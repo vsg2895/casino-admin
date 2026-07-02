@@ -112,7 +112,7 @@ async function submit(): Promise<void> {
           v-model="form.name"
           fluid
           required
-          placeholder="Crystal Dice"
+          placeholder="Idev Affiliation"
           @input="autoSlug"
         />
         <p v-if="fieldErrors.name" class="mt-1 text-xs text-red-600">{{ fieldErrors.name }}</p>
@@ -122,7 +122,7 @@ async function submit(): Promise<void> {
         <label class="mb-1 block text-sm font-medium text-gray-700">
           Slug <span class="text-red-500">*</span>
         </label>
-        <InputText v-model="form.slug" fluid required placeholder="crystal-dice" />
+        <InputText v-model="form.slug" fluid required placeholder="idevaffiliation" />
         <p class="mt-1 text-xs text-gray-500">Used in API paths. Lowercase, hyphens only.</p>
         <p v-if="fieldErrors.slug" class="mt-1 text-xs text-red-600">{{ fieldErrors.slug }}</p>
       </div>
@@ -131,7 +131,7 @@ async function submit(): Promise<void> {
         <label class="mb-1 block text-sm font-medium text-gray-700">
           Domain <span class="text-red-500">*</span>
         </label>
-        <InputText v-model="form.domain" fluid required placeholder="crystaldice.net" />
+        <InputText v-model="form.domain" fluid required placeholder="idevaffiliation.com" />
         <p v-if="fieldErrors.domain" class="mt-1 text-xs text-red-600">{{ fieldErrors.domain }}</p>
       </div>
 
@@ -140,7 +140,7 @@ async function submit(): Promise<void> {
         <InputText
           v-model="form.revalidation_url"
           fluid
-          placeholder="https://crystaldice.net/api/revalidate"
+          placeholder="https://idevaffiliation.com/api/revalidate"
         />
         <p class="mt-1 text-xs text-gray-500">Next.js ISR webhook. Optional.</p>
         <p v-if="fieldErrors.revalidation_url" class="mt-1 text-xs text-red-600">
