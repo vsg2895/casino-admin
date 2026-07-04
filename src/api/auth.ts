@@ -7,6 +7,7 @@ export function login(credentials: LoginCredentials): Promise<LoginResponse> {
     .then((r) => r.data)
 }
 
+
 export function logout(): Promise<void> {
   return client.post('/admin/auth/logout').then(() => undefined)
 }
