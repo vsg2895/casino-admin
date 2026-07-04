@@ -20,6 +20,25 @@ export function exportNewsletters(siteId?: number): Promise<void> {
   return downloadFile(`/admin/newsletters/export${query}`, 'newsletter.csv')
 }
 
+export interface ImportResult {
+  imported: number
+  skipped: number
+  total: number
+  message: string
+}
+
+// Bulk-import subscribers from an .xlsx / .csv file with an "Email" column.
+export function importNewsletters(siteId: number, file: File): Promise<ImportResult> {
+  const form = new FormData()
+  form.append('site_id', String(siteId))
+  form.append('file', file)
+  return client
+    .post<ImportResult>('/admin/newsletters/import', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    .then((r) => r.data)
+}
+
 export function deleteNewsletter(id: number): Promise<void> {
   return client.delete(`/admin/newsletters/${id}`).then(() => undefined)
 }

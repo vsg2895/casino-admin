@@ -42,6 +42,18 @@ const router = createRouter({
           meta: { requiresAuth: true, title: 'Subscription Email' },
         },
         {
+          path: 'promotion-emails',
+          name: 'promotion-emails',
+          component: () => import('@/views/sites/PromotionEmails.vue'),
+          meta: { requiresAuth: true, title: 'Promotion Emails' },
+        },
+        {
+          path: 'sites/:siteId/promotion-email',
+          name: 'sites-promotion-email',
+          component: () => import('@/views/sites/PromotionEmail.vue'),
+          meta: { requiresAuth: true, title: 'Promotion Email' },
+        },
+        {
           path: 'casinos',
           name: 'casinos',
           component: () => import('@/views/casinos/List.vue'),
@@ -88,6 +100,18 @@ const router = createRouter({
           name: 'newsletter',
           component: () => import('@/views/newsletter/List.vue'),
           meta: { requiresAuth: true, title: 'Newsletter' },
+        },
+        {
+          path: 'unsubscribes',
+          name: 'unsubscribes',
+          component: () => import('@/views/unsubscribes/List.vue'),
+          meta: { requiresAuth: true, title: 'Unsubscribes' },
+        },
+        {
+          path: 'schedules',
+          name: 'schedules',
+          component: () => import('@/views/schedules/List.vue'),
+          meta: { requiresAuth: true, title: 'Schedule Setting' },
         },
         {
           path: 'social-links',

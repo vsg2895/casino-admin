@@ -8,9 +8,10 @@ import SelectButton from 'primevue/selectbutton'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import { useToast } from 'primevue/usetoast'
+import axios from 'axios'
 import { useNewsletterStore } from '@/stores/newsletterStore'
 import { useSitesStore } from '@/stores/sitesStore'
-import { exportNewsletters } from '@/api/newsletter'
+import { exportNewsletters, importNewsletters } from '@/api/newsletter'
 import type { Newsletter } from '@shared/types/newsletter'
 
 type View = 'active' | 'trash'
@@ -30,6 +31,8 @@ const viewOptions: { label: string; value: View }[] = [
 const email = ref('')
 const adding = ref(false)
 const exporting = ref(false)
+const importing = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
 
 const selected = ref<Newsletter[]>([])
 const selectedIds = computed(() => selected.value.map((n) => n.id))
@@ -65,6 +68,37 @@ async function doExport(): Promise<void> {
     await exportNewsletters(siteId.value ?? undefined)
   } finally {
     exporting.value = false
+  }
+}
+
+// ── Excel / CSV import ────────────────────────────────────────────────────────
+function triggerImport(): void {
+  if (!siteId.value) {
+    toast.add({ severity: 'warn', summary: 'Pick a site', detail: 'Choose a site to import subscribers into.', life: 4000 })
+    return
+  }
+  fileInput.value?.click()
+}
+
+async function onFileSelected(e: Event): Promise<void> {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = '' // allow re-picking the same file
+  if (!file || !siteId.value) return
+
+  importing.value = true
+  try {
+    const res = await importNewsletters(siteId.value, file)
+    toast.add({ severity: 'success', summary: 'Import complete', detail: res.message, life: 5000 })
+    await reload()
+  } catch (err: unknown) {
+    const detail =
+      axios.isAxiosError(err)
+        ? ((err.response?.data as { message?: string } | undefined)?.message ?? 'Import failed. Check the file and try again.')
+        : 'Import failed. Check the file and try again.'
+    toast.add({ severity: 'error', summary: 'Import failed', detail, life: 6000 })
+  } finally {
+    importing.value = false
   }
 }
 
@@ -199,7 +233,9 @@ onMounted(async () => {
               @click="showBulkDelete = true"
             />
             <Button label="Delete all" icon="pi pi-trash" severity="danger" outlined size="small" :disabled="store.items.length === 0" @click="showAllDelete = true" />
+            <Button label="Import Excel" icon="pi pi-upload" outlined size="small" :loading="importing" v-tooltip.top="'Upload an .xlsx or .csv with an Email column'" @click="triggerImport" />
             <Button label="Export CSV" icon="pi pi-download" outlined size="small" :loading="exporting" @click="doExport" />
+            <input ref="fileInput" type="file" accept=".xlsx,.csv" class="hidden" @change="onFileSelected" />
           </template>
 
           <!-- Trash view actions -->
