@@ -114,6 +114,12 @@ const router = createRouter({
           meta: { requiresAuth: true, title: 'Schedule Setting' },
         },
         {
+          path: 'promotion-history',
+          name: 'promotion-history',
+          component: () => import('@/views/promotionHistory/List.vue'),
+          meta: { requiresAuth: true, title: 'Promotion History' },
+        },
+        {
           path: 'social-links',
           name: 'social-links',
           component: () => import('@/views/socialLinks/List.vue'),
