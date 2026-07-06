@@ -37,7 +37,7 @@ async function handleLogout(): Promise<void> {
     <!-- Brand -->
     <div class="flex h-16 items-center gap-3 px-6 border-b border-gray-700">
       <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
-        <i class="pi pi-bolt text-white text-sm" />
+        <i class="pi pi-briefcase text-white text-sm" />
       </div>
       <span class="text-sm font-semibold tracking-wide">Casino Admin</span>
     </div>
