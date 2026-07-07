@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { uploadImage } from '@/api/uploads'
+import { STORAGE_BASE_URL } from '@/config/urls'
 
 /**
  * Drag-and-drop image upload. v-models the STORED PATH returned by the backend
@@ -24,10 +25,7 @@ const error = ref<string | null>(null)
 const input = ref<HTMLInputElement | null>(null)
 
 // Resolve a stored path into a browsable URL via the API origin's /storage mount.
-const storageBase = computed(() => {
-  const api = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
-  return api.replace(/\/api\/v1\/?$/, '')
-})
+const storageBase = computed(() => STORAGE_BASE_URL)
 
 const previewUrl = computed(() => {
   const v = props.modelValue

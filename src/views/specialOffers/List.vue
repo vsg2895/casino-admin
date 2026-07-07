@@ -7,6 +7,7 @@ import Dialog from 'primevue/dialog'
 import Popover from 'primevue/popover'
 import { useToast } from 'primevue/usetoast'
 import { useSpecialOffersStore } from '@/stores/specialOffersStore'
+import { STORAGE_BASE_URL } from '@/config/urls'
 import * as offersApi from '@/api/specialOffers'
 import type { SpecialOffer } from '@shared/types/specialOffer'
 import type { CasinoSiteRow } from '@shared/types/casino'
@@ -20,7 +21,7 @@ const filtered = computed(() =>
   store.offers.filter((o) => o.title.toLowerCase().includes(search.value.toLowerCase())),
 )
 
-const storageBase = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1').replace(/\/api\/v1\/?$/, '')
+const storageBase = STORAGE_BASE_URL
 function img(path: string | null): string | null {
   if (!path) return null
   return /^https?:\/\//.test(path) ? path : `${storageBase}/storage/${path}`
