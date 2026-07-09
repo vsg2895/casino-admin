@@ -380,7 +380,9 @@ function err(field: string): string | undefined {
     <Dialog v-model:visible="showTest" modal header="Send test email" :style="{ width: '420px' }">
       <div class="space-y-3">
         <p class="text-sm text-gray-600">
-          Sends the <strong>saved</strong> promotion through SendGrid to the address below.
+          Sends the <strong>saved</strong> promotion via your configured SMTP server
+          (the <code>MAIL_*</code> settings in <code>.env</code>) to the address below.
+          Real promotion blasts are delivered through SendGrid.
         </p>
         <InputText
           v-model="testEmail"
