@@ -42,6 +42,18 @@ const router = createRouter({
           meta: { requiresAuth: true, title: 'Subscription Email' },
         },
         {
+          path: 'verify-emails',
+          name: 'verify-emails',
+          component: () => import('@/views/sites/VerifyEmails.vue'),
+          meta: { requiresAuth: true, title: 'Verify Email' },
+        },
+        {
+          path: 'sites/:siteId/verify-email',
+          name: 'sites-verify-email',
+          component: () => import('@/views/sites/VerifyEmail.vue'),
+          meta: { requiresAuth: true, title: 'Verify Email' },
+        },
+        {
           path: 'promotion-emails',
           name: 'promotion-emails',
           component: () => import('@/views/sites/PromotionEmails.vue'),

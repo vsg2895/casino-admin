@@ -18,6 +18,7 @@ const navItems: NavItem[] = [
   { label: 'Newsletter',     to: '/newsletter',     icon: 'pi-envelope' },
   { label: 'Unsubscribes',   to: '/unsubscribes',   icon: 'pi-ban' },
   { label: 'Subscription Emails', to: '/email-templates', icon: 'pi-inbox' },
+  { label: 'Verify Email', to: '/verify-emails', icon: 'pi-verified' },
   { label: 'Promotion Emails', to: '/promotion-emails', icon: 'pi-megaphone' },
   { label: 'Schedule Setting', to: '/schedules',        icon: 'pi-clock' },
   { label: 'Promotion History', to: '/promotion-history', icon: 'pi-history' },
