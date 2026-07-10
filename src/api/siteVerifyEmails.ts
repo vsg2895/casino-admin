@@ -34,8 +34,9 @@ export function previewVerifyEmail(
 export function sendTestVerifyEmail(
   siteId: number,
   to: string,
+  name?: string,
 ): Promise<{ ok: boolean; message: string }> {
   return client
-    .post<{ ok: boolean; message: string }>(`/admin/sites/${siteId}/verify-email/test`, { to })
+    .post<{ ok: boolean; message: string }>(`/admin/sites/${siteId}/verify-email/test`, { to, name })
     .then((r) => r.data)
 }

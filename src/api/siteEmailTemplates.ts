@@ -34,8 +34,9 @@ export function previewEmailTemplate(
 export function sendTestEmail(
   siteId: number,
   to: string,
+  name?: string,
 ): Promise<{ ok: boolean; message: string }> {
   return client
-    .post<{ ok: boolean; message: string }>(`/admin/sites/${siteId}/email-template/test`, { to })
+    .post<{ ok: boolean; message: string }>(`/admin/sites/${siteId}/email-template/test`, { to, name })
     .then((r) => r.data)
 }

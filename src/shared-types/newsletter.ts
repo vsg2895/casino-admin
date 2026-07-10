@@ -6,6 +6,8 @@ export interface Newsletter {
   site_id: number
   site?: Site
   email: string
+  full_name: string | null
+  verified: boolean
   created_at: string
   deleted_at?: string | null
 }

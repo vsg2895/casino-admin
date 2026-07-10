@@ -286,6 +286,30 @@ onMounted(async () => {
             </template>
           </Column>
 
+          <Column header="Name" :style="{ width: '200px' }">
+            <template #body="{ data }: { data: Newsletter }">
+              <span v-if="data.full_name" class="text-gray-700">{{ data.full_name }}</span>
+              <span v-else class="text-gray-300">—</span>
+            </template>
+          </Column>
+
+          <Column header="Verified" :style="{ width: '120px' }">
+            <template #body="{ data }: { data: Newsletter }">
+              <span
+                v-if="data.verified"
+                class="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700"
+              >
+                <i class="pi pi-check-circle text-[11px]" /> Verified
+              </span>
+              <span
+                v-else
+                class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
+              >
+                <i class="pi pi-clock text-[11px]" /> Pending
+              </span>
+            </template>
+          </Column>
+
           <Column :header="isTrash ? 'Deleted at' : 'Created at'" :style="{ width: '220px' }">
             <template #body="{ data }: { data: Newsletter }">
               <span class="text-gray-600">{{ formatDate(isTrash ? data.deleted_at : data.created_at) }}</span>

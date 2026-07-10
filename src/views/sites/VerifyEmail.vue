@@ -33,6 +33,7 @@ const previewError = ref('')
 // Send-test dialog
 const showTest = ref(false)
 const testEmail = ref('')
+const testName = ref('')
 const testSending = ref(false)
 
 function emptyForm(): UpdateSiteVerifyEmailPayload {
@@ -56,7 +57,7 @@ function emptyForm(): UpdateSiteVerifyEmailPayload {
 
 const form = reactive<UpdateSiteVerifyEmailPayload>(emptyForm())
 
-const placeholders = '{{site_name}}, {{site_url}}, {{email}}, {{year}}, {{unsubscribe_url}}'
+const placeholders = '{{site_name}}, {{site_url}}, {{email}}, {{year}}, {{unsubscribe_url}}, {{verify_url}}'
 
 const fromEmailHint = computed(
   () => `For best deliverability, use an address on your sending domain — e.g. verify@${fromDomain.value}`,
@@ -158,10 +159,11 @@ async function sendTest(): Promise<void> {
   if (!testEmail.value.trim()) return
   testSending.value = true
   try {
-    const res = await api.sendTestVerifyEmail(siteId, testEmail.value.trim())
+    const res = await api.sendTestVerifyEmail(siteId, testEmail.value.trim(), testName.value.trim() || undefined)
     toast.add({ severity: 'success', summary: 'Sent', detail: res.message, life: 4000 })
     showTest.value = false
     testEmail.value = ''
+    testName.value = ''
   } catch (e: unknown) {
     const msg =
       axios.isAxiosError(e)
@@ -204,7 +206,9 @@ function err(field: string): string | undefined {
       <div class="space-y-5">
         <p class="rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
           Placeholders you can use anywhere: <code class="font-mono">{{ placeholders }}</code>.
-          Body fields also support <code class="font-mono">**bold**</code>.
+          Body fields also support <code class="font-mono">**bold**</code>. A
+          <strong>“Verify My Email”</strong> button with the verification link is added to the email
+          automatically.
         </p>
 
         <!-- Sender -->
@@ -344,6 +348,12 @@ function err(field: string): string | undefined {
           Sends the <strong>saved</strong> template via your configured SMTP server
           (the <code>MAIL_*</code> settings in <code>.env</code>) to the address below.
         </p>
+        <InputText
+          v-model="testName"
+          fluid
+          placeholder="Recipient name (optional) — adds “Dear name,”"
+          @keyup.enter="sendTest"
+        />
         <InputText
           v-model="testEmail"
           fluid

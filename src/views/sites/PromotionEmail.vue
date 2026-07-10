@@ -36,6 +36,7 @@ const previewError = ref('')
 // Send-test dialog
 const showTest = ref(false)
 const testEmail = ref('')
+const testName = ref('')
 const testSending = ref(false)
 
 function emptyForm(): UpdateSitePromotionEmailPayload {
@@ -172,10 +173,11 @@ async function sendTest(): Promise<void> {
   if (!testEmail.value.trim()) return
   testSending.value = true
   try {
-    const res = await api.sendTestPromotionEmail(siteId, testEmail.value.trim())
+    const res = await api.sendTestPromotionEmail(siteId, testEmail.value.trim(), testName.value.trim() || undefined)
     toast.add({ severity: 'success', summary: 'Sent', detail: res.message, life: 4000 })
     showTest.value = false
     testEmail.value = ''
+    testName.value = ''
   } catch (e: unknown) {
     const msg =
       axios.isAxiosError(e)
@@ -384,6 +386,12 @@ function err(field: string): string | undefined {
           (the <code>MAIL_*</code> settings in <code>.env</code>) to the address below.
           Real promotion blasts are delivered through SendGrid.
         </p>
+        <InputText
+          v-model="testName"
+          fluid
+          placeholder="Recipient name (optional) — adds “Dear name,”"
+          @keyup.enter="sendTest"
+        />
         <InputText
           v-model="testEmail"
           fluid
