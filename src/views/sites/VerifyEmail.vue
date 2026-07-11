@@ -346,7 +346,9 @@ function err(field: string): string | undefined {
       <div class="space-y-3">
         <p class="text-sm text-gray-600">
           Sends the <strong>saved</strong> template via your configured SMTP server
-          (the <code>MAIL_*</code> settings in <code>.env</code>) to the address below.
+          (the <code>MAIL_*</code> settings in <code>.env</code>) to the address below,
+          using this template's own <strong>From name and address</strong>.
+          Real subscriber emails are delivered through SendGrid.
         </p>
         <InputText
           v-model="testName"

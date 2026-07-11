@@ -28,10 +28,12 @@ export interface ImportResult {
 }
 
 // Bulk-import subscribers from an .xlsx / .csv file with an "Email" column.
-export function importNewsletters(siteId: number, file: File): Promise<ImportResult> {
+// `verified` marks imported subscribers as already verified (default false).
+export function importNewsletters(siteId: number, file: File, verified = false): Promise<ImportResult> {
   const form = new FormData()
   form.append('site_id', String(siteId))
   form.append('file', file)
+  form.append('verified', verified ? '1' : '0')
   return client
     .post<ImportResult>('/admin/newsletters/import', form, {
       headers: { 'Content-Type': 'multipart/form-data' },

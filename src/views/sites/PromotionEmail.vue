@@ -383,7 +383,8 @@ function err(field: string): string | undefined {
       <div class="space-y-3">
         <p class="text-sm text-gray-600">
           Sends the <strong>saved</strong> promotion via your configured SMTP server
-          (the <code>MAIL_*</code> settings in <code>.env</code>) to the address below.
+          (the <code>MAIL_*</code> settings in <code>.env</code>) to the address below,
+          using this template's own <strong>From name and address</strong>.
           Real promotion blasts are delivered through SendGrid.
         </p>
         <InputText

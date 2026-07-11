@@ -6,6 +6,7 @@ import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import SelectButton from 'primevue/selectbutton'
 import Button from 'primevue/button'
+import Checkbox from 'primevue/checkbox'
 import Dialog from 'primevue/dialog'
 import { useToast } from 'primevue/usetoast'
 import axios from 'axios'
@@ -33,6 +34,9 @@ const adding = ref(false)
 const exporting = ref(false)
 const importing = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
+const pendingFile = ref<File | null>(null)
+const showImportModal = ref(false)
+const importVerified = ref(false)
 
 const selected = ref<Newsletter[]>([])
 const selectedIds = computed(() => selected.value.map((n) => n.id))
@@ -80,16 +84,27 @@ function triggerImport(): void {
   fileInput.value?.click()
 }
 
-async function onFileSelected(e: Event): Promise<void> {
+// A file was picked → stage it and ask whether to import as verified before sending.
+function onFileSelected(e: Event): void {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = '' // allow re-picking the same file
   if (!file || !siteId.value) return
 
+  pendingFile.value = file
+  importVerified.value = false // default: import as unverified
+  showImportModal.value = true
+}
+
+async function runImport(): Promise<void> {
+  if (!pendingFile.value || !siteId.value) return
+
   importing.value = true
   try {
-    const res = await importNewsletters(siteId.value, file)
+    const res = await importNewsletters(siteId.value, pendingFile.value, importVerified.value)
     toast.add({ severity: 'success', summary: 'Import complete', detail: res.message, life: 5000 })
+    showImportModal.value = false
+    pendingFile.value = null
     await reload()
   } catch (err: unknown) {
     const detail =
@@ -330,6 +345,36 @@ onMounted(async () => {
         </DataTable>
       </div>
     </section>
+
+    <!-- Import: confirm + choose verified state -->
+    <Dialog
+      :visible="showImportModal"
+      modal
+      header="Import subscribers"
+      :style="{ width: '460px' }"
+      @update:visible="(v: boolean) => { if (!v) { showImportModal = false; pendingFile = null } }"
+    >
+      <div class="space-y-4">
+        <p class="text-sm text-gray-700">
+          Import <strong>{{ pendingFile?.name }}</strong> into
+          <strong>{{ currentSiteLabel }}</strong>.
+        </p>
+        <div class="flex items-start gap-3 rounded-lg bg-gray-50 p-3">
+          <Checkbox v-model="importVerified" :binary="true" input-id="import-verified" />
+          <label for="import-verified" class="cursor-pointer text-sm text-gray-700">
+            <span class="font-medium text-gray-900">Accept these subscribers as verified</span>
+            <span class="mt-0.5 block text-xs text-gray-500">
+              Leave unchecked to import them as <strong>unverified</strong> (default). Check only if
+              these contacts have already confirmed their email elsewhere.
+            </span>
+          </label>
+        </div>
+      </div>
+      <template #footer>
+        <Button label="Cancel" text @click="showImportModal = false; pendingFile = null" />
+        <Button label="Import" icon="pi pi-upload" :loading="importing" @click="runImport" />
+      </template>
+    </Dialog>
 
     <!-- Active: single soft delete -->
     <Dialog :visible="deletingOne !== null" modal header="Move to trash" :style="{ width: '400px' }" @update:visible="deletingOne = null">
