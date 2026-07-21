@@ -384,7 +384,8 @@ function err(field: string): string | undefined {
         <p class="text-sm text-gray-600">
           Sends the <strong>saved</strong> promotion via your configured SMTP server
           (the <code>MAIL_*</code> settings in <code>.env</code>) to the address below,
-          using this template's own <strong>From name and address</strong>.
+          It is sent from your server's mailbox (<code>MAIL_FROM_ADDRESS</code>) with this
+          template's <strong>From name</strong> — so your mail server accepts it.
           Real promotion blasts are delivered through SendGrid.
         </p>
         <InputText
