@@ -1,4 +1,8 @@
 import type { Site } from './site'
+import type { SendgridKey } from './sendgridKey'
+
+// How a schedule's promotion campaign is delivered.
+export type ScheduleProvider = 'smtp' | 'sendgrid'
 
 // Which subscribers to target, by newsletters.created_at (relative to run time).
 export type ScheduleDateFilter =
@@ -28,6 +32,9 @@ export interface EmailSchedule {
   time: string // 'HH:MM'
   day_of_week: number | null // 0=Sun..6=Sat, only when frequency = 'weekly'
   day_of_month: number | null // 1..31, only when frequency = 'monthly'
+  provider: ScheduleProvider // delivery transport
+  sendgrid_key_id: number | null // stored key id, only when provider = 'sendgrid'
+  sendgrid_key?: SendgridKey | null // hydrated key (masked), when loaded
   active: boolean
   last_run_at: string | null
   created_at: string
@@ -45,5 +52,7 @@ export interface UpsertEmailSchedulePayload {
   time: string
   day_of_week?: number | null
   day_of_month?: number | null
+  provider: ScheduleProvider
+  sendgrid_key_id?: number | null
   active?: boolean
 }

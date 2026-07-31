@@ -132,6 +132,12 @@ const router = createRouter({
           meta: { requiresAuth: true, title: 'Promotion History' },
         },
         {
+          path: 'sendgrid-keys',
+          name: 'sendgrid-keys',
+          component: () => import('@/views/sendgridKeys/List.vue'),
+          meta: { requiresAuth: true, title: 'SendGrid Keys' },
+        },
+        {
           path: 'social-links',
           name: 'social-links',
           component: () => import('@/views/socialLinks/List.vue'),

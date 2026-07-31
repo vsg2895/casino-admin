@@ -5,11 +5,12 @@ import Column from 'primevue/column'
 import Select from 'primevue/select'
 import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
+import Tag from 'primevue/tag'
 import Paginator, { type PageState } from 'primevue/paginator'
 import { useToast } from 'primevue/usetoast'
 import { useSitesStore } from '@/stores/sitesStore'
 import { listPromotionHistory } from '@/api/promotionHistory'
-import type { PromotionEmailHistory } from '@shared/types/promotionEmailHistory'
+import type { PromotionEmailHistory, PromotionEmailStatus } from '@shared/types/promotionEmailHistory'
 
 const sitesStore = useSitesStore()
 const toast = useToast()
@@ -24,6 +25,20 @@ const siteId = ref<number | null>(null)
 const from = ref('')
 const to = ref('')
 const search = ref('')
+const status = ref<PromotionEmailStatus | null>(null)
+
+const statusOptions = [
+  { label: 'All statuses', value: null },
+  { label: 'Success', value: 'success' },
+  { label: 'Failed', value: 'failed' },
+  { label: 'Skipped', value: 'skipped' },
+]
+
+const statusSeverity: Record<PromotionEmailStatus, string> = {
+  success: 'success',
+  failed: 'danger',
+  skipped: 'secondary',
+}
 
 const siteOptions = computed(() => [
   { label: 'All sites', value: null },
@@ -44,6 +59,7 @@ async function reload(): Promise<void> {
       from: from.value || undefined,
       to: to.value || undefined,
       search: search.value.trim() || undefined,
+      status: status.value ?? undefined,
     })
     items.value = res.data
     total.value = res.meta.total
@@ -67,7 +83,7 @@ function resetToFirstAndReload(): void {
 
 // Filters reset to page 1; search is debounced.
 let searchTimer: ReturnType<typeof setTimeout> | undefined
-watch([siteId, from, to], resetToFirstAndReload)
+watch([siteId, from, to, status], resetToFirstAndReload)
 watch(search, () => {
   clearTimeout(searchTimer)
   searchTimer = setTimeout(resetToFirstAndReload, 400)
@@ -78,6 +94,7 @@ function clearFilters(): void {
   from.value = ''
   to.value = ''
   search.value = ''
+  status.value = null
 }
 
 onMounted(async () => {
@@ -92,7 +109,7 @@ onMounted(async () => {
     <div>
       <h2 class="text-lg font-semibold text-gray-900">Promotion History</h2>
       <p class="text-sm text-gray-500">
-        Every promotion email delivered — filter by site and date, or search by the start of an email address.
+        Every promotion email attempt — sent, failed, or skipped. Filter by site, date, and status, or search by the start of an email address.
       </p>
     </div>
 
@@ -110,6 +127,10 @@ onMounted(async () => {
         <div>
           <label class="mb-1 block text-xs font-medium text-gray-500">To</label>
           <input type="date" v-model="to" class="h-10 rounded-md border border-gray-300 px-3 text-sm" />
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-gray-500">Status</label>
+          <Select v-model="status" :options="statusOptions" option-label="label" option-value="value" placeholder="Status" class="w-40" />
         </div>
         <div>
           <label class="mb-1 block text-xs font-medium text-gray-500">Email starts with</label>
@@ -135,6 +156,23 @@ onMounted(async () => {
         <Column header="Site" :style="{ width: '220px' }">
           <template #body="{ data }: { data: PromotionEmailHistory }">
             <span class="text-gray-700">{{ data.site?.name ?? '—' }}</span>
+          </template>
+        </Column>
+
+        <Column header="Status" :style="{ width: '120px' }">
+          <template #body="{ data }: { data: PromotionEmailHistory }">
+            <Tag :value="data.status" :severity="statusSeverity[data.status]" class="capitalize" />
+          </template>
+        </Column>
+
+        <Column header="Error" :style="{ width: '280px' }">
+          <template #body="{ data }: { data: PromotionEmailHistory }">
+            <span
+              v-if="data.error"
+              :title="data.error"
+              class="block max-w-[16rem] truncate text-red-600"
+            >{{ data.error }}</span>
+            <span v-else class="text-gray-300">—</span>
           </template>
         </Column>
 

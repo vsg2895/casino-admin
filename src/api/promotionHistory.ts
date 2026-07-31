@@ -1,6 +1,6 @@
 import client from './client'
 import type { PaginatedResponse } from '@shared/types/api'
-import type { PromotionEmailHistory } from '@shared/types/promotionEmailHistory'
+import type { PromotionEmailHistory, PromotionEmailStatus } from '@shared/types/promotionEmailHistory'
 
 export interface PromotionHistoryFilters {
   page?: number
@@ -8,6 +8,7 @@ export interface PromotionHistoryFilters {
   from?: string // Y-m-d
   to?: string // Y-m-d
   search?: string // email prefix
+  status?: PromotionEmailStatus
 }
 
 export function listPromotionHistory(

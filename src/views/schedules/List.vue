@@ -13,12 +13,15 @@ import { useToast } from 'primevue/usetoast'
 import axios from 'axios'
 import { useSitesStore } from '@/stores/sitesStore'
 import * as api from '@/api/emailSchedules'
+import * as sendgridApi from '@/api/sendgridKeys'
 import type {
   EmailSchedule,
   ScheduleDateFilter,
   ScheduleFrequency,
+  ScheduleProvider,
   UpsertEmailSchedulePayload,
 } from '@shared/types/emailSchedule'
+import type { SendgridKey } from '@shared/types/sendgridKey'
 import type { ErrorResponse } from '@shared/types/api'
 
 const sitesStore = useSitesStore()
@@ -47,6 +50,16 @@ const audienceModeOptions: { label: string; value: AudienceMode }[] = [
   { label: 'By sign-up date', value: 'date' },
   { label: 'Most recent count', value: 'count' },
 ]
+const providerOptions: { label: string; value: ScheduleProvider }[] = [
+  { label: 'SMTP (.env credentials)', value: 'smtp' },
+  { label: 'SendGrid (stored key)', value: 'sendgrid' },
+]
+
+// Active SendGrid keys available to pick when provider = 'sendgrid'.
+const sendgridKeys = ref<SendgridKey[]>([])
+const sendgridKeyOptions = computed(() =>
+  sendgridKeys.value.map((k) => ({ label: `${k.name} (${k.masked_key})`, value: k.id })),
+)
 const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const weekdayOptions = weekdays.map((label, value) => ({ label, value }))
 
@@ -64,6 +77,11 @@ function cadenceLabel(s: EmailSchedule): string {
   if (s.frequency === 'weekly') return `Every ${weekdays[s.day_of_week ?? 0]} at ${s.time}`
   if (s.frequency === 'monthly') return `Monthly on day ${s.day_of_month ?? 1} at ${s.time}`
   return `Every day at ${s.time}`
+}
+
+function providerLabel(s: EmailSchedule): string {
+  if (s.provider === 'sendgrid') return `SendGrid · ${s.sendgrid_key?.name ?? 'key removed'}`
+  return 'SMTP'
 }
 
 function formatDate(iso: string | null): string {
@@ -100,6 +118,8 @@ function emptyForm(): UpsertEmailSchedulePayload {
     time: '03:00',
     day_of_week: 1,
     day_of_month: 1,
+    provider: 'smtp',
+    sendgrid_key_id: null,
     active: true,
   }
 }
@@ -124,6 +144,8 @@ function openEdit(s: EmailSchedule): void {
     time: s.time,
     day_of_week: s.day_of_week ?? 1,
     day_of_month: s.day_of_month ?? 1,
+    provider: s.provider,
+    sendgrid_key_id: s.sendgrid_key_id,
     active: s.active,
   })
   audienceMode.value = s.date_filter === null ? 'count' : 'date'
@@ -133,8 +155,12 @@ function openEdit(s: EmailSchedule): void {
 }
 
 // Build the payload for the chosen audience mode: date window OR newest-N.
+// Also drops the SendGrid key when delivering over SMTP so no stale id lingers.
 function payload(): UpsertEmailSchedulePayload {
-  const base = { ...form }
+  const base = {
+    ...form,
+    sendgrid_key_id: form.provider === 'sendgrid' ? form.sendgrid_key_id : null,
+  }
   return audienceMode.value === 'count'
     ? { ...base, date_filter: null, limit: form.limit }
     : { ...base, date_filter: form.date_filter, limit: null }
@@ -204,8 +230,17 @@ function err(field: string): string | undefined {
   return fieldErrors.value[field]
 }
 
+async function loadSendgridKeys(): Promise<void> {
+  try {
+    sendgridKeys.value = (await sendgridApi.listSendgridKeys('active')).data
+  } catch {
+    // Non-fatal: the SendGrid option just shows no keys to pick.
+    sendgridKeys.value = []
+  }
+}
+
 onMounted(async () => {
-  await sitesStore.fetchSites()
+  await Promise.all([sitesStore.fetchSites(), loadSendgridKeys()])
   await reload()
 })
 </script>
@@ -243,6 +278,11 @@ onMounted(async () => {
         </Column>
         <Column header="Runs">
           <template #body="{ data }: { data: EmailSchedule }">{{ cadenceLabel(data) }}</template>
+        </Column>
+        <Column header="Via" :style="{ width: '150px' }">
+          <template #body="{ data }: { data: EmailSchedule }">
+            <span class="text-gray-600">{{ providerLabel(data) }}</span>
+          </template>
         </Column>
         <Column header="Status" :style="{ width: '110px' }">
           <template #body="{ data }: { data: EmailSchedule }">
@@ -334,6 +374,36 @@ onMounted(async () => {
               <p v-if="err('day_of_month')" class="mt-1 text-xs text-red-600">{{ err('day_of_month') }}</p>
             </div>
           </div>
+        </section>
+
+        <!-- Delivery / email provider -->
+        <section class="rounded-lg border border-gray-200 p-3">
+          <h4 class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Email provider</h4>
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div :class="form.provider === 'sendgrid' ? '' : 'sm:col-span-2'">
+              <label class="mb-1 block text-xs font-medium text-gray-600">Send via</label>
+              <Select v-model="form.provider" :options="providerOptions" option-label="label" option-value="value" fluid />
+              <p v-if="err('provider')" class="mt-1 text-xs text-red-600">{{ err('provider') }}</p>
+            </div>
+            <div v-if="form.provider === 'sendgrid'">
+              <label class="mb-1 block text-xs font-medium text-gray-600">SendGrid key</label>
+              <Select
+                v-model="form.sendgrid_key_id"
+                :options="sendgridKeyOptions"
+                option-label="label"
+                option-value="value"
+                fluid
+                placeholder="Select an active key"
+              />
+              <p v-if="err('sendgrid_key_id')" class="mt-1 text-xs text-red-600">{{ err('sendgrid_key_id') }}</p>
+            </div>
+          </div>
+          <p v-if="form.provider === 'sendgrid' && sendgridKeyOptions.length === 0" class="mt-2 text-xs text-amber-600">
+            No active SendGrid keys. Add one under “SendGrid Keys” first.
+          </p>
+          <p v-else class="mt-2 text-xs text-gray-400">
+            SMTP uses the server's .env mail credentials. SendGrid sends through the selected stored key.
+          </p>
         </section>
 
         <section class="flex items-center justify-between rounded-lg border border-gray-200 p-3">
