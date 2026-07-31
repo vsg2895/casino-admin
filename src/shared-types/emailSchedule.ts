@@ -56,3 +56,18 @@ export interface UpsertEmailSchedulePayload {
   sendgrid_key_id?: number | null
   active?: boolean
 }
+
+// One recipient row shown in the preview table.
+export interface ScheduleRecipient {
+  email: string
+  created_at: string | null
+}
+
+// GET /admin/schedules/{id}/recipients — resolved by the same query the send
+// uses, so `count` is exactly how many subscribers would be mailed right now.
+export interface ScheduleRecipientPreview {
+  count: number
+  sample_size: number
+  sample: ScheduleRecipient[]
+  generated_at: string
+}

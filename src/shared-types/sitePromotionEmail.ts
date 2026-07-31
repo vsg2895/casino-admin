@@ -8,16 +8,18 @@ export interface SitePromotionEmail {
   from_name: string
   from_email: string
   subject: string
-  preheader: string
-  // Removable elements — null/empty means the email omits them entirely.
+  // Removable content blocks — null means the email omits that block entirely.
+  // Each is independent: any combination can be cleared.
+  preheader: string | null
   hero_image_url: string | null
   hero_url: string | null
   top_button_text: string | null
-  heading: string
-  intro_text: string
-  secondary_text: string
+  heading: string | null
+  intro_text: string | null
+  secondary_text: string | null
   cta_button_text: string | null
-  disclaimer_text: string
+  disclaimer_text: string | null
+  // Structural — the opt-out link is legally required and cannot be removed.
   unsubscribe_label: string
   // CTA button fill colour and link/accent colour (hex).
   button_color: string

@@ -1,6 +1,11 @@
 import client from './client'
+import { downloadFile } from './download'
 import type { ApiResponse, PaginatedResponse } from '@shared/types/api'
-import type { EmailSchedule, UpsertEmailSchedulePayload } from '@shared/types/emailSchedule'
+import type {
+  EmailSchedule,
+  ScheduleRecipientPreview,
+  UpsertEmailSchedulePayload,
+} from '@shared/types/emailSchedule'
 
 export function listSchedules(page = 1): Promise<PaginatedResponse<EmailSchedule>> {
   return client
@@ -26,4 +31,22 @@ export function deleteSchedule(id: number): Promise<void> {
 // Queue this campaign immediately, ignoring its cadence.
 export function runSchedule(id: number): Promise<{ ok: boolean; message: string }> {
   return client.post<{ ok: boolean; message: string }>(`/admin/schedules/${id}/run`).then((r) => r.data)
+}
+
+// Who would receive this campaign right now — resolved by the same query the
+// scheduled send uses, so the count matches what will actually be mailed.
+export function previewScheduleRecipients(
+  id: number,
+  sample = 25,
+): Promise<ApiResponse<ScheduleRecipientPreview>> {
+  return client
+    .get<ApiResponse<ScheduleRecipientPreview>>(`/admin/schedules/${id}/recipients`, {
+      params: { sample },
+    })
+    .then((r) => r.data)
+}
+
+// Streams the full recipient list (email + created_at only) as CSV.
+export function exportScheduleRecipients(id: number): Promise<void> {
+  return downloadFile(`/admin/schedules/${id}/recipients/export`, `schedule-${id}-recipients.csv`)
 }

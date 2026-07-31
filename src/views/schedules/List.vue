@@ -19,6 +19,7 @@ import type {
   ScheduleDateFilter,
   ScheduleFrequency,
   ScheduleProvider,
+  ScheduleRecipientPreview,
   UpsertEmailSchedulePayload,
 } from '@shared/types/emailSchedule'
 import type { SendgridKey } from '@shared/types/sendgridKey'
@@ -209,6 +210,41 @@ async function runNow(s: EmailSchedule): Promise<void> {
   }
 }
 
+// ── Recipient preview ──────────────────────────────────────────────────────────
+// Shows exactly who would be mailed if this schedule ran right now — the count
+// comes from the same query the scheduled send uses.
+const previewing = ref<EmailSchedule | null>(null)
+const previewLoading = ref(false)
+const previewData = ref<ScheduleRecipientPreview | null>(null)
+const previewError = ref('')
+const exportingId = ref<number | null>(null)
+
+async function openPreview(s: EmailSchedule): Promise<void> {
+  previewing.value = s
+  previewData.value = null
+  previewError.value = ''
+  previewLoading.value = true
+  try {
+    previewData.value = (await api.previewScheduleRecipients(s.id)).data
+  } catch {
+    previewError.value = 'Could not load the recipient list.'
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+async function exportRecipients(s: EmailSchedule): Promise<void> {
+  exportingId.value = s.id
+  try {
+    await api.exportScheduleRecipients(s.id)
+    toast.add({ severity: 'success', summary: 'Exported', detail: 'Recipient list downloaded.', life: 3000 })
+  } catch {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to export recipients.', life: 4000 })
+  } finally {
+    exportingId.value = null
+  }
+}
+
 const deleting = ref<EmailSchedule | null>(null)
 const deletingLoading = ref(false)
 async function confirmDelete(): Promise<void> {
@@ -294,8 +330,10 @@ onMounted(async () => {
             <span class="text-gray-500">{{ formatDate(data.last_run_at) }}</span>
           </template>
         </Column>
-        <Column header="Actions" :style="{ width: '150px' }">
+        <Column header="Actions" :style="{ width: '210px' }">
           <template #body="{ data }: { data: EmailSchedule }">
+            <Button icon="pi pi-users" text severity="info" size="small" v-tooltip.top="'Preview recipients'" @click="openPreview(data)" />
+            <Button icon="pi pi-download" text severity="secondary" size="small" v-tooltip.top="'Export recipients (CSV)'" :loading="exportingId === data.id" @click="exportRecipients(data)" />
             <Button icon="pi pi-play" text severity="success" size="small" v-tooltip.top="'Run now'" :loading="runningId === data.id" @click="runNow(data)" />
             <Button icon="pi pi-pencil" text severity="secondary" size="small" v-tooltip.top="'Edit'" @click="openEdit(data)" />
             <Button icon="pi pi-trash" text severity="danger" size="small" v-tooltip.top="'Delete'" @click="deleting = data" />
@@ -303,6 +341,67 @@ onMounted(async () => {
         </Column>
       </DataTable>
     </div>
+
+    <!-- Recipient preview -->
+    <Dialog
+      :visible="previewing !== null"
+      modal
+      header="Recipients"
+      :style="{ width: '640px' }"
+      @update:visible="previewing = null"
+    >
+      <div class="space-y-4">
+        <p class="text-sm text-gray-600">
+          Who would receive <strong>{{ previewing?.name || previewing?.site?.name }}</strong> if it ran now.
+          Uses the same recipient query as the scheduled send.
+        </p>
+
+        <div v-if="previewLoading" class="py-8 text-center text-sm text-gray-400">
+          <i class="pi pi-spin pi-spinner mr-2" />Loading recipients…
+        </div>
+
+        <p v-else-if="previewError" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          {{ previewError }}
+        </p>
+
+        <template v-else-if="previewData">
+          <div class="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 p-3">
+            <div>
+              <p class="text-2xl font-semibold text-gray-900">{{ previewData.count.toLocaleString() }}</p>
+              <p class="text-xs text-gray-500">recipients right now · as of {{ previewData.generated_at }}</p>
+            </div>
+            <Button
+              label="Export CSV"
+              icon="pi pi-download"
+              outlined
+              size="small"
+              :loading="exportingId === previewing?.id"
+              :disabled="previewData.count === 0"
+              @click="previewing && exportRecipients(previewing)"
+            />
+          </div>
+
+          <div v-if="previewData.count === 0" class="py-6 text-center text-sm text-gray-400">
+            No subscribers match this schedule's audience right now.
+          </div>
+
+          <template v-else>
+            <DataTable :value="previewData.sample" data-key="email" :pt="{ root: { class: 'text-sm' } }">
+              <Column field="email" header="Email address" />
+              <Column field="created_at" header="Signed up" :style="{ width: '190px' }" />
+            </DataTable>
+            <p v-if="previewData.count > previewData.sample.length" class="text-xs text-gray-400">
+              Showing the first {{ previewData.sample.length }} of
+              {{ previewData.count.toLocaleString() }} — export the CSV for the full list.
+            </p>
+          </template>
+        </template>
+      </div>
+
+      <template #footer>
+        <Button label="Close" text @click="previewing = null" />
+      </template>
+    </Dialog>
 
     <!-- Create / edit dialog -->
     <Dialog v-model:visible="showDialog" modal :header="editingId ? 'Edit schedule' : 'New schedule'" :style="{ width: '520px' }">

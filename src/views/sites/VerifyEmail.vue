@@ -7,6 +7,7 @@ import ToggleSwitch from 'primevue/toggleswitch'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import { useToast } from 'primevue/usetoast'
+import RemovableLabel from '@/components/forms/RemovableLabel.vue'
 import axios from 'axios'
 import * as api from '@/api/siteVerifyEmails'
 import * as sitesApi from '@/api/sites'
@@ -86,15 +87,15 @@ function toPayload(t: SiteVerifyEmail): UpdateSiteVerifyEmailPayload {
     from_name: t.from_name,
     from_email: t.from_email,
     subject: t.subject,
-    header_title: t.header_title,
-    header_subtitle: t.header_subtitle,
-    heading: t.heading,
-    intro_text: t.intro_text,
-    offer_text: t.offer_text,
-    spam_notice: t.spam_notice,
-    footer_note: t.footer_note,
+    header_title: t.header_title ?? '',
+    header_subtitle: t.header_subtitle ?? '',
+    heading: t.heading ?? '',
+    intro_text: t.intro_text ?? '',
+    offer_text: t.offer_text ?? '',
+    spam_notice: t.spam_notice ?? '',
+    footer_note: t.footer_note ?? '',
     unsubscribe_label: t.unsubscribe_label,
-    copyright_text: t.copyright_text,
+    copyright_text: t.copyright_text ?? '',
     accent_color: t.accent_color,
     active: t.active,
   }
@@ -239,12 +240,12 @@ function err(field: string): string | undefined {
               <p v-if="err('subject')" class="mt-1 text-xs text-red-600">{{ err('subject') }}</p>
             </div>
             <div>
-              <label class="mb-1 block text-xs font-medium text-gray-600">Header title</label>
+              <RemovableLabel label="Header title" :value="form.header_title" @clear="form.header_title = ''" />
               <InputText v-model="form.header_title" fluid />
               <p v-if="err('header_title')" class="mt-1 text-xs text-red-600">{{ err('header_title') }}</p>
             </div>
             <div>
-              <label class="mb-1 block text-xs font-medium text-gray-600">Header subtitle</label>
+              <RemovableLabel label="Header subtitle" :value="form.header_subtitle" @clear="form.header_subtitle = ''" />
               <InputText v-model="form.header_subtitle" fluid />
               <p v-if="err('header_subtitle')" class="mt-1 text-xs text-red-600">{{ err('header_subtitle') }}</p>
             </div>
@@ -266,22 +267,22 @@ function err(field: string): string | undefined {
           <h3 class="mb-3 text-sm font-semibold text-gray-800">Body</h3>
           <div class="space-y-3">
             <div>
-              <label class="mb-1 block text-xs font-medium text-gray-600">Heading</label>
+              <RemovableLabel label="Heading" :value="form.heading" @clear="form.heading = ''" />
               <InputText v-model="form.heading" fluid />
               <p v-if="err('heading')" class="mt-1 text-xs text-red-600">{{ err('heading') }}</p>
             </div>
             <div>
-              <label class="mb-1 block text-xs font-medium text-gray-600">Intro paragraph</label>
+              <RemovableLabel label="Intro paragraph" :value="form.intro_text" @clear="form.intro_text = ''" />
               <Textarea v-model="form.intro_text" rows="2" auto-resize fluid />
               <p v-if="err('intro_text')" class="mt-1 text-xs text-red-600">{{ err('intro_text') }}</p>
             </div>
             <div>
-              <label class="mb-1 block text-xs font-medium text-gray-600">Offer paragraph</label>
+              <RemovableLabel label="Offer paragraph" :value="form.offer_text" @clear="form.offer_text = ''" />
               <Textarea v-model="form.offer_text" rows="2" auto-resize fluid />
               <p v-if="err('offer_text')" class="mt-1 text-xs text-red-600">{{ err('offer_text') }}</p>
             </div>
             <div>
-              <label class="mb-1 block text-xs font-medium text-gray-600">Spam notice</label>
+              <RemovableLabel label="Spam notice" :value="form.spam_notice" @clear="form.spam_notice = ''" />
               <Textarea v-model="form.spam_notice" rows="2" auto-resize fluid />
               <p v-if="err('spam_notice')" class="mt-1 text-xs text-red-600">{{ err('spam_notice') }}</p>
             </div>
@@ -293,7 +294,7 @@ function err(field: string): string | undefined {
           <h3 class="mb-3 text-sm font-semibold text-gray-800">Footer &amp; unsubscribe</h3>
           <div class="space-y-3">
             <div>
-              <label class="mb-1 block text-xs font-medium text-gray-600">Footer note</label>
+              <RemovableLabel label="Footer note" :value="form.footer_note" @clear="form.footer_note = ''" />
               <Textarea v-model="form.footer_note" rows="2" auto-resize fluid />
               <p v-if="err('footer_note')" class="mt-1 text-xs text-red-600">{{ err('footer_note') }}</p>
             </div>
@@ -304,7 +305,7 @@ function err(field: string): string | undefined {
                 <p v-if="err('unsubscribe_label')" class="mt-1 text-xs text-red-600">{{ err('unsubscribe_label') }}</p>
               </div>
               <div>
-                <label class="mb-1 block text-xs font-medium text-gray-600">Copyright line</label>
+                <RemovableLabel label="Copyright line" :value="form.copyright_text" @clear="form.copyright_text = ''" />
                 <InputText v-model="form.copyright_text" fluid />
                 <p v-if="err('copyright_text')" class="mt-1 text-xs text-red-600">{{ err('copyright_text') }}</p>
               </div>

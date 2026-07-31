@@ -7,6 +7,7 @@ import ToggleSwitch from 'primevue/toggleswitch'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import { useToast } from 'primevue/usetoast'
+import RemovableLabel from '@/components/forms/RemovableLabel.vue'
 import axios from 'axios'
 import * as api from '@/api/sitePromotionEmails'
 import * as sitesApi from '@/api/sites'
@@ -91,15 +92,15 @@ function toPayload(t: SitePromotionEmail): UpdateSitePromotionEmailPayload {
     from_name: t.from_name,
     from_email: t.from_email,
     subject: t.subject,
-    preheader: t.preheader,
+    preheader: t.preheader ?? '',
     hero_image_url: t.hero_image_url ?? '',
     hero_url: t.hero_url ?? '',
     top_button_text: t.top_button_text ?? '',
-    heading: t.heading,
-    intro_text: t.intro_text,
-    secondary_text: t.secondary_text,
+    heading: t.heading ?? '',
+    intro_text: t.intro_text ?? '',
+    secondary_text: t.secondary_text ?? '',
     cta_button_text: t.cta_button_text ?? '',
-    disclaimer_text: t.disclaimer_text,
+    disclaimer_text: t.disclaimer_text ?? '',
     unsubscribe_label: t.unsubscribe_label,
     button_color: t.button_color,
     accent_color: t.accent_color,
@@ -114,14 +115,26 @@ function nullIfBlank(value: string | null | undefined): string | null {
   return trimmed ? trimmed : null
 }
 
+// Every removable block: cleared → null. Structural fields (sender, subject,
+// unsubscribe label, colours) are never in this list — they cannot be removed.
+const REMOVABLE_FIELDS = [
+  'preheader',
+  'hero_image_url',
+  'hero_url',
+  'top_button_text',
+  'heading',
+  'intro_text',
+  'secondary_text',
+  'cta_button_text',
+  'disclaimer_text',
+] as const
+
 function toPayloadForApi(): UpdateSitePromotionEmailPayload {
-  return {
-    ...form,
-    hero_image_url: nullIfBlank(form.hero_image_url),
-    hero_url: nullIfBlank(form.hero_url),
-    top_button_text: nullIfBlank(form.top_button_text),
-    cta_button_text: nullIfBlank(form.cta_button_text),
+  const payload = { ...form }
+  for (const field of REMOVABLE_FIELDS) {
+    payload[field] = nullIfBlank(payload[field])
   }
+  return payload
 }
 
 // ── Debounced live preview ──────────────────────────────────────────────────
@@ -263,7 +276,7 @@ function err(field: string): string | undefined {
               <p v-if="err('subject')" class="mt-1 text-xs text-red-600">{{ err('subject') }}</p>
             </div>
             <div>
-              <label class="mb-1 block text-xs font-medium text-gray-600">Preview (preheader) text</label>
+              <RemovableLabel label="Preview (preheader) text" :value="form.preheader" @clear="form.preheader = ''" />
               <InputText v-model="form.preheader" fluid />
               <p class="mt-1 text-xs text-gray-400">Hidden snippet shown next to the subject in the inbox.</p>
               <p v-if="err('preheader')" class="mt-1 text-xs text-red-600">{{ err('preheader') }}</p>
@@ -276,18 +289,7 @@ function err(field: string): string | undefined {
           <h3 class="mb-3 text-sm font-semibold text-gray-800">Hero &amp; offer link</h3>
           <div class="space-y-3">
             <div>
-              <div class="mb-1 flex items-center justify-between gap-2">
-                <label class="block text-xs font-medium text-gray-600">Hero image URL (optional)</label>
-                <Button
-                  v-if="form.hero_image_url"
-                  label="Remove image"
-                  icon="pi pi-trash"
-                  text
-                  severity="danger"
-                  size="small"
-                  @click="form.hero_image_url = ''"
-                />
-              </div>
+              <RemovableLabel label="Hero image URL (optional)" :value="form.hero_image_url" remove-label="Remove image" @clear="form.hero_image_url = ''" />
               <InputText v-model="form.hero_image_url" fluid placeholder="https://…/banner.jpeg" />
               <img
                 v-if="form.hero_image_url"
@@ -295,24 +297,13 @@ function err(field: string): string | undefined {
                 alt="Hero preview"
                 class="mt-2 max-h-28 w-full rounded-md border border-gray-200 object-cover"
               />
-              <p class="mt-1 text-xs text-gray-400">Removed images are dropped from the email entirely.</p>
+              <p class="mt-1 text-xs text-gray-400">Every block here can be removed independently — cleared blocks are dropped from the email.</p>
               <p v-if="err('hero_image_url')" class="mt-1 text-xs text-red-600">{{ err('hero_image_url') }}</p>
             </div>
             <div>
-              <div class="mb-1 flex items-center justify-between gap-2">
-                <label class="block text-xs font-medium text-gray-600">Offer link (hero + buttons)</label>
-                <Button
-                  v-if="form.hero_url"
-                  label="Remove link"
-                  icon="pi pi-trash"
-                  text
-                  severity="danger"
-                  size="small"
-                  @click="form.hero_url = ''"
-                />
-              </div>
+              <RemovableLabel label="Offer link (hero + buttons)" :value="form.hero_url" remove-label="Remove link" @clear="form.hero_url = ''" />
               <InputText v-model="form.hero_url" fluid placeholder="https://affiliate.example/offer/123" />
-              <p class="mt-1 text-xs text-gray-400">Where the image and both CTA buttons point. You may use <code v-pre class="font-mono">{{site_url}}</code>. Removing it also removes both buttons.</p>
+              <p class="mt-1 text-xs text-gray-400">Where the image and buttons point. You may use <code v-pre class="font-mono">{{site_url}}</code>. Remove it and any remaining buttons simply render without a link.</p>
               <p v-if="err('hero_url')" class="mt-1 text-xs text-red-600">{{ err('hero_url') }}</p>
             </div>
           </div>
@@ -323,49 +314,27 @@ function err(field: string): string | undefined {
           <h3 class="mb-3 text-sm font-semibold text-gray-800">Body</h3>
           <div class="space-y-3">
             <div>
-              <div class="mb-1 flex items-center justify-between gap-2">
-                <label class="block text-xs font-medium text-gray-600">Top button text</label>
-                <Button
-                  v-if="form.top_button_text"
-                  label="Remove button"
-                  icon="pi pi-trash"
-                  text
-                  severity="danger"
-                  size="small"
-                  @click="form.top_button_text = ''"
-                />
-              </div>
+              <RemovableLabel label="Top button text" :value="form.top_button_text" remove-label="Remove button" @clear="form.top_button_text = ''" />
               <InputText v-model="form.top_button_text" fluid placeholder="Leave empty to hide this button" />
               <p v-if="err('top_button_text')" class="mt-1 text-xs text-red-600">{{ err('top_button_text') }}</p>
             </div>
             <div>
-              <label class="mb-1 block text-xs font-medium text-gray-600">Heading</label>
+              <RemovableLabel label="Heading" :value="form.heading" @clear="form.heading = ''" />
               <InputText v-model="form.heading" fluid />
               <p v-if="err('heading')" class="mt-1 text-xs text-red-600">{{ err('heading') }}</p>
             </div>
             <div>
-              <label class="mb-1 block text-xs font-medium text-gray-600">Intro paragraph</label>
+              <RemovableLabel label="Intro paragraph" :value="form.intro_text" @clear="form.intro_text = ''" />
               <Textarea v-model="form.intro_text" rows="2" auto-resize fluid />
               <p v-if="err('intro_text')" class="mt-1 text-xs text-red-600">{{ err('intro_text') }}</p>
             </div>
             <div>
-              <label class="mb-1 block text-xs font-medium text-gray-600">Secondary paragraph</label>
+              <RemovableLabel label="Secondary paragraph" :value="form.secondary_text" @clear="form.secondary_text = ''" />
               <Textarea v-model="form.secondary_text" rows="2" auto-resize fluid />
               <p v-if="err('secondary_text')" class="mt-1 text-xs text-red-600">{{ err('secondary_text') }}</p>
             </div>
             <div>
-              <div class="mb-1 flex items-center justify-between gap-2">
-                <label class="block text-xs font-medium text-gray-600">CTA button text</label>
-                <Button
-                  v-if="form.cta_button_text"
-                  label="Remove button"
-                  icon="pi pi-trash"
-                  text
-                  severity="danger"
-                  size="small"
-                  @click="form.cta_button_text = ''"
-                />
-              </div>
+              <RemovableLabel label="CTA button text" :value="form.cta_button_text" remove-label="Remove button" @clear="form.cta_button_text = ''" />
               <InputText v-model="form.cta_button_text" fluid placeholder="Leave empty to hide this button" />
               <p v-if="err('cta_button_text')" class="mt-1 text-xs text-red-600">{{ err('cta_button_text') }}</p>
             </div>
@@ -377,7 +346,7 @@ function err(field: string): string | undefined {
           <h3 class="mb-3 text-sm font-semibold text-gray-800">Footer &amp; colours</h3>
           <div class="space-y-3">
             <div>
-              <label class="mb-1 block text-xs font-medium text-gray-600">Disclaimer</label>
+              <RemovableLabel label="Disclaimer" :value="form.disclaimer_text" @clear="form.disclaimer_text = ''" />
               <Textarea v-model="form.disclaimer_text" rows="2" auto-resize fluid />
               <p v-if="err('disclaimer_text')" class="mt-1 text-xs text-red-600">{{ err('disclaimer_text') }}</p>
             </div>
