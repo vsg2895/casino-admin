@@ -9,7 +9,12 @@ export const useNewsletterStore = defineStore('newsletter', () => {
   const loading = ref(false)
   const meta = ref<PaginatedResponse<Newsletter>['meta'] | null>(null)
 
-  async function fetchNewsletters(params?: { page?: number; site_id?: number; trashed?: boolean }): Promise<void> {
+  async function fetchNewsletters(params?: {
+    page?: number
+    per_page?: number
+    site_id?: number
+    trashed?: boolean
+  }): Promise<void> {
     loading.value = true
     try {
       const response = await newsletterApi.listNewsletters(params)

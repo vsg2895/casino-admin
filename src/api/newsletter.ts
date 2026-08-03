@@ -6,6 +6,7 @@ import type { ApiResponse, PaginatedResponse } from '@shared/types/api'
 
 export function listNewsletters(params?: {
   page?: number
+  per_page?: number
   site_id?: number
   trashed?: boolean
 }): Promise<PaginatedResponse<Newsletter>> {

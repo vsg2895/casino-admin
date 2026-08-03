@@ -49,8 +49,49 @@ function formatDate(iso: string | null | undefined): string {
   return iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '—'
 }
 
+// ── Server-side pagination ────────────────────────────────────────────────────
+// The table is `lazy`: it renders exactly the rows the API returned and asks us
+// for the next page. Paginating client-side instead would silently cap the list
+// at whatever one API page contained — 50 rows looking like a complete list of
+// three pages, however many subscribers actually exist.
+const page = ref(1)
+const perPage = ref(50)
+const totalRecords = computed(() => store.meta?.total ?? 0)
+const first = computed(() => (page.value - 1) * perPage.value)
+
+function fetchPage(): Promise<void> {
+  return store.fetchNewsletters({
+    page: page.value,
+    per_page: perPage.value,
+    site_id: siteId.value ?? undefined,
+    trashed: isTrash.value,
+  })
+}
+
 async function reload(): Promise<void> {
-  await store.fetchNewsletters({ site_id: siteId.value ?? undefined, trashed: isTrash.value })
+  await fetchPage()
+
+  // A bulk delete can leave the current page past the end of the list. Step
+  // back to the last real page rather than showing an empty table.
+  const lastPage = store.meta?.last_page ?? 1
+  if (page.value > lastPage) {
+    page.value = lastPage
+    await fetchPage()
+  }
+}
+
+async function onPage(event: { page: number; rows: number }): Promise<void> {
+  page.value = event.page + 1 // PrimeVue is 0-based, Laravel is 1-based
+  perPage.value = event.rows
+  selected.value = [] // selection is per page — never carry it across
+  await reload()
+}
+
+// Any filter change restarts at page one; staying on page 40 of a list that no
+// longer has 40 pages would render an empty table.
+async function reloadFromFirstPage(): Promise<void> {
+  page.value = 1
+  await reload()
 }
 
 async function add(): Promise<void> {
@@ -123,7 +164,8 @@ async function runImport(): Promise<void> {
     })
 
     closeImportModal()
-    await reload()
+    // Newest-first ordering puts the freshly imported rows on page one.
+    await reloadFromFirstPage()
   } catch (err: unknown) {
     const detail =
       axios.isAxiosError(err)
@@ -250,7 +292,7 @@ function confirmForceSelected(): Promise<void> {
 
 watch([siteId, view], async () => {
   selected.value = []
-  await reload()
+  await reloadFromFirstPage()
 })
 
 onMounted(async () => {
@@ -325,9 +367,16 @@ onMounted(async () => {
           :loading="store.loading"
           data-key="id"
           striped-rows
+          lazy
           paginator
-          :rows="20"
+          :rows="perPage"
+          :first="first"
+          :total-records="totalRecords"
+          :rows-per-page-options="[20, 50, 100, 200]"
+          current-page-report-template="{first}–{last} of {totalRecords}"
+          paginator-template="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown CurrentPageReport"
           :pt="{ root: { class: 'text-sm' } }"
+          @page="onPage"
         >
           <template #empty>
             <div class="py-10 text-center text-sm text-gray-400">
