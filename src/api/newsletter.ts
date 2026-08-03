@@ -1,6 +1,7 @@
 import client from './client'
 import { downloadFile } from './download'
 import type { Newsletter } from '@shared/types/newsletter'
+import type { NewsletterImportProgress } from '@shared/types/newsletterImport'
 import type { ApiResponse, PaginatedResponse } from '@shared/types/api'
 
 export function listNewsletters(params?: {
@@ -20,24 +21,30 @@ export function exportNewsletters(siteId?: number): Promise<void> {
   return downloadFile(`/admin/newsletters/export${query}`, 'newsletter.csv')
 }
 
-export interface ImportResult {
-  imported: number
-  skipped: number
-  total: number
-  message: string
-}
-
-// Bulk-import subscribers from an .xlsx / .csv file with an "Email" column.
-// `verified` marks imported subscribers as already verified (default false).
-export function importNewsletters(siteId: number, file: File, verified = false): Promise<ImportResult> {
+// Queue a bulk import of subscribers from an .xlsx / .csv file with an "Email"
+// column. `verified` marks imported subscribers as already verified (default
+// false). Resolves as soon as the file is staged and the job is queued — poll
+// `getImportStatus` with the returned import_id for progress and final counts.
+export function importNewsletters(
+  siteId: number,
+  file: File,
+  verified = false,
+): Promise<NewsletterImportProgress> {
   const form = new FormData()
   form.append('site_id', String(siteId))
   form.append('file', file)
   form.append('verified', verified ? '1' : '0')
   return client
-    .post<ImportResult>('/admin/newsletters/import', form, {
+    .post<NewsletterImportProgress>('/admin/newsletters/import', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
+    .then((r) => r.data)
+}
+
+// Current progress of a queued import. `finished` tells you when to stop.
+export function getImportStatus(importId: number): Promise<NewsletterImportProgress> {
+  return client
+    .get<NewsletterImportProgress>(`/admin/newsletters/imports/${importId}`)
     .then((r) => r.data)
 }
 

@@ -12,8 +12,9 @@ import { useToast } from 'primevue/usetoast'
 import axios from 'axios'
 import { useNewsletterStore } from '@/stores/newsletterStore'
 import { useSitesStore } from '@/stores/sitesStore'
-import { exportNewsletters, importNewsletters } from '@/api/newsletter'
+import { exportNewsletters, importNewsletters, getImportStatus } from '@/api/newsletter'
 import type { Newsletter } from '@shared/types/newsletter'
+import type { NewsletterImportProgress } from '@shared/types/newsletterImport'
 
 type View = 'active' | 'trash'
 
@@ -96,25 +97,66 @@ function onFileSelected(e: Event): void {
   showImportModal.value = true
 }
 
+// The import runs on the queue, so the upload call only tells us it was
+// accepted. Progress is polled until the job reports itself finished.
+const importProgress = ref<NewsletterImportProgress | null>(null)
+const IMPORT_POLL_MS = 1500
+const IMPORT_POLL_TIMEOUT_MS = 15 * 60 * 1000
+
 async function runImport(): Promise<void> {
   if (!pendingFile.value || !siteId.value) return
 
   importing.value = true
+  importProgress.value = null
   try {
-    const res = await importNewsletters(siteId.value, pendingFile.value, importVerified.value)
-    toast.add({ severity: 'success', summary: 'Import complete', detail: res.message, life: 5000 })
-    showImportModal.value = false
-    pendingFile.value = null
+    const queued = await importNewsletters(siteId.value, pendingFile.value, importVerified.value)
+    importProgress.value = queued
+
+    // A synchronous queue finishes before the response comes back; otherwise poll.
+    const result = queued.finished ? queued : await waitForImport(queued.import_id)
+
+    toast.add({
+      severity: result.status === 'failed' ? 'error' : 'success',
+      summary: result.status === 'failed' ? 'Import failed' : 'Import complete',
+      detail: result.message,
+      life: result.status === 'failed' ? 8000 : 5000,
+    })
+
+    closeImportModal()
     await reload()
   } catch (err: unknown) {
     const detail =
       axios.isAxiosError(err)
         ? ((err.response?.data as { message?: string } | undefined)?.message ?? 'Import failed. Check the file and try again.')
-        : 'Import failed. Check the file and try again.'
-    toast.add({ severity: 'error', summary: 'Import failed', detail, life: 6000 })
+        : err instanceof Error
+          ? err.message
+          : 'Import failed. Check the file and try again.'
+    toast.add({ severity: 'error', summary: 'Import failed', detail, life: 8000 })
   } finally {
     importing.value = false
   }
+}
+
+// Poll until the job finishes. The deadline only stops the polling — the import
+// itself keeps running on the worker regardless.
+async function waitForImport(importId: number): Promise<NewsletterImportProgress> {
+  const deadline = Date.now() + IMPORT_POLL_TIMEOUT_MS
+
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, IMPORT_POLL_MS))
+    const status = await getImportStatus(importId)
+    importProgress.value = status
+
+    if (status.finished) return status
+  }
+
+  throw new Error('The import is still running. Reopen this page shortly to see the result.')
+}
+
+function closeImportModal(): void {
+  showImportModal.value = false
+  pendingFile.value = null
+  importProgress.value = null
 }
 
 // ── Dialog state ────────────────────────────────────────────────────────────
@@ -352,7 +394,7 @@ onMounted(async () => {
       modal
       header="Import subscribers"
       :style="{ width: '460px' }"
-      @update:visible="(v: boolean) => { if (!v) { showImportModal = false; pendingFile = null } }"
+      @update:visible="(v: boolean) => { if (!v && !importing) closeImportModal() }"
     >
       <div class="space-y-4">
         <p class="text-sm text-gray-700">
@@ -360,7 +402,7 @@ onMounted(async () => {
           <strong>{{ currentSiteLabel }}</strong>.
         </p>
         <div class="flex items-start gap-3 rounded-lg bg-gray-50 p-3">
-          <Checkbox v-model="importVerified" :binary="true" input-id="import-verified" />
+          <Checkbox v-model="importVerified" :binary="true" input-id="import-verified" :disabled="importing" />
           <label for="import-verified" class="cursor-pointer text-sm text-gray-700">
             <span class="font-medium text-gray-900">Accept these subscribers as verified</span>
             <span class="mt-0.5 block text-xs text-gray-500">
@@ -369,9 +411,25 @@ onMounted(async () => {
             </span>
           </label>
         </div>
+
+        <!-- Live progress: the import runs on a queue worker, so the numbers
+             climb here while the job works through the file. -->
+        <div v-if="importing" class="rounded-lg border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-800">
+          <p class="flex items-center gap-2 font-medium">
+            <i class="pi pi-spin pi-spinner text-xs" />
+            {{ importProgress?.status === 'processing' ? 'Importing…' : 'Queued…' }}
+          </p>
+          <p v-if="importProgress && importProgress.total > 0" class="mt-1 text-xs">
+            {{ importProgress.imported }} added, {{ importProgress.skipped }} already on the list
+            ({{ importProgress.total }} read so far)
+          </p>
+          <p v-else class="mt-1 text-xs">
+            Waiting for a worker to pick the file up. You can leave this open.
+          </p>
+        </div>
       </div>
       <template #footer>
-        <Button label="Cancel" text @click="showImportModal = false; pendingFile = null" />
+        <Button label="Cancel" text :disabled="importing" @click="closeImportModal" />
         <Button label="Import" icon="pi pi-upload" :loading="importing" @click="runImport" />
       </template>
     </Dialog>
