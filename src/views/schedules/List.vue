@@ -203,8 +203,18 @@ async function runNow(s: EmailSchedule): Promise<void> {
     const res = await api.runSchedule(s.id)
     toast.add({ severity: 'success', summary: 'Queued', detail: res.message, life: 4000 })
     await reload()
-  } catch {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to queue the campaign.', life: 4000 })
+  } catch (e: unknown) {
+    // The API refuses a run it knows would send nothing (paused schedule,
+    // promotion email switched off) or that is already in flight — show its
+    // reason rather than a generic failure.
+    const refusal = axios.isAxiosError(e) ? (e.response?.data as { message?: string } | undefined)?.message : undefined
+    const alreadyRunning = axios.isAxiosError(e) && e.response?.status === 409
+    toast.add({
+      severity: alreadyRunning ? 'warn' : 'error',
+      summary: alreadyRunning ? 'Already running' : 'Not queued',
+      detail: refusal ?? 'Failed to queue the campaign.',
+      life: 6000,
+    })
   } finally {
     runningId.value = null
   }
