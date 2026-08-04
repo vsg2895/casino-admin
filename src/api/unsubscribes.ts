@@ -14,6 +14,14 @@ export function listUnsubscribes(params?: UnsubscribeFilters): Promise<Paginated
   return client.get<PaginatedResponse<Unsubscribe>>('/admin/unsubscribes', { params }).then((r) => r.data)
 }
 
+// Total matching the current filters. A dedicated COUNT on the server, issued
+// separately from the listing so the paginated query never carries its weight.
+export function countUnsubscribes(params?: Omit<UnsubscribeFilters, 'page'>): Promise<number> {
+  return client
+    .get<{ total: number }>('/admin/unsubscribes/count', { params })
+    .then((r) => r.data.total)
+}
+
 export function exportUnsubscribes(params?: Omit<UnsubscribeFilters, 'page' | 'search'>): Promise<void> {
   const query = new URLSearchParams()
   if (params?.site_id) query.set('site_id', String(params.site_id))

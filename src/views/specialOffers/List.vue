@@ -9,6 +9,7 @@ import { useToast } from 'primevue/usetoast'
 import { useSpecialOffersStore } from '@/stores/specialOffersStore'
 import { STORAGE_BASE_URL } from '@/config/urls'
 import * as offersApi from '@/api/specialOffers'
+import RecordCount from '@/components/RecordCount.vue'
 import type { SpecialOffer } from '@shared/types/specialOffer'
 import type { CasinoSiteRow } from '@shared/types/casino'
 
@@ -35,6 +36,7 @@ async function confirmDelete(): Promise<void> {
   try {
     await offersApi.deleteSpecialOffer(deleting.value.id)
     store.remove(deleting.value.id)
+    void refreshCount()
     toast.add({ severity: 'success', summary: 'Deleted', detail: 'Special offer deleted.', life: 2500 })
     deleting.value = null
   } finally {
@@ -88,19 +90,48 @@ async function duplicate(offer: SpecialOffer): Promise<void> {
   try {
     const res = await offersApi.duplicateSpecialOffer(offer.id)
     store.upsert(res.data)
+    void refreshCount()
     toast.add({ severity: 'success', summary: 'Duplicated', detail: `${res.data.title} created.`, life: 2500 })
   } catch {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to duplicate.', life: 4000 })
   }
 }
 
-onMounted(() => store.fetchOffers())
+// ── Record counter ────────────────────────────────────────────────────────────
+// Total from the dedicated COUNT endpoint — never derived from the listing
+// response, so the listing query keeps its eager loads without also paying to
+// count. Refreshed after any mutation so the badge tracks create/delete.
+const recordTotal = ref<number | null>(null)
+
+async function refreshCount(): Promise<void> {
+  try {
+    recordTotal.value = await offersApi.countSpecialOffers()
+  } catch {
+    recordTotal.value = null
+  }
+}
+
+// The search here filters the already-loaded list in the browser, so while a
+// term is active the exact number of matches is known locally — asking the
+// server to re-count would be a round-trip for a figure we already have. The
+// label changes with it, so "12" is never mistaken for the catalogue total.
+const isSearching = computed(() => search.value.trim() !== '')
+const countLabel = computed(() => (isSearching.value ? 'Matching Special Offers' : 'Total Special Offers'))
+const countTotal = computed(() => (isSearching.value ? filtered.value.length : recordTotal.value))
+
+onMounted(() => {
+  store.fetchOffers()
+  refreshCount()
+})
 </script>
 
 <template>
   <div class="space-y-4">
-    <div class="flex items-center justify-between gap-3">
-      <h2 class="text-xl font-semibold text-indigo-500">Special Offers</h2>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex flex-wrap items-center gap-3">
+        <h2 class="text-xl font-semibold text-indigo-500">Special Offers</h2>
+        <RecordCount :label="countLabel" :total="countTotal" :loading="store.loading" />
+      </div>
       <div class="flex items-center gap-2">
         <InputText v-model="search" placeholder="Search by name" class="w-64" />
         <Button label="Create" icon="pi pi-plus" @click="router.push({ name: 'special-offers-create' })" />

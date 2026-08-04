@@ -21,6 +21,12 @@ export function listSpecialOffers(): Promise<ApiResponse<SpecialOffer[]>> {
   return client.get<ApiResponse<SpecialOffer[]>>('/admin/special-offers').then((r) => r.data)
 }
 
+// Total special offers. A dedicated COUNT on the server, issued separately from
+// the listing so that query never carries its weight.
+export function countSpecialOffers(): Promise<number> {
+  return client.get<{ total: number }>('/admin/special-offers/count').then((r) => r.data.total)
+}
+
 export function getSpecialOffer(id: number): Promise<ApiResponse<SpecialOffer>> {
   return client.get<ApiResponse<SpecialOffer>>(`/admin/special-offers/${id}`).then((r) => r.data)
 }

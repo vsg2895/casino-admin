@@ -18,3 +18,13 @@ export function listPromotionHistory(
     .get<PaginatedResponse<PromotionEmailHistory>>('/admin/promotion-history', { params })
     .then((r) => r.data)
 }
+
+// Total matching the current filters. A dedicated COUNT on the server, issued
+// separately from the listing so the paginated query never carries its weight.
+export function countPromotionHistory(
+  params?: Omit<PromotionHistoryFilters, 'page'>,
+): Promise<number> {
+  return client
+    .get<{ total: number }>('/admin/promotion-history/count', { params })
+    .then((r) => r.data.total)
+}

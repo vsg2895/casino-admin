@@ -12,7 +12,8 @@ import { useToast } from 'primevue/usetoast'
 import axios from 'axios'
 import { useNewsletterStore } from '@/stores/newsletterStore'
 import { useSitesStore } from '@/stores/sitesStore'
-import { exportNewsletters, importNewsletters, getImportStatus } from '@/api/newsletter'
+import { exportNewsletters, importNewsletters, getImportStatus, countNewsletters } from '@/api/newsletter'
+import RecordCount from '@/components/RecordCount.vue'
 import type { Newsletter } from '@shared/types/newsletter'
 import type { NewsletterImportProgress } from '@shared/types/newsletterImport'
 
@@ -59,6 +60,10 @@ const perPage = ref(50)
 const totalRecords = computed(() => store.meta?.total ?? 0)
 const first = computed(() => (page.value - 1) * perPage.value)
 
+// Total from the dedicated COUNT endpoint — never from the listing response,
+// so the paginated query stays free of counting work as the list grows.
+const recordTotal = ref<number | null>(null)
+
 function fetchPage(): Promise<void> {
   return store.fetchNewsletters({
     page: page.value,
@@ -68,8 +73,21 @@ function fetchPage(): Promise<void> {
   })
 }
 
+// Same filters as the listing, issued independently and concurrently.
+// Never fatal — a failed count must not take the listing down with it.
+async function fetchCount(): Promise<void> {
+  try {
+    recordTotal.value = await countNewsletters({
+      site_id: siteId.value ?? undefined,
+      trashed: isTrash.value,
+    })
+  } catch {
+    recordTotal.value = null
+  }
+}
+
 async function reload(): Promise<void> {
-  await fetchPage()
+  await Promise.all([fetchPage(), fetchCount()])
 
   // A bulk delete can leave the current page past the end of the list. Step
   // back to the last real page rather than showing an empty table.
@@ -315,9 +333,14 @@ onMounted(async () => {
 
     <section>
       <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-3">
           <h2 class="text-xl font-semibold text-indigo-500">Newsletter list</h2>
           <SelectButton v-model="view" :options="viewOptions" option-label="label" option-value="value" :allow-empty="false" />
+          <RecordCount
+            :label="isTrash ? 'Total in Trash' : 'Total Newsletters'"
+            :total="recordTotal"
+            :loading="store.loading"
+          />
         </div>
 
         <div class="flex flex-wrap items-center gap-2">

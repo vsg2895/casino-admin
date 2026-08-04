@@ -13,6 +13,12 @@ export function listNewsletters(params?: {
   return client.get<PaginatedResponse<Newsletter>>('/admin/newsletters', { params }).then((r) => r.data)
 }
 
+// Total matching the current filters. A dedicated COUNT on the server, issued
+// separately from the listing so the paginated query never carries its weight.
+export function countNewsletters(params?: { site_id?: number; trashed?: boolean }): Promise<number> {
+  return client.get<{ total: number }>('/admin/newsletters/count', { params }).then((r) => r.data.total)
+}
+
 export function createNewsletter(payload: { site_id: number; email: string }): Promise<ApiResponse<Newsletter>> {
   return client.post<ApiResponse<Newsletter>>('/admin/newsletters', payload).then((r) => r.data)
 }

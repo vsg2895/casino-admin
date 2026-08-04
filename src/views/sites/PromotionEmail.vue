@@ -40,6 +40,38 @@ const testEmail = ref('')
 const testName = ref('')
 const testSending = ref(false)
 
+type ColorField =
+  | 'background_color'
+  | 'heading_color'
+  | 'text_color'
+  | 'secondary_text_color'
+  | 'muted_text_color'
+  | 'button_color'
+  | 'accent_color'
+
+// Mirrors SitePromotionEmail::COLOR_DEFAULTS on the server — the original dark
+// design. Kept in sync by hand; the server defaults are authoritative.
+const COLOR_DEFAULTS: Record<ColorField, string> = {
+  background_color: '#000000',
+  heading_color: '#ffffff',
+  text_color: '#ffffff',
+  secondary_text_color: '#d9d9d9',
+  muted_text_color: '#b3b3b3',
+  button_color: '#75B636',
+  accent_color: '#f3a333',
+}
+
+// Order here drives the order of the swatches in the Colours panel.
+const COLOR_FIELDS = [
+  { key: 'background_color', label: 'Background', hint: 'The email canvas.' },
+  { key: 'heading_color', label: 'Heading', hint: 'The large title.' },
+  { key: 'text_color', label: 'Body text', hint: 'Greeting and intro paragraph.' },
+  { key: 'secondary_text_color', label: 'Secondary text', hint: 'The second paragraph.' },
+  { key: 'muted_text_color', label: 'Muted text', hint: 'Disclaimer and unsubscribe line.' },
+  { key: 'button_color', label: 'Button', hint: 'CTA button fill.' },
+  { key: 'accent_color', label: 'Link', hint: 'The unsubscribe link.' },
+] as const satisfies ReadonlyArray<{ key: ColorField; label: string; hint: string }>
+
 function emptyForm(): UpdateSitePromotionEmailPayload {
   return {
     from_name: '',
@@ -55,10 +87,13 @@ function emptyForm(): UpdateSitePromotionEmailPayload {
     cta_button_text: '',
     disclaimer_text: '',
     unsubscribe_label: '',
-    button_color: '#75B636',
-    accent_color: '#f3a333',
+    ...COLOR_DEFAULTS,
     active: true,
   }
+}
+
+function resetColors(): void {
+  Object.assign(form, COLOR_DEFAULTS)
 }
 
 const form = reactive<UpdateSitePromotionEmailPayload>(emptyForm())
@@ -102,8 +137,13 @@ function toPayload(t: SitePromotionEmail): UpdateSitePromotionEmailPayload {
     cta_button_text: t.cta_button_text ?? '',
     disclaimer_text: t.disclaimer_text ?? '',
     unsubscribe_label: t.unsubscribe_label,
-    button_color: t.button_color,
-    accent_color: t.accent_color,
+    background_color: t.background_color ?? COLOR_DEFAULTS.background_color,
+    heading_color: t.heading_color ?? COLOR_DEFAULTS.heading_color,
+    text_color: t.text_color ?? COLOR_DEFAULTS.text_color,
+    secondary_text_color: t.secondary_text_color ?? COLOR_DEFAULTS.secondary_text_color,
+    muted_text_color: t.muted_text_color ?? COLOR_DEFAULTS.muted_text_color,
+    button_color: t.button_color ?? COLOR_DEFAULTS.button_color,
+    accent_color: t.accent_color ?? COLOR_DEFAULTS.accent_color,
     active: t.active,
   }
 }
@@ -341,9 +381,9 @@ function err(field: string): string | undefined {
           </div>
         </section>
 
-        <!-- Footer + colours -->
+        <!-- Footer -->
         <section class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <h3 class="mb-3 text-sm font-semibold text-gray-800">Footer &amp; colours</h3>
+          <h3 class="mb-3 text-sm font-semibold text-gray-800">Footer</h3>
           <div class="space-y-3">
             <div>
               <RemovableLabel label="Disclaimer" :value="form.disclaimer_text" @clear="form.disclaimer_text = ''" />
@@ -355,28 +395,34 @@ function err(field: string): string | undefined {
               <InputText v-model="form.unsubscribe_label" fluid />
               <p v-if="err('unsubscribe_label')" class="mt-1 text-xs text-red-600">{{ err('unsubscribe_label') }}</p>
             </div>
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div class="flex items-center gap-3">
-                <label class="text-xs font-medium text-gray-600">Button color</label>
+          </div>
+        </section>
+
+        <!-- Palette -->
+        <section class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div class="mb-3 flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-gray-800">Colours</h3>
+            <Button label="Reset to defaults" text size="small" severity="secondary" @click="resetColors" />
+          </div>
+          <p class="mb-3 text-xs text-gray-400">
+            Every colour in the email is editable. The preview updates as you change them —
+            keep an eye on the contrast between the background and each text colour.
+          </p>
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div v-for="field in COLOR_FIELDS" :key="field.key">
+              <label class="mb-1 block text-xs font-medium text-gray-600">{{ field.label }}</label>
+              <div class="flex items-center gap-2">
                 <input
                   type="color"
-                  v-model="form.button_color"
-                  class="h-9 w-14 cursor-pointer rounded border border-gray-300 bg-white p-0.5"
+                  v-model="form[field.key]"
+                  class="h-9 w-12 shrink-0 cursor-pointer rounded border border-gray-300 bg-white p-0.5"
+                  :aria-label="`${field.label} colour`"
                 />
-                <InputText v-model="form.button_color" class="w-28" />
+                <InputText v-model="form[field.key]" class="w-28" />
               </div>
-              <div class="flex items-center gap-3">
-                <label class="text-xs font-medium text-gray-600">Accent color</label>
-                <input
-                  type="color"
-                  v-model="form.accent_color"
-                  class="h-9 w-14 cursor-pointer rounded border border-gray-300 bg-white p-0.5"
-                />
-                <InputText v-model="form.accent_color" class="w-28" />
-              </div>
+              <p class="mt-1 text-xs text-gray-400">{{ field.hint }}</p>
+              <p v-if="err(field.key)" class="mt-1 text-xs text-red-600">{{ err(field.key) }}</p>
             </div>
-            <p v-if="err('button_color')" class="text-xs text-red-600">{{ err('button_color') }}</p>
-            <p v-if="err('accent_color')" class="text-xs text-red-600">{{ err('accent_color') }}</p>
           </div>
         </section>
 

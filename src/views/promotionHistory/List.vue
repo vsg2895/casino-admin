@@ -9,7 +9,8 @@ import Tag from 'primevue/tag'
 import Paginator, { type PageState } from 'primevue/paginator'
 import { useToast } from 'primevue/usetoast'
 import { useSitesStore } from '@/stores/sitesStore'
-import { listPromotionHistory } from '@/api/promotionHistory'
+import { listPromotionHistory, countPromotionHistory } from '@/api/promotionHistory'
+import RecordCount from '@/components/RecordCount.vue'
 import type { PromotionEmailHistory, PromotionEmailStatus } from '@shared/types/promotionEmailHistory'
 
 const sitesStore = useSitesStore()
@@ -49,21 +50,35 @@ function formatDateTime(iso: string | null | undefined): string {
   return iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '—'
 }
 
+// Total from the dedicated COUNT endpoint — never from the listing response.
+// This table reaches millions of rows, so counting is kept off the paginated
+// query entirely.
+const recordTotal = ref<number | null>(null)
+
 async function reload(): Promise<void> {
   loading.value = true
   try {
     const page = Math.floor(first.value / perPage.value) + 1
-    const res = await listPromotionHistory({
-      page,
+    // One filter object drives both calls, so the badge can never disagree with
+    // the rows on screen. They run concurrently — the count never delays the list.
+    const filters = {
       site_id: siteId.value ?? undefined,
       from: from.value || undefined,
       to: to.value || undefined,
       search: search.value.trim() || undefined,
       status: status.value ?? undefined,
-    })
+    }
+    const [res, count] = await Promise.all([
+      listPromotionHistory({ page, ...filters }),
+      // Never fatal: a COUNT over millions of history rows is the slowest thing
+      // on this page, and it failing must not take the listing down with it —
+      // the badge just falls back to "—".
+      countPromotionHistory(filters).catch(() => null),
+    ])
     items.value = res.data
     total.value = res.meta.total
     perPage.value = res.meta.per_page
+    recordTotal.value = count
   } catch {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load history.', life: 4000 })
   } finally {
@@ -106,11 +121,14 @@ onMounted(async () => {
 <template>
   <div class="space-y-4">
     <!-- Header -->
-    <div>
-      <h2 class="text-lg font-semibold text-gray-900">Promotion History</h2>
-      <p class="text-sm text-gray-500">
-        Every promotion email attempt — sent, failed, or skipped. Filter by site, date, and status, or search by the start of an email address.
-      </p>
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 class="text-lg font-semibold text-gray-900">Promotion History</h2>
+        <p class="text-sm text-gray-500">
+          Every promotion email attempt — sent, failed, or skipped. Filter by site, date, and status, or search by the start of an email address.
+        </p>
+      </div>
+      <RecordCount label="Total Promotion Histories" :total="recordTotal" :loading="loading" />
     </div>
 
     <!-- Filters -->

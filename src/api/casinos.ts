@@ -27,6 +27,12 @@ export function listCasinos(params?: {
   return client.get<PaginatedResponse<Casino>>('/admin/casinos', { params }).then((r) => r.data)
 }
 
+// Total casinos. A dedicated COUNT on the server, issued separately from the
+// listing so the paginated query never carries its weight.
+export function countCasinos(): Promise<number> {
+  return client.get<{ total: number }>('/admin/casinos/count').then((r) => r.data.total)
+}
+
 export function getCasino(id: number): Promise<ApiResponse<Casino>> {
   return client.get<ApiResponse<Casino>>(`/admin/casinos/${id}`).then((r) => r.data)
 }

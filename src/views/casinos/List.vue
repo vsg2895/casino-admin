@@ -16,6 +16,7 @@ import { useCasinosStore } from '@/stores/casinosStore'
 import { useSitesStore } from '@/stores/sitesStore'
 import * as casinosApi from '@/api/casinos'
 import * as attachmentsApi from '@/api/casinoAttachments'
+import RecordCount from '@/components/RecordCount.vue'
 import type { Casino } from '@shared/types/casino'
 import type { ErrorResponse } from '@shared/types/api'
 
@@ -44,6 +45,7 @@ async function confirmDelete(): Promise<void> {
   try {
     await casinosApi.deleteCasino(deletingCasino.value.id)
     store.remove(deletingCasino.value.id)
+    void refreshCount()
     selected.value = selected.value.filter((c) => c.id !== deletingCasino.value!.id)
     showDeleteConfirm.value = false
     toast.add({ severity: 'success', summary: 'Deleted', detail: `${deletingCasino.value.name} deleted.`, life: 3000 })
@@ -64,6 +66,7 @@ async function confirmBulkDelete(): Promise<void> {
   try {
     await Promise.all(ids.map((id) => casinosApi.deleteCasino(id)))
     ids.forEach((id) => store.remove(id))
+    void refreshCount()
     selected.value = []
     showBulkDeleteConfirm.value = false
     toast.add({ severity: 'success', summary: 'Deleted', detail: `${ids.length} casino(s) deleted.`, life: 3000 })
@@ -138,10 +141,25 @@ function extractError(e: unknown, fallback: string): string {
   return 'An unexpected error occurred.'
 }
 
+// ── Record counter ────────────────────────────────────────────────────────────
+// Total from the dedicated COUNT endpoint — never from the listing response, so
+// the paginated query keeps its eager loads and ordering without also paying to
+// count. Refreshed after any mutation so the badge tracks create/delete.
+const recordTotal = ref<number | null>(null)
+
+async function refreshCount(): Promise<void> {
+  try {
+    recordTotal.value = await casinosApi.countCasinos()
+  } catch {
+    recordTotal.value = null
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 onMounted(() => {
   store.fetchCasinos()
   sitesStore.fetchSites()
+  refreshCount()
 })
 </script>
 
@@ -153,11 +171,14 @@ onMounted(() => {
         <h2 class="text-lg font-semibold text-gray-900">Casinos</h2>
         <p class="text-sm text-gray-500">Manage casino master data and site attachments.</p>
       </div>
-      <Button
-        label="New Casino"
-        icon="pi pi-plus"
-        @click="router.push({ name: 'casinos-create' })"
-      />
+      <div class="flex items-center gap-3">
+        <RecordCount label="Total Casinos" :total="recordTotal" :loading="store.loading" />
+        <Button
+          label="New Casino"
+          icon="pi pi-plus"
+          @click="router.push({ name: 'casinos-create' })"
+        />
+      </div>
     </div>
 
     <!-- Bulk action bar -->
