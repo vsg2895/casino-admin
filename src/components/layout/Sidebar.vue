@@ -22,6 +22,7 @@ const navItems: NavItem[] = [
   { label: 'Promotion Emails', to: '/promotion-emails', icon: 'pi-megaphone' },
   { label: 'Schedule Setting', to: '/schedules',        icon: 'pi-clock' },
   { label: 'SendGrid Keys', to: '/sendgrid-keys', icon: 'pi-key' },
+  { label: 'Mailgun Keys', to: '/mailgun-keys', icon: 'pi-key' },
   { label: 'Promotion History', to: '/promotion-history', icon: 'pi-history' },
   { label: 'Social Links',   to: '/social-links',   icon: 'pi-share-alt' },
   { label: 'Pages',          to: '/pages',          icon: 'pi-file' },

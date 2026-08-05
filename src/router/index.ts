@@ -138,6 +138,12 @@ const router = createRouter({
           meta: { requiresAuth: true, title: 'SendGrid Keys' },
         },
         {
+          path: 'mailgun-keys',
+          name: 'mailgun-keys',
+          component: () => import('@/views/mailgunKeys/List.vue'),
+          meta: { requiresAuth: true, title: 'Mailgun Keys' },
+        },
+        {
           path: 'social-links',
           name: 'social-links',
           component: () => import('@/views/socialLinks/List.vue'),

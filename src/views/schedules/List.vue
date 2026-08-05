@@ -14,6 +14,7 @@ import axios from 'axios'
 import { useSitesStore } from '@/stores/sitesStore'
 import * as api from '@/api/emailSchedules'
 import * as sendgridApi from '@/api/sendgridKeys'
+import * as mailgunApi from '@/api/mailgunKeys'
 import type {
   EmailSchedule,
   ScheduleDateFilter,
@@ -23,6 +24,7 @@ import type {
   UpsertEmailSchedulePayload,
 } from '@shared/types/emailSchedule'
 import type { SendgridKey } from '@shared/types/sendgridKey'
+import type { MailgunKey } from '@shared/types/mailgunKey'
 import type { ErrorResponse } from '@shared/types/api'
 
 const sitesStore = useSitesStore()
@@ -54,10 +56,16 @@ const audienceModeOptions: { label: string; value: AudienceMode }[] = [
 const providerOptions: { label: string; value: ScheduleProvider }[] = [
   { label: 'SMTP (.env credentials)', value: 'smtp' },
   { label: 'SendGrid (stored key)', value: 'sendgrid' },
+  { label: 'Mailgun (stored key)', value: 'mailgun' },
 ]
 
 // Active SendGrid keys available to pick when provider = 'sendgrid'.
 const sendgridKeys = ref<SendgridKey[]>([])
+// Active Mailgun credentials available to pick when provider = 'mailgun'.
+const mailgunKeys = ref<MailgunKey[]>([])
+const mailgunKeyOptions = computed(() =>
+  mailgunKeys.value.map((k) => ({ label: `${k.name} — ${k.domain}`, value: k.id })),
+)
 const sendgridKeyOptions = computed(() =>
   sendgridKeys.value.map((k) => ({ label: `${k.name} (${k.masked_key})`, value: k.id })),
 )
@@ -82,6 +90,7 @@ function cadenceLabel(s: EmailSchedule): string {
 
 function providerLabel(s: EmailSchedule): string {
   if (s.provider === 'sendgrid') return `SendGrid · ${s.sendgrid_key?.name ?? 'key removed'}`
+  if (s.provider === 'mailgun') return `Mailgun · ${s.mailgun_key?.name ?? 'key removed'}`
   return 'SMTP'
 }
 
@@ -121,6 +130,7 @@ function emptyForm(): UpsertEmailSchedulePayload {
     day_of_month: 1,
     provider: 'smtp',
     sendgrid_key_id: null,
+    mailgun_key_id: null,
     active: true,
   }
 }
@@ -147,6 +157,7 @@ function openEdit(s: EmailSchedule): void {
     day_of_month: s.day_of_month ?? 1,
     provider: s.provider,
     sendgrid_key_id: s.sendgrid_key_id,
+    mailgun_key_id: s.mailgun_key_id,
     active: s.active,
   })
   audienceMode.value = s.date_filter === null ? 'count' : 'date'
@@ -161,6 +172,7 @@ function payload(): UpsertEmailSchedulePayload {
   const base = {
     ...form,
     sendgrid_key_id: form.provider === 'sendgrid' ? form.sendgrid_key_id : null,
+    mailgun_key_id: form.provider === 'mailgun' ? form.mailgun_key_id : null,
   }
   return audienceMode.value === 'count'
     ? { ...base, date_filter: null, limit: form.limit }
@@ -274,6 +286,16 @@ async function confirmDelete(): Promise<void> {
 
 function err(field: string): string | undefined {
   return fieldErrors.value[field]
+}
+
+async function loadMailgunKeys(): Promise<void> {
+  try {
+    mailgunKeys.value = (await mailgunApi.listMailgunKeys('active')).data
+  } catch {
+    // Non-fatal, and isolated from the SendGrid load: one provider's API
+    // failing must never blank the other's dropdown.
+    mailgunKeys.value = []
+  }
 }
 
 async function loadSendgridKeys(): Promise<void> {
@@ -489,7 +511,7 @@ onMounted(async () => {
         <section class="rounded-lg border border-gray-200 p-3">
           <h4 class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Email provider</h4>
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div :class="form.provider === 'sendgrid' ? '' : 'sm:col-span-2'">
+            <div :class="form.provider === 'smtp' ? 'sm:col-span-2' : ''">
               <label class="mb-1 block text-xs font-medium text-gray-600">Send via</label>
               <Select v-model="form.provider" :options="providerOptions" option-label="label" option-value="value" fluid />
               <p v-if="err('provider')" class="mt-1 text-xs text-red-600">{{ err('provider') }}</p>
@@ -506,12 +528,27 @@ onMounted(async () => {
               />
               <p v-if="err('sendgrid_key_id')" class="mt-1 text-xs text-red-600">{{ err('sendgrid_key_id') }}</p>
             </div>
+            <div v-if="form.provider === 'mailgun'">
+              <label class="mb-1 block text-xs font-medium text-gray-600">Mailgun key</label>
+              <Select
+                v-model="form.mailgun_key_id"
+                :options="mailgunKeyOptions"
+                option-label="label"
+                option-value="value"
+                fluid
+                placeholder="Select an active key"
+              />
+              <p v-if="err('mailgun_key_id')" class="mt-1 text-xs text-red-600">{{ err('mailgun_key_id') }}</p>
+            </div>
           </div>
           <p v-if="form.provider === 'sendgrid' && sendgridKeyOptions.length === 0" class="mt-2 text-xs text-amber-600">
             No active SendGrid keys. Add one under “SendGrid Keys” first.
           </p>
+          <p v-else-if="form.provider === 'mailgun' && mailgunKeyOptions.length === 0" class="mt-2 text-xs text-amber-600">
+            No active Mailgun keys. Add one under “Mailgun Keys” first.
+          </p>
           <p v-else class="mt-2 text-xs text-gray-400">
-            SMTP uses the server's .env mail credentials. SendGrid sends through the selected stored key.
+            SMTP uses the server's .env mail credentials. SendGrid and Mailgun each send through their selected stored key.
           </p>
         </section>
 
