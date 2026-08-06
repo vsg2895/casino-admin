@@ -308,7 +308,7 @@ async function loadSendgridKeys(): Promise<void> {
 }
 
 onMounted(async () => {
-  await Promise.all([sitesStore.fetchSites(), loadSendgridKeys()])
+  await Promise.all([sitesStore.fetchSites(), loadSendgridKeys(), loadMailgunKeys()])
   await reload()
 })
 </script>
