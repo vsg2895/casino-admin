@@ -144,6 +144,12 @@ const router = createRouter({
           meta: { requiresAuth: true, title: 'Mailgun Keys' },
         },
         {
+          path: 'warmup',
+          name: 'warmup',
+          component: () => import('@/views/warmup/List.vue'),
+          meta: { requiresAuth: true, title: 'Warmup' },
+        },
+        {
           path: 'social-links',
           name: 'social-links',
           component: () => import('@/views/socialLinks/List.vue'),
