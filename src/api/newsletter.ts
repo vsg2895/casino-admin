@@ -9,13 +9,19 @@ export function listNewsletters(params?: {
   per_page?: number
   site_id?: number
   trashed?: boolean
+  // Tri-state: true / false filter, or omit for "all".
+  verified?: boolean
 }): Promise<PaginatedResponse<Newsletter>> {
   return client.get<PaginatedResponse<Newsletter>>('/admin/newsletters', { params }).then((r) => r.data)
 }
 
 // Total matching the current filters. A dedicated COUNT on the server, issued
 // separately from the listing so the paginated query never carries its weight.
-export function countNewsletters(params?: { site_id?: number; trashed?: boolean }): Promise<number> {
+export function countNewsletters(params?: {
+  site_id?: number
+  trashed?: boolean
+  verified?: boolean
+}): Promise<number> {
   return client.get<{ total: number }>('/admin/newsletters/count', { params }).then((r) => r.data.total)
 }
 

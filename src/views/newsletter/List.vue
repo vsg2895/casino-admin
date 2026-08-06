@@ -31,6 +31,16 @@ const viewOptions: { label: string; value: View }[] = [
   { label: 'Trash', value: 'trash' },
 ]
 
+// Verification filter. Tri-state, so null must mean "all" — sending `false`
+// for the unfiltered case would silently narrow the list to unverified only.
+type VerifiedFilter = boolean | null
+const verifiedFilter = ref<VerifiedFilter>(null)
+const verifiedOptions: { label: string; value: VerifiedFilter }[] = [
+  { label: 'All', value: null },
+  { label: 'Verified', value: true },
+  { label: 'Unverified', value: false },
+]
+
 const email = ref('')
 const adding = ref(false)
 const exporting = ref(false)
@@ -64,12 +74,22 @@ const first = computed(() => (page.value - 1) * perPage.value)
 // so the paginated query stays free of counting work as the list grows.
 const recordTotal = ref<number | null>(null)
 
+// One definition of "what is the admin looking at", shared by the listing and
+// the count so the badge can never disagree with the rows on screen.
+function activeFilters(): { site_id?: number; trashed: boolean; verified?: boolean } {
+  return {
+    site_id: siteId.value ?? undefined,
+    trashed: isTrash.value,
+    // Omitted entirely when null, so the server sees no ?verified at all.
+    ...(verifiedFilter.value === null ? {} : { verified: verifiedFilter.value }),
+  }
+}
+
 function fetchPage(): Promise<void> {
   return store.fetchNewsletters({
     page: page.value,
     per_page: perPage.value,
-    site_id: siteId.value ?? undefined,
-    trashed: isTrash.value,
+    ...activeFilters(),
   })
 }
 
@@ -77,10 +97,7 @@ function fetchPage(): Promise<void> {
 // Never fatal — a failed count must not take the listing down with it.
 async function fetchCount(): Promise<void> {
   try {
-    recordTotal.value = await countNewsletters({
-      site_id: siteId.value ?? undefined,
-      trashed: isTrash.value,
-    })
+    recordTotal.value = await countNewsletters(activeFilters())
   } catch {
     recordTotal.value = null
   }
@@ -308,7 +325,7 @@ function confirmForceSelected(): Promise<void> {
   })
 }
 
-watch([siteId, view], async () => {
+watch([siteId, view, verifiedFilter], async () => {
   selected.value = []
   await reloadFromFirstPage()
 })
@@ -336,6 +353,14 @@ onMounted(async () => {
         <div class="flex flex-wrap items-center gap-3">
           <h2 class="text-xl font-semibold text-indigo-500">Newsletter list</h2>
           <SelectButton v-model="view" :options="viewOptions" option-label="label" option-value="value" :allow-empty="false" />
+          <SelectButton
+            v-model="verifiedFilter"
+            :options="verifiedOptions"
+            option-label="label"
+            option-value="value"
+            :allow-empty="false"
+            aria-label="Filter by verification status"
+          />
           <RecordCount
             :label="isTrash ? 'Total in Trash' : 'Total Newsletters'"
             :total="recordTotal"
