@@ -120,6 +120,26 @@ const router = createRouter({
           meta: { requiresAuth: true, title: 'Unsubscribes' },
         },
         {
+          // Standalone SMS list — backed by `newsletters_based_on_phone`, with no
+          // relationship to the email newsletter above.
+          path: 'newsletter-phones',
+          name: 'newsletter-phones',
+          component: () => import('@/views/newsletterPhone/List.vue'),
+          meta: { requiresAuth: true, title: 'Newsletters Based on Phone' },
+        },
+        {
+          path: 'sms-templates',
+          name: 'sms-templates',
+          component: () => import('@/views/smsTemplates/List.vue'),
+          meta: { requiresAuth: true, title: 'SMS Templates' },
+        },
+        {
+          path: 'twilio-configs',
+          name: 'twilio-configs',
+          component: () => import('@/views/twilioConfigs/List.vue'),
+          meta: { requiresAuth: true, title: 'Twilio Configs' },
+        },
+        {
           path: 'schedules',
           name: 'schedules',
           component: () => import('@/views/schedules/List.vue'),
