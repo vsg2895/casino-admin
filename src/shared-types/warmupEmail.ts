@@ -21,6 +21,25 @@ export interface WarmupImportSummary {
 
 export interface WarmupSendResult {
   ok: boolean
+  send_id: number
   recipients: number
   message: string
+}
+
+// A template a warmup run may use. Served by /admin/warmup-emails/templates,
+// which is the catalog minus what warmup forbids (currently the verify email:
+// its payload is a confirmation link that means nothing for a seed address).
+export interface WarmupTemplate {
+  value: string
+  label: string
+  description: string
+}
+
+// Payload for a warmup run. `count` is OPTIONAL — omit it (or send null) to mail
+// every address on the list; a number takes that many, least-recently-contacted
+// first, so the list warms evenly instead of the same addresses absorbing it all.
+export interface WarmupSendPayload {
+  site_id: number
+  template: string
+  count?: number | null
 }

@@ -3,17 +3,21 @@ import { ref, computed, onMounted, watch } from 'vue'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import InputText from 'primevue/inputtext'
-import Textarea from 'primevue/textarea'
+import Select from 'primevue/select'
+import InputNumber from 'primevue/inputnumber'
+import ToggleSwitch from 'primevue/toggleswitch'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import { useToast } from 'primevue/usetoast'
 import axios from 'axios'
 import * as api from '@/api/warmupEmails'
 import RecordCount from '@/components/RecordCount.vue'
-import type { WarmupEmail, WarmupImportSummary } from '@shared/types/warmupEmail'
+import { useSitesStore } from '@/stores/sitesStore'
+import type { WarmupEmail, WarmupImportSummary, WarmupTemplate } from '@shared/types/warmupEmail'
 import type { ErrorResponse } from '@shared/types/api'
 
 const toast = useToast()
+const sitesStore = useSitesStore()
 
 const items = ref<WarmupEmail[]>([])
 const loading = ref(false)
@@ -193,26 +197,102 @@ async function onFileSelected(e: Event): Promise<void> {
 }
 
 // ── Send ──────────────────────────────────────────────────────────────────────
+// The message is no longer typed here: a run renders one of the SITE's own email
+// templates, so warmup traffic looks like the operator's real mail rather than
+// hand-written prose — which is what actually teaches a receiving server to trust
+// the sending mailbox.
 const showSend = ref(false)
-const sendSubject = ref('')
-const sendBody = ref('')
 const sending = ref(false)
+const sendSiteId = ref<number | null>(null)
+const sendTemplate = ref<string | null>(null)
+const templates = ref<WarmupTemplate[]>([])
+
+// null = every address on the list; a number takes that many, least recently
+// contacted first.
+const sendAll = ref(true)
+const sendCount = ref<number | null>(null)
+
+const siteOptions = computed(() =>
+  sitesStore.sites.map((s) => ({ label: `${s.name} (${s.domain})`, value: s.id })),
+)
+
+// Templates are resolved per site: the send renders THAT site's stored template,
+// so changing the site reloads what is on offer. The endpoint already excludes
+// anything warmup forbids, so the dropdown can never offer a rejected option.
+const templateOptions = computed(() =>
+  templates.value.map((t) => ({ label: t.label, value: t.value, description: t.description })),
+)
+
+const selectedTemplate = computed(() =>
+  templates.value.find((t) => t.value === sendTemplate.value) ?? null,
+)
+
+const recipientCap = computed(() => recordTotal.value ?? 0)
+
+const canSend = computed(
+  () =>
+    sendSiteId.value !== null &&
+    sendTemplate.value !== null &&
+    recipientCap.value > 0 &&
+    (sendAll.value || (sendCount.value !== null && sendCount.value >= 1 && sendCount.value <= recipientCap.value)),
+)
+
+async function loadTemplates(): Promise<void> {
+  try {
+    const { data } = await api.listWarmupTemplates()
+    templates.value = data
+    // Drop a selection the new site no longer offers.
+    if (sendTemplate.value && !data.some((t) => t.value === sendTemplate.value)) {
+      sendTemplate.value = null
+    }
+  } catch {
+    templates.value = []
+  }
+}
+
+async function openSend(): Promise<void> {
+  showSend.value = true
+  sendAll.value = true
+  sendCount.value = null
+  sendSiteId.value = sitesStore.sites[0]?.id ?? null
+  await Promise.all([sitesStore.fetchSites(), loadTemplates()])
+  if (sendSiteId.value === null) sendSiteId.value = sitesStore.sites[0]?.id ?? null
+}
+
+// Refilter the template list whenever the site changes.
+watch(sendSiteId, () => {
+  if (showSend.value) void loadTemplates()
+})
 
 async function send(): Promise<void> {
-  if (sendSubject.value.trim() === '' || sendBody.value.trim() === '') return
+  if (!canSend.value) return
   sending.value = true
   try {
-    const res = await api.sendWarmupEmails(sendSubject.value.trim(), sendBody.value.trim())
-    toast.add({ severity: 'success', summary: 'Queued', detail: res.message, life: 5000 })
+    const res = await api.sendWarmupEmails({
+      site_id: sendSiteId.value as number,
+      template: sendTemplate.value as string,
+      count: sendAll.value ? null : sendCount.value,
+    })
+    toast.add({ severity: 'success', summary: 'Queued', detail: res.message, life: 7000 })
     showSend.value = false
+    await reload()
   } catch (e: unknown) {
-    toast.add({ severity: 'error', summary: 'Not queued', detail: extractError(e, 'Could not queue the warmup send.'), life: 6000 })
+    // 409 means a run is already in flight — an expected outcome, not a fault.
+    const conflict = axios.isAxiosError(e) && e.response?.status === 409
+    toast.add({
+      severity: conflict ? 'warn' : 'error',
+      summary: conflict ? 'Already running' : 'Not queued',
+      detail: extractError(e, 'Could not queue the warmup run.'),
+      life: 7000,
+    })
   } finally {
     sending.value = false
   }
 }
 
-onMounted(reload)
+onMounted(async () => {
+  await Promise.all([reload(), sitesStore.fetchSites()])
+})
 </script>
 
 <template>
@@ -229,7 +309,7 @@ onMounted(reload)
       <div class="flex flex-wrap items-center gap-2">
         <RecordCount label="Total Warmup Emails" :total="recordTotal" :loading="loading" />
         <Button label="Import" icon="pi pi-upload" severity="secondary" outlined :loading="importing" @click="triggerImport" />
-        <Button label="Send warmup" icon="pi pi-send" severity="secondary" outlined @click="showSend = true" />
+        <Button label="Send warmup" icon="pi pi-send" severity="secondary" outlined @click="openSend" />
         <Button label="Add email" icon="pi pi-plus" @click="openCreate" />
       </div>
     </div>
@@ -341,21 +421,74 @@ onMounted(reload)
     </Dialog>
 
     <!-- Send -->
-    <Dialog v-model:visible="showSend" modal header="Send warmup emails" :style="{ width: '520px' }">
+    <Dialog v-model:visible="showSend" modal header="Send warmup emails" :style="{ width: '560px' }">
       <div class="space-y-4">
         <p class="text-sm text-gray-600">
-          Sends a plain-text message to every address on the list over the <code>.env</code> SMTP
-          mailer. Keep the wording conversational — marketing-shaped mail is what gets a young
-          sender filtered.
+          Sends one of a site's own email templates over the <code>.env</code> SMTP mailer —
+          the same transport as before. Using a real template means warmup traffic looks like
+          your genuine mail, which is what actually builds the mailbox's reputation.
         </p>
+
         <div>
-          <label class="mb-1 block text-xs font-medium text-gray-600">Subject</label>
-          <InputText v-model="sendSubject" fluid placeholder="e.g. Quick question" />
+          <label class="mb-1 block text-xs font-medium text-gray-600">Site</label>
+          <Select
+            v-model="sendSiteId"
+            :options="siteOptions"
+            option-label="label"
+            option-value="value"
+            fluid
+            placeholder="Select a site"
+          />
         </div>
+
         <div>
-          <label class="mb-1 block text-xs font-medium text-gray-600">Message</label>
-          <Textarea v-model="sendBody" rows="6" auto-resize fluid placeholder="Write a short, ordinary message…" />
+          <label class="mb-1 block text-xs font-medium text-gray-600">Email template</label>
+          <Select
+            v-model="sendTemplate"
+            :options="templateOptions"
+            option-label="label"
+            option-value="value"
+            fluid
+            :disabled="sendSiteId === null"
+            placeholder="Select a template"
+          />
+          <p v-if="selectedTemplate" class="mt-1 text-xs text-gray-500">
+            {{ selectedTemplate.description }}
+          </p>
+          <p v-else class="mt-1 text-xs text-gray-500">
+            Rendered from the selected site's stored template. The verify email is excluded —
+            its confirmation link means nothing for a warmup address.
+          </p>
         </div>
+
+        <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3">
+          <div class="flex items-center gap-3">
+            <ToggleSwitch v-model="sendAll" input-id="warmup-send-all" />
+            <label for="warmup-send-all" class="cursor-pointer text-sm text-gray-700">
+              Send to every address on the list
+              <span class="text-gray-400">({{ recipientCap.toLocaleString() }})</span>
+            </label>
+          </div>
+
+          <div v-if="!sendAll" class="mt-3">
+            <label class="mb-1 block text-xs font-medium text-gray-600">How many recipients</label>
+            <InputNumber
+              v-model="sendCount"
+              :min="1"
+              :max="recipientCap"
+              fluid
+              placeholder="e.g. 50"
+            />
+            <p class="mt-1 text-xs text-gray-500">
+              Takes the least recently contacted first, so the list warms evenly instead of the
+              same addresses absorbing every run. Max {{ recipientCap.toLocaleString() }}.
+            </p>
+          </div>
+        </div>
+
+        <p v-if="recipientCap === 0" class="text-sm text-amber-700">
+          The warmup list is empty — add or import addresses first.
+        </p>
       </div>
       <template #footer>
         <Button label="Cancel" text @click="showSend = false" />
@@ -363,7 +496,7 @@ onMounted(reload)
           label="Queue send"
           icon="pi pi-send"
           :loading="sending"
-          :disabled="sendSubject.trim() === '' || sendBody.trim() === ''"
+          :disabled="!canSend"
           @click="send"
         />
       </template>

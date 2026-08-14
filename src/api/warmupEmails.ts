@@ -1,6 +1,12 @@
 import client from './client'
 import type { ApiResponse, PaginatedResponse } from '@shared/types/api'
-import type { WarmupEmail, WarmupImportSummary, WarmupSendResult } from '@shared/types/warmupEmail'
+import type {
+  WarmupEmail,
+  WarmupImportSummary,
+  WarmupSendPayload,
+  WarmupSendResult,
+  WarmupTemplate,
+} from '@shared/types/warmupEmail'
 
 export interface WarmupFilters {
   page?: number
@@ -50,10 +56,19 @@ export function importWarmupEmails(file: File): Promise<WarmupImportSummary> {
     .then((r) => r.data)
 }
 
-// Queues the warmup send over the .env SMTP mailer; resolves as soon as the
-// batches are queued, not when delivery finishes.
-export function sendWarmupEmails(subject: string, body: string): Promise<WarmupSendResult> {
+// Templates a warmup run may use — the catalog minus what warmup forbids. Served
+// from the same allow-list the server validates against, so the dropdown can
+// never offer something the send would reject.
+export function listWarmupTemplates(): Promise<{ data: WarmupTemplate[] }> {
+  return client.get<{ data: WarmupTemplate[] }>('/admin/warmup-emails/templates').then((r) => r.data)
+}
+
+// Queues a warmup run: one site's template, sent to `count` addresses — or to the
+// whole list when `count` is omitted. Still goes over the .env SMTP mailer;
+// resolves as soon as the fan-out is queued, not when delivery finishes.
+// Returns 409 if a run is already in flight.
+export function sendWarmupEmails(payload: WarmupSendPayload): Promise<WarmupSendResult> {
   return client
-    .post<WarmupSendResult>('/admin/warmup-emails/send', { subject, body })
+    .post<WarmupSendResult>('/admin/warmup-emails/send', payload)
     .then((r) => r.data)
 }
