@@ -4,6 +4,9 @@ import type { ApiResponse, PaginatedResponse } from '@shared/types/api'
 
 export interface CreateCasinoPayload {
   name: string
+  // Optional on create (the backend derives it from the name when omitted) and
+  // editable thereafter — it is the casino's public URL segment on every site.
+  slug?: string
   image_path?: string | null
   banner_image?: string | null
   bonuses?: string | null

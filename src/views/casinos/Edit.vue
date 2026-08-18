@@ -32,7 +32,7 @@ const offers = ref<SpecialOffer[]>([])
 const loaded = ref(false)
 
 const form = reactive<CasinoFormModel>({
-  name: '', image_path: null, banner_image: null, bonuses: null, affiliate_url: null,
+  name: '', slug: '', image_path: null, banner_image: null, bonuses: null, affiliate_url: null,
   description: null, rating: 0, sort_order: 0, featured_special_offer_id: null,
   meta_title: null, meta_description: null, active: false, category_ids: [],
 })
@@ -58,6 +58,7 @@ onMounted(async () => {
   ])
   Object.assign(form, {
     name: casino.name,
+    slug: casino.slug,
     image_path: casino.image_path,
     banner_image: casino.banner_image,
     bonuses: casino.bonuses,
@@ -143,7 +144,7 @@ async function saveAttachments(): Promise<void> {
       <TabPanels class="!pt-4">
         <TabPanel value="details">
           <div class="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
-            <CasinoFormFields :form="form" :categories="categoriesStore.categories" :offers="offers" :errors="errors" />
+            <CasinoFormFields :form="form" :categories="categoriesStore.categories" :offers="offers" :errors="errors" editing />
           </div>
         </TabPanel>
         <TabPanel value="sites">

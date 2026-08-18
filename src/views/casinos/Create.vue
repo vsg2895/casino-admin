@@ -18,6 +18,7 @@ const categoriesStore = useCategoriesStore()
 
 const form = reactive<CasinoFormModel>({
   name: '',
+  slug: '',
   image_path: null,
   banner_image: null,
   bonuses: null,
@@ -45,7 +46,10 @@ async function create(): Promise<void> {
   formError.value = null
   loading.value = true
   try {
-    const response = await casinosApi.createCasino({ ...form })
+    // A blank slug is omitted entirely rather than sent as '': that is what
+    // tells the backend to derive it from the title.
+    const { slug, ...rest } = form
+    const response = await casinosApi.createCasino(slug ? { ...rest, slug } : { ...rest })
     store.upsert(response.data)
     toast.add({ severity: 'success', summary: 'Created', detail: `${response.data.name} created.`, life: 3000 })
     router.push({ name: 'casinos-edit', params: { id: response.data.id } })
@@ -66,7 +70,7 @@ async function create(): Promise<void> {
 
 function clearForm(): void {
   Object.assign(form, {
-    name: '', image_path: null, banner_image: null, bonuses: null, affiliate_url: null,
+    name: '', slug: '', image_path: null, banner_image: null, bonuses: null, affiliate_url: null,
     description: null, rating: 0, sort_order: 0, featured_special_offer_id: null,
     meta_title: null, meta_description: null, active: false, category_ids: [],
   })
