@@ -2,6 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      favicon.ico first, then the SVG. The panel previously offered only the
+      SVG, so browsers that do not take an SVG favicon (Safari most visibly)
+      fell back to a placeholder instead of the briefcase mark. The .ico holds
+      16/32/48 rasters generated from that same favicon.svg.
+    -->
+    <link rel="icon" sizes="16x16 32x32 48x48" href="/favicon.ico" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Casino Admin</title>
