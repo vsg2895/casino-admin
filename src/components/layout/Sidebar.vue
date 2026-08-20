@@ -23,6 +23,7 @@ const navItems: NavItem[] = [
   { label: 'Subscription Emails', to: '/email-templates', icon: 'pi-inbox' },
   { label: 'Verify Email', to: '/verify-emails', icon: 'pi-verified' },
   { label: 'Promotion Emails', to: '/promotion-emails', icon: 'pi-megaphone' },
+  { label: 'Promotion After Verification', to: '/promotion-after-verification', icon: 'pi-verified' },
   { label: 'Schedule Setting', to: '/schedules',        icon: 'pi-clock' },
   { label: 'SendGrid Keys', to: '/sendgrid-keys', icon: 'pi-key' },
   { label: 'Mailgun Keys', to: '/mailgun-keys', icon: 'pi-key' },

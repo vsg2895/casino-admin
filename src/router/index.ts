@@ -54,6 +54,13 @@ const router = createRouter({
           meta: { requiresAuth: true, title: 'Verify Email' },
         },
         {
+          // The ONE global post-verification promotion — no :siteId, by design.
+          path: 'promotion-after-verification',
+          name: 'promotion-after-verification',
+          component: () => import('@/views/verificationPromotion/Edit.vue'),
+          meta: { requiresAuth: true, title: 'Promotion After Verification' },
+        },
+        {
           path: 'promotion-emails',
           name: 'promotion-emails',
           component: () => import('@/views/sites/PromotionEmails.vue'),
