@@ -464,6 +464,26 @@ onMounted(async () => {
             </template>
           </Column>
 
+          <!--
+            When they clicked the verify link. Null for anyone still pending,
+            and for subscribers who verified before this column existed — those
+            rows are never sent the post-verification promotion, which is why
+            an empty value here is worth being able to see.
+          -->
+          <Column header="Verified at" :style="{ width: '200px' }">
+            <template #body="{ data }: { data: Newsletter }">
+              <span v-if="data.verified_at" class="text-gray-600">{{ formatDate(data.verified_at) }}</span>
+              <span
+                v-else-if="data.verified"
+                class="text-xs text-gray-400"
+                v-tooltip.top="'Verified before this was recorded — not eligible for the post-verification promotion'"
+              >
+                not recorded
+              </span>
+              <span v-else class="text-gray-300">—</span>
+            </template>
+          </Column>
+
           <Column :header="isTrash ? 'Deleted at' : 'Created at'" :style="{ width: '220px' }">
             <template #body="{ data }: { data: Newsletter }">
               <span class="text-gray-600">{{ formatDate(isTrash ? data.deleted_at : data.created_at) }}</span>
