@@ -368,7 +368,7 @@ function err(field: string): string | undefined {
               v-model="form.delay_minutes"
               :min="0"
               :max="maxDelay"
-              :step="5"
+              :step="1"
               show-buttons
               fluid
               suffix=" min"
