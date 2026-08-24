@@ -12,6 +12,12 @@ export interface FooterLink {
   url: string
 }
 
+// One offer "ticket" term — a column label + its value (e.g. Wagering / 40x).
+export interface OfferTerm {
+  label: string
+  value: string
+}
+
 export interface VerificationPromotionEmail {
   id: number
   from_name: string
@@ -32,14 +38,25 @@ export interface VerificationPromotionEmail {
 
   // ── New design components (removable — null omits the block) ─────────────────
   header_brand_text: string | null
+  // Thin green strip at the top: the one-line email-confirmed fact.
+  confirmation_text: string | null
   eyebrow_text: string | null
-  rating_stars: string | null
+  // Bonus-amount headline of the offer "ticket".
   highlight_text: string | null
+  // Ordered list of the ticket's term columns. Always an array (may be empty).
+  offer_terms: OfferTerm[]
   responsible_notice_text: string | null
   footer_tagline: string | null
   // Ordered list of footer nav links. Always an array (may be empty).
   footer_links: FooterLink[]
   affiliate_disclosure_text: string | null
+  // Footer legal / contact lines
+  reason_text: string | null
+  age_disclaimer_text: string | null
+  postal_address: string | null
+  contact_email: string | null
+  email_preferences_label: string | null
+  email_preferences_url: string | null
   copyright_text: string | null
 
   // Palette (hex). Never null; the API fills in the design default.
@@ -53,6 +70,7 @@ export interface VerificationPromotionEmail {
   secondary_text_color: string
   muted_text_color: string
   footer_background_color: string
+  footer_link_color: string
   footer_text_color: string
 
   // ── Settings ───────────────────────────────────────────────────────────────
