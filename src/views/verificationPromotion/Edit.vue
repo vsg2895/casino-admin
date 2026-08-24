@@ -24,6 +24,7 @@ import axios from 'axios'
 import * as api from '@/api/verificationPromotion'
 import { listSendgridKeys } from '@/api/sendgridKeys'
 import { listMailgunKeys } from '@/api/mailgunKeys'
+import { useSitesStore } from '@/stores/sitesStore'
 import type {
   EmailProvider,
   UpdateVerificationPromotionEmailPayload,
@@ -32,6 +33,18 @@ import type {
 import type { ErrorResponse } from '@shared/types/api'
 
 const toast = useToast()
+const sitesStore = useSitesStore()
+
+// Which registered site the preview + test render against, so {{site_name}} /
+// {{site_url}} resolve to that site's values. Defaults to the first site once
+// loaded (matching the server's fallback); null only while sites are loading.
+const previewSiteId = ref<number | null>(null)
+const siteOptions = computed(() =>
+  sitesStore.sites.map((s) => ({ label: `${s.name} (${s.domain})`, value: s.id })),
+)
+const previewSiteName = computed(
+  () => sitesStore.sites.find((s) => s.id === previewSiteId.value)?.name ?? '',
+)
 
 const fromDomain = ref('example.com')
 const maxDelay = ref(43200)
@@ -196,6 +209,14 @@ onMounted(async () => {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load the promotion.', life: 5000 })
   }
 
+  // Sites for the preview picker. Default to the first site so the initial
+  // render matches the server's fallback; a failure just leaves it on the
+  // server default.
+  try {
+    await sitesStore.fetchSites()
+    previewSiteId.value = sitesStore.sites[0]?.id ?? null
+  } catch { /* preview falls back to a representative site server-side */ }
+
   // Key lists are loaded independently: one provider's endpoint failing must not
   // blank out the other's dropdown.
   try {
@@ -302,7 +323,7 @@ let previewTimer: ReturnType<typeof setTimeout> | undefined
 async function refreshPreview(): Promise<void> {
   previewLoading.value = true
   try {
-    const res = await api.previewVerificationPromotion(toPayloadForApi())
+    const res = await api.previewVerificationPromotion(toPayloadForApi(), previewSiteId.value)
     previewHtml.value = res.html
     previewError.value = ''
   } catch (e: unknown) {
@@ -320,6 +341,12 @@ watch(form, () => {
   clearTimeout(previewTimer)
   previewTimer = setTimeout(refreshPreview, 500)
 }, { deep: true })
+
+// Re-render immediately when the preview site changes — no debounce, it is a
+// deliberate single action, not typing.
+watch(previewSiteId, () => {
+  if (!loading.value) refreshPreview()
+})
 
 async function save(): Promise<void> {
   fieldErrors.value = {}
@@ -350,7 +377,11 @@ async function sendTest(): Promise<void> {
   if (!testEmail.value.trim()) return
   testSending.value = true
   try {
-    const res = await api.sendTestVerificationPromotion(testEmail.value.trim(), testName.value.trim() || undefined)
+    const res = await api.sendTestVerificationPromotion(
+      testEmail.value.trim(),
+      testName.value.trim() || undefined,
+      previewSiteId.value,
+    )
     toast.add({ severity: 'success', summary: 'Sent', detail: res.message, life: 4000 })
     showTest.value = false
     testEmail.value = ''
@@ -682,10 +713,29 @@ function err(field: string): string | undefined {
       <!-- ── Live preview ── -->
       <div class="lg:sticky lg:top-4 lg:self-start">
         <div class="rounded-xl border border-gray-200 bg-white shadow-sm">
-          <div class="flex items-center justify-between border-b border-gray-100 px-4 py-2.5">
-            <h3 class="text-sm font-semibold text-gray-800">Preview</h3>
-            <span v-if="previewLoading" class="text-xs text-gray-400">Rendering…</span>
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-2.5">
+            <div class="flex items-center gap-2">
+              <h3 class="text-sm font-semibold text-gray-800">Preview</h3>
+              <span v-if="previewLoading" class="text-xs text-gray-400">Rendering…</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-xs font-medium text-gray-500">Preview as</label>
+              <Select
+                v-model="previewSiteId"
+                :options="siteOptions"
+                option-label="label"
+                option-value="value"
+                placeholder="Select a site"
+                class="w-56"
+                :disabled="siteOptions.length === 0"
+              />
+            </div>
           </div>
+          <p class="border-b border-gray-100 px-4 py-1.5 text-xs text-gray-400">
+            <code class="font-mono">{{ SITE_NAME_TOKEN }}</code> and
+            <code class="font-mono">{{ SITE_URL_TOKEN }}</code> resolve to the selected site. Each
+            subscriber still receives their own site's values when the promotion is sent.
+          </p>
           <div class="p-3">
             <p v-if="previewError" class="rounded bg-red-50 px-3 py-2 text-xs text-red-700">{{ previewError }}</p>
             <iframe
@@ -714,6 +764,9 @@ function err(field: string): string | undefined {
         <Message severity="info" :closable="false" class="text-xs">
           Sends the <strong>saved</strong> template through the transport configured above, so this
           also proves that key works.
+          <span v-if="previewSiteName" class="mt-1 block">
+            Placeholders resolve to <strong>{{ previewSiteName }}</strong> (the site selected in the preview).
+          </span>
         </Message>
       </div>
       <template #footer>
