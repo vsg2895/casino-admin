@@ -81,29 +81,38 @@ const providerOptions = computed<{ label: string; value: EmailProvider }[]>(() =
 })
 
 type ColorField =
-  | 'background_color' | 'heading_color' | 'text_color'
-  | 'secondary_text_color' | 'muted_text_color' | 'button_color' | 'accent_color'
+  | 'background_color' | 'body_background_color' | 'header_color' | 'heading_color'
+  | 'text_color' | 'secondary_text_color' | 'muted_text_color' | 'button_color'
+  | 'accent_color' | 'footer_background_color' | 'footer_text_color'
 
-// Mirrors SitePromotionEmail::COLOR_DEFAULTS on the server (this template
-// inherits that model's palette). The server defaults are authoritative.
+// Mirrors VerificationPromotionEmail::COLOR_DEFAULTS on the server (the light
+// "thanks for subscribing" design). The server defaults are authoritative.
 const COLOR_DEFAULTS: Record<ColorField, string> = {
-  background_color: '#000000',
-  heading_color: '#ffffff',
-  text_color: '#ffffff',
-  secondary_text_color: '#d9d9d9',
-  muted_text_color: '#b3b3b3',
-  button_color: '#75B636',
-  accent_color: '#f3a333',
+  background_color: '#f4f5f7',
+  body_background_color: '#ffffff',
+  header_color: '#059669',
+  heading_color: '#111827',
+  text_color: '#374151',
+  secondary_text_color: '#4b5563',
+  muted_text_color: '#6b7280',
+  button_color: '#059669',
+  accent_color: '#059669',
+  footer_background_color: '#111827',
+  footer_text_color: '#9ca3af',
 }
 
 const COLOR_FIELDS = [
-  { key: 'background_color', label: 'Background', hint: 'The email canvas.' },
+  { key: 'background_color', label: 'Page canvas', hint: 'Behind the email card.' },
+  { key: 'body_background_color', label: 'Body card', hint: 'The white content card.' },
+  { key: 'header_color', label: 'Header band', hint: 'The brand band at the top.' },
   { key: 'heading_color', label: 'Heading', hint: 'The large title.' },
   { key: 'text_color', label: 'Body text', hint: 'Greeting and intro paragraph.' },
   { key: 'secondary_text_color', label: 'Secondary text', hint: 'The second paragraph.' },
-  { key: 'muted_text_color', label: 'Muted text', hint: 'Disclaimer and unsubscribe line.' },
-  { key: 'button_color', label: 'Button', hint: 'CTA button fill.' },
-  { key: 'accent_color', label: 'Link', hint: 'The unsubscribe link.' },
+  { key: 'muted_text_color', label: 'Muted text', hint: 'Fine print and notice.' },
+  { key: 'button_color', label: 'Button', hint: 'CTA fill + rating highlight.' },
+  { key: 'accent_color', label: 'Accent', hint: 'Eyebrow label and links.' },
+  { key: 'footer_background_color', label: 'Footer band', hint: 'The dark footer.' },
+  { key: 'footer_text_color', label: 'Footer text', hint: 'Footer copy + links.' },
 ] as const satisfies ReadonlyArray<{ key: ColorField; label: string; hint: string }>
 
 function emptyForm(): UpdateVerificationPromotionEmailPayload {
@@ -112,6 +121,10 @@ function emptyForm(): UpdateVerificationPromotionEmailPayload {
     hero_image_url: '', hero_url: '', top_button_text: '', heading: '',
     intro_text: '', secondary_text: '', cta_button_text: '', disclaimer_text: '',
     unsubscribe_label: '',
+    // New design components
+    header_brand_text: '', eyebrow_text: '', rating_stars: '', highlight_text: '',
+    responsible_notice_text: '', footer_tagline: '', footer_links: [],
+    affiliate_disclosure_text: '', copyright_text: '',
     ...COLOR_DEFAULTS,
     active: false,
     delay_minutes: 60,
@@ -132,6 +145,7 @@ const placeholders = '{{site_name}}, {{site_url}}, {{email}}, {{year}}, {{unsubs
 // the first `}}` inside the string literal.
 const SITE_NAME_TOKEN = '{{site_name}}'
 const SITE_URL_TOKEN = '{{site_url}}'
+const YEAR_TOKEN = '{{year}}'
 
 const fromEmailHint = computed(
   () => `For best deliverability, use an address on your sending domain — e.g. offers@${fromDomain.value}`,
@@ -212,13 +226,27 @@ function toPayload(t: VerificationPromotionEmail): UpdateVerificationPromotionEm
     cta_button_text: t.cta_button_text ?? '',
     disclaimer_text: t.disclaimer_text ?? '',
     unsubscribe_label: t.unsubscribe_label,
+    // New design components
+    header_brand_text: t.header_brand_text ?? '',
+    eyebrow_text: t.eyebrow_text ?? '',
+    rating_stars: t.rating_stars ?? '',
+    highlight_text: t.highlight_text ?? '',
+    responsible_notice_text: t.responsible_notice_text ?? '',
+    footer_tagline: t.footer_tagline ?? '',
+    footer_links: (t.footer_links ?? []).map((l) => ({ label: l.label, url: l.url })),
+    affiliate_disclosure_text: t.affiliate_disclosure_text ?? '',
+    copyright_text: t.copyright_text ?? '',
     background_color: t.background_color ?? COLOR_DEFAULTS.background_color,
+    body_background_color: t.body_background_color ?? COLOR_DEFAULTS.body_background_color,
+    header_color: t.header_color ?? COLOR_DEFAULTS.header_color,
     heading_color: t.heading_color ?? COLOR_DEFAULTS.heading_color,
     text_color: t.text_color ?? COLOR_DEFAULTS.text_color,
     secondary_text_color: t.secondary_text_color ?? COLOR_DEFAULTS.secondary_text_color,
     muted_text_color: t.muted_text_color ?? COLOR_DEFAULTS.muted_text_color,
     button_color: t.button_color ?? COLOR_DEFAULTS.button_color,
     accent_color: t.accent_color ?? COLOR_DEFAULTS.accent_color,
+    footer_background_color: t.footer_background_color ?? COLOR_DEFAULTS.footer_background_color,
+    footer_text_color: t.footer_text_color ?? COLOR_DEFAULTS.footer_text_color,
     active: t.active,
     delay_minutes: t.delay_minutes,
     provider: t.provider,
@@ -235,11 +263,28 @@ function nullIfBlank(value: string | null | undefined): string | null {
 const REMOVABLE_FIELDS = [
   'preheader', 'hero_image_url', 'hero_url', 'top_button_text', 'heading',
   'intro_text', 'secondary_text', 'cta_button_text', 'disclaimer_text',
+  'header_brand_text', 'eyebrow_text', 'rating_stars', 'highlight_text',
+  'responsible_notice_text', 'footer_tagline', 'affiliate_disclosure_text',
+  'copyright_text',
 ] as const
+
+// ── Footer navigation links editor ──────────────────────────────────────────
+function addFooterLink(): void {
+  form.footer_links.push({ label: '', url: '' })
+}
+
+function removeFooterLink(index: number): void {
+  form.footer_links.splice(index, 1)
+}
 
 function toPayloadForApi(): UpdateVerificationPromotionEmailPayload {
   const payload = { ...form }
   for (const field of REMOVABLE_FIELDS) payload[field] = nullIfBlank(payload[field])
+  // Drop blank footer links (a half-filled row would fail server validation) and
+  // send a fresh array so the reactive source is never mutated here.
+  payload.footer_links = form.footer_links
+    .map((l) => ({ label: l.label.trim(), url: l.url.trim() }))
+    .filter((l) => l.label !== '' && l.url !== '')
   // Only the chosen provider's credential is sent; the other is cleared so a
   // stale id cannot linger and be picked up after a later provider switch.
   payload.sendgrid_key_id = form.provider === 'sendgrid' ? form.sendgrid_key_id : null
@@ -499,6 +544,39 @@ function err(field: string): string | undefined {
               <RemovableLabel label="Top button text" :value="form.top_button_text" @clear="form.top_button_text = ''" />
               <InputText v-model="form.top_button_text" fluid />
             </div>
+            <div>
+              <RemovableLabel label="Header brand text" :value="form.header_brand_text" @clear="form.header_brand_text = ''" />
+              <InputText v-model="form.header_brand_text" fluid />
+              <p class="mt-1 text-xs text-gray-400">
+                Shown in the coloured header band and linked to the offer. Use
+                <code class="font-mono">{{ SITE_NAME_TOKEN }}</code> to show each subscriber's own site name.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Offer highlights ── -->
+        <section class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <h3 class="mb-3 text-sm font-semibold text-gray-800">Offer highlights</h3>
+          <div class="space-y-3">
+            <div>
+              <RemovableLabel label="Eyebrow label" :value="form.eyebrow_text" @clear="form.eyebrow_text = ''" />
+              <InputText v-model="form.eyebrow_text" fluid placeholder="Exclusive subscriber offer" />
+              <p class="mt-1 text-xs text-gray-400">Small uppercase line above the heading.</p>
+            </div>
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <RemovableLabel label="Rating stars" :value="form.rating_stars" @clear="form.rating_stars = ''" />
+                <InputText v-model="form.rating_stars" fluid placeholder="★★★★★" />
+              </div>
+              <div>
+                <RemovableLabel label="Highlight text" :value="form.highlight_text" @clear="form.highlight_text = ''" />
+                <InputText v-model="form.highlight_text" fluid placeholder="100 Free Spins" />
+              </div>
+            </div>
+            <p class="text-xs text-gray-400">
+              The stars and highlight together form the boxed callout between the paragraphs. Clear both to hide it.
+            </p>
           </div>
         </section>
 
@@ -527,10 +605,56 @@ function err(field: string): string | undefined {
               <Textarea v-model="form.disclaimer_text" rows="2" fluid auto-resize />
             </div>
             <div>
+              <RemovableLabel label="Responsible gambling notice" :value="form.responsible_notice_text" @clear="form.responsible_notice_text = ''" />
+              <Textarea v-model="form.responsible_notice_text" rows="2" fluid auto-resize />
+              <p class="mt-1 text-xs text-gray-400">Boxed notice below the body. Supports <code class="font-mono">**bold**</code>.</p>
+            </div>
+            <div>
               <label class="mb-1 block text-xs font-medium text-gray-600">Unsubscribe label</label>
               <InputText v-model="form.unsubscribe_label" fluid />
               <p class="mt-1 text-xs text-gray-400">Required — marketing email must carry an opt-out link.</p>
               <p v-if="err('unsubscribe_label')" class="mt-1 text-xs text-red-600">{{ err('unsubscribe_label') }}</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Footer ── -->
+        <section class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <h3 class="mb-3 text-sm font-semibold text-gray-800">Footer</h3>
+          <div class="space-y-3">
+            <div>
+              <RemovableLabel label="Footer tagline" :value="form.footer_tagline" @clear="form.footer_tagline = ''" />
+              <Textarea v-model="form.footer_tagline" rows="2" fluid auto-resize />
+            </div>
+
+            <div>
+              <div class="mb-1 flex items-center justify-between">
+                <label class="block text-xs font-medium text-gray-600">Footer navigation links</label>
+                <Button label="Add link" icon="pi pi-plus" size="small" text @click="addFooterLink" />
+              </div>
+              <p v-if="form.footer_links.length === 0" class="text-xs text-gray-400">
+                No footer links. Add one, or leave empty to hide the row.
+                Use <code class="font-mono">{{ SITE_URL_TOKEN }}</code> in a URL to point at each subscriber's own site.
+              </p>
+              <div v-for="(link, i) in form.footer_links" :key="i" class="mb-2 flex items-center gap-2">
+                <InputText v-model="link.label" class="w-2/5" placeholder="Label" />
+                <InputText v-model="link.url" class="flex-1" placeholder="https://example.com/about" />
+                <Button icon="pi pi-trash" size="small" text severity="danger" @click="removeFooterLink(i)" />
+              </div>
+              <p v-if="err('footer_links')" class="mt-1 text-xs text-red-600">{{ err('footer_links') }}</p>
+            </div>
+
+            <div>
+              <RemovableLabel label="Affiliate disclosure" :value="form.affiliate_disclosure_text" @clear="form.affiliate_disclosure_text = ''" />
+              <Textarea v-model="form.affiliate_disclosure_text" rows="2" fluid auto-resize />
+            </div>
+            <div>
+              <RemovableLabel label="Copyright line" :value="form.copyright_text" @clear="form.copyright_text = ''" />
+              <InputText v-model="form.copyright_text" fluid />
+              <p class="mt-1 text-xs text-gray-400">
+                Use <code class="font-mono">{{ YEAR_TOKEN }}</code> and
+                <code class="font-mono">{{ SITE_NAME_TOKEN }}</code>.
+              </p>
             </div>
           </div>
         </section>

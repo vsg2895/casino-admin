@@ -4,7 +4,14 @@
 // `site_id`. Subscribers from every registered site receive this same template,
 // so only placeholders available on every site may be used:
 // {{site_name}}, {{site_url}}, {{email}}, {{year}}, {{unsubscribe_url}}.
-// Body fields (intro/secondary/disclaimer) additionally support **bold**.
+// Body fields (intro/secondary/disclaimer/notice/tagline/disclosure) support **bold**.
+
+// One footer navigation link — label + destination URL (both accept placeholders).
+export interface FooterLink {
+  label: string
+  url: string
+}
+
 export interface VerificationPromotionEmail {
   id: number
   from_name: string
@@ -22,14 +29,31 @@ export interface VerificationPromotionEmail {
   disclaimer_text: string | null
   // Structural — the opt-out link is legally required and cannot be removed.
   unsubscribe_label: string
+
+  // ── New design components (removable — null omits the block) ─────────────────
+  header_brand_text: string | null
+  eyebrow_text: string | null
+  rating_stars: string | null
+  highlight_text: string | null
+  responsible_notice_text: string | null
+  footer_tagline: string | null
+  // Ordered list of footer nav links. Always an array (may be empty).
+  footer_links: FooterLink[]
+  affiliate_disclosure_text: string | null
+  copyright_text: string | null
+
   // Palette (hex). Never null; the API fills in the design default.
   button_color: string
   accent_color: string
   background_color: string
+  body_background_color: string
+  header_color: string
   heading_color: string
   text_color: string
   secondary_text_color: string
   muted_text_color: string
+  footer_background_color: string
+  footer_text_color: string
 
   // ── Settings ───────────────────────────────────────────────────────────────
   // Master switch for the whole feature. False = nothing is ever sent.

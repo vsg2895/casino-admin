@@ -40,8 +40,25 @@ const siteOptions = computed(() => [
 const typeOptions: { label: string; value: UnsubscribeType | null }[] = [
   { label: 'All', value: null },
   { label: 'Subscription', value: 'subscription' },
+  { label: 'Verify', value: 'verify' },
   { label: 'Promotion', value: 'promotion' },
+  { label: 'After verification', value: 'promotion_after_verification' },
 ]
+
+// The template each opt-out is attributed to — its display label and tag colour.
+const TYPE_LABELS: Record<UnsubscribeType, string> = {
+  subscription: 'Subscription',
+  promotion: 'Promotion',
+  verify: 'Verify',
+  promotion_after_verification: 'After verification',
+}
+
+const TYPE_SEVERITY: Record<UnsubscribeType, 'info' | 'warn' | 'secondary' | 'success'> = {
+  subscription: 'info',
+  promotion: 'warn',
+  verify: 'secondary',
+  promotion_after_verification: 'success',
+}
 
 function formatDate(iso: string | null | undefined): string {
   return iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '—'
@@ -171,12 +188,9 @@ onMounted(async () => {
           </template>
         </Column>
 
-        <Column header="Stream" :style="{ width: '150px' }">
+        <Column header="Template" :style="{ width: '170px' }">
           <template #body="{ data }: { data: Unsubscribe }">
-            <Tag
-              :severity="data.type === 'promotion' ? 'warn' : 'info'"
-              :value="data.type === 'promotion' ? 'Promotion' : 'Subscription'"
-            />
+            <Tag :severity="TYPE_SEVERITY[data.type]" :value="TYPE_LABELS[data.type]" />
           </template>
         </Column>
 
@@ -211,8 +225,9 @@ onMounted(async () => {
     <!-- Clear opt-out confirm -->
     <Dialog :visible="deleting !== null" modal header="Clear opt-out" :style="{ width: '440px' }" @update:visible="deleting = null">
       <p class="text-sm text-gray-700">
-        Clear the <strong>{{ deleting?.type }}</strong> opt-out for <strong>{{ deleting?.email }}</strong>?
-        They will be able to receive this stream again.
+        Clear the <strong>{{ deleting ? TYPE_LABELS[deleting.type] : '' }}</strong> opt-out for
+        <strong>{{ deleting?.email }}</strong>? Because opt-out is global, clearing it lets them
+        receive email again.
       </p>
       <template #footer>
         <Button label="Cancel" text @click="deleting = null" />
