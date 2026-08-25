@@ -18,9 +18,19 @@ export interface SitePromotionEmail {
   intro_text: string | null
   secondary_text: string | null
   cta_button_text: string | null
+  // Where the buttons point. Empty falls back to `hero_url`, so leaving it blank
+  // keeps the current destination.
+  cta_button_url: string | null
   disclaimer_text: string | null
   // Structural — the opt-out link is legally required and cannot be removed.
   unsubscribe_label: string
+  // Blocks the admin has switched OFF. Each still has its content stored in its
+  // own field, so restoring one means dropping its key from here — never a
+  // retype. Keys come from `optional_blocks`.
+  hidden_blocks: string[]
+  // Read-only catalogue of what can be hidden, served by the API so the editor
+  // never duplicates the list.
+  optional_blocks: string[]
   // Palette (hex). Never null: the API falls back to the design default for any
   // colour a row predates, so the email always renders a complete palette.
   button_color: string          // CTA button fill
@@ -40,5 +50,11 @@ export interface SitePromotionEmail {
 // Payload for PUT /admin/sites/{id}/promotion-email — every editable field.
 export type UpdateSitePromotionEmailPayload = Omit<
   SitePromotionEmail,
-  'id' | 'site_id' | 'from_domain' | 'created_at' | 'updated_at'
+  | 'id'
+  | 'site_id'
+  | 'from_domain'
+  // Server-owned catalogue; the editor reads it but never sends it back.
+  | 'optional_blocks'
+  | 'created_at'
+  | 'updated_at'
 >
