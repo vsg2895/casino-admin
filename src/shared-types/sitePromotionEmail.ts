@@ -17,7 +17,6 @@ export interface SitePromotionEmail {
   heading: string | null
   intro_text: string | null
   secondary_text: string | null
-  cta_button_text: string | null
   // Where the buttons point. Empty falls back to `hero_url`, so leaving it blank
   // keeps the current destination.
   cta_button_url: string | null

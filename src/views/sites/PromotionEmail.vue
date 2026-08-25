@@ -84,7 +84,6 @@ function emptyForm(): UpdateSitePromotionEmailPayload {
     heading: '',
     intro_text: '',
     secondary_text: '',
-    cta_button_text: '',
     cta_button_url: '',
     hidden_blocks: [],
     disclaimer_text: '',
@@ -136,7 +135,6 @@ function toPayload(t: SitePromotionEmail): UpdateSitePromotionEmailPayload {
     heading: t.heading ?? '',
     intro_text: t.intro_text ?? '',
     secondary_text: t.secondary_text ?? '',
-    cta_button_text: t.cta_button_text ?? '',
     cta_button_url: t.cta_button_url ?? '',
     // Fresh array: the form must never share a reference with the loaded
     // resource, or restoring a block would not trip the preview watcher.
@@ -171,7 +169,6 @@ const REMOVABLE_FIELDS = [
   'heading',
   'intro_text',
   'secondary_text',
-  'cta_button_text',
   'cta_button_url',
   'disclaimer_text',
 ] as const
@@ -379,11 +376,6 @@ function err(field: string): string | undefined {
               <OptionalBlockLabel label="Secondary paragraph" block="secondary_text" v-model:hidden="form.hidden_blocks" />
               <Textarea v-model="form.secondary_text" rows="2" auto-resize fluid />
               <p v-if="err('secondary_text')" class="mt-1 text-xs text-red-600">{{ err('secondary_text') }}</p>
-            </div>
-            <div>
-              <OptionalBlockLabel label="CTA button text" block="cta_button_text" v-model:hidden="form.hidden_blocks" remove-label="Remove button" />
-              <InputText v-model="form.cta_button_text" fluid placeholder="Leave empty to hide this button" />
-              <p v-if="err('cta_button_text')" class="mt-1 text-xs text-red-600">{{ err('cta_button_text') }}</p>
             </div>
             <div>
               <OptionalBlockLabel
