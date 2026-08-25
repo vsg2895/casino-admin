@@ -50,6 +50,7 @@ function emptyForm(): UpdateSiteVerifyEmailPayload {
     spam_notice: '',
     footer_note: '',
     unsubscribe_label: '',
+    unsubscribe_enabled: true,
     copyright_text: '',
     accent_color: '#4f1d96',
     active: true,
@@ -95,6 +96,9 @@ function toPayload(t: SiteVerifyEmail): UpdateSiteVerifyEmailPayload {
     spam_notice: t.spam_notice ?? '',
     footer_note: t.footer_note ?? '',
     unsubscribe_label: t.unsubscribe_label,
+    // Defaulted so a row written before the column existed reads as "shown",
+    // matching how the server coalesces it.
+    unsubscribe_enabled: t.unsubscribe_enabled ?? true,
     copyright_text: t.copyright_text ?? '',
     accent_color: t.accent_color,
     active: t.active,
@@ -300,9 +304,41 @@ function err(field: string): string | undefined {
             </div>
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label class="mb-1 block text-xs font-medium text-gray-600">Unsubscribe label</label>
-                <InputText v-model="form.unsubscribe_label" fluid />
+                <!-- Remove / Restore rather than clearing the field: the label has
+                     to survive removal, or "restore" could only put back a default
+                     instead of the wording that was actually there. -->
+                <div class="mb-1 flex items-center justify-between gap-2">
+                  <label class="block text-xs font-medium text-gray-600">Unsubscribe link</label>
+                  <Button
+                    v-if="form.unsubscribe_enabled"
+                    label="Remove"
+                    icon="pi pi-trash"
+                    text
+                    severity="danger"
+                    size="small"
+                    @click="form.unsubscribe_enabled = false"
+                  />
+                  <Button
+                    v-else
+                    label="Restore"
+                    icon="pi pi-replay"
+                    text
+                    severity="secondary"
+                    size="small"
+                    @click="form.unsubscribe_enabled = true"
+                  />
+                </div>
+                <InputText
+                  v-model="form.unsubscribe_label"
+                  fluid
+                  :disabled="!form.unsubscribe_enabled"
+                />
                 <p v-if="err('unsubscribe_label')" class="mt-1 text-xs text-red-600">{{ err('unsubscribe_label') }}</p>
+                <p v-else-if="!form.unsubscribe_enabled" class="mt-1 text-xs text-gray-500">
+                  Hidden from the email footer. The wording is kept, so Restore brings back the
+                  same link. Recipients can still unsubscribe from their mail client — the
+                  one-click header and the unsubscribe page are unchanged.
+                </p>
               </div>
               <div>
                 <RemovableLabel label="Copyright line" :value="form.copyright_text" @clear="form.copyright_text = ''" />

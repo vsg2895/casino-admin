@@ -16,6 +16,11 @@ export interface SiteVerifyEmail {
   spam_notice: string | null
   footer_note: string | null
   unsubscribe_label: string
+  // Whether the footer unsubscribe LINK is rendered in the body. False hides it;
+  // `unsubscribe_label` is kept either way so restoring brings back the same link.
+  // Hiding the link never affects the unsubscribe process itself — the
+  // List-Unsubscribe headers and the /unsubscribe/{token} endpoint are unchanged.
+  unsubscribe_enabled: boolean
   copyright_text: string | null
   accent_color: string
   active: boolean
