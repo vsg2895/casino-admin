@@ -32,9 +32,24 @@ export interface VerificationPromotionEmail {
   intro_text: string | null
   secondary_text: string | null
   cta_button_text: string | null
+  // Where the CTA points. Empty falls back to `hero_url`, then the site URL — so
+  // leaving it blank keeps the button's existing destination.
+  cta_button_url: string | null
   disclaimer_text: string | null
   // Structural — the opt-out link is legally required and cannot be removed.
   unsubscribe_label: string
+  // Blocks the admin has switched OFF. Every one of them still has its text
+  // stored in its own field, so restoring a block means dropping its key from
+  // here — nothing is ever retyped. Keys come from `optional_blocks`.
+  hidden_blocks: string[]
+  // Read-only catalogue of everything that can be hidden, served by the API so
+  // the editor never duplicates the list.
+  optional_blocks: string[]
+  // Which site the PREVIEW and test render {{site_name}} / {{site_url}} against.
+  // Persisted so reopening the editor keeps the admin's choice. NOT ownership —
+  // this template is global, and the automatic send resolves the site from each
+  // subscriber's own newsletters.site_id.
+  preview_site_id: number | null
 
   // ── New design components (removable — null omits the block) ─────────────────
   header_brand_text: string | null
@@ -107,5 +122,12 @@ export type EmailProvider = 'smtp' | 'sendgrid_env' | 'mailgun' | 'sendgrid'
 // Payload for PUT /admin/verification-promotion — every editable field.
 export type UpdateVerificationPromotionEmailPayload = Omit<
   VerificationPromotionEmail,
-  'id' | 'from_domain' | 'max_delay_minutes' | 'sendgrid_env_available' | 'created_at' | 'updated_at'
+  | 'id'
+  | 'from_domain'
+  | 'max_delay_minutes'
+  | 'sendgrid_env_available'
+  // Server-owned catalogue; the editor reads it but never sends it back.
+  | 'optional_blocks'
+  | 'created_at'
+  | 'updated_at'
 >

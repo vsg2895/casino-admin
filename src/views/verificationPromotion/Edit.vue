@@ -19,7 +19,7 @@ import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Message from 'primevue/message'
 import { useToast } from 'primevue/usetoast'
-import RemovableLabel from '@/components/forms/RemovableLabel.vue'
+import OptionalBlockLabel from '@/components/forms/OptionalBlockLabel.vue'
 import axios from 'axios'
 import * as api from '@/api/verificationPromotion'
 import { listSendgridKeys } from '@/api/sendgridKeys'
@@ -38,12 +38,11 @@ const sitesStore = useSitesStore()
 // Which registered site the preview + test render against, so {{site_name}} /
 // {{site_url}} resolve to that site's values. Defaults to the first site once
 // loaded (matching the server's fallback); null only while sites are loading.
-const previewSiteId = ref<number | null>(null)
 const siteOptions = computed(() =>
   sitesStore.sites.map((s) => ({ label: `${s.name} (${s.domain})`, value: s.id })),
 )
 const previewSiteName = computed(
-  () => sitesStore.sites.find((s) => s.id === previewSiteId.value)?.name ?? '',
+  () => sitesStore.sites.find((s) => s.id === form.preview_site_id)?.name ?? '',
 )
 
 const fromDomain = ref('example.com')
@@ -134,10 +133,13 @@ function emptyForm(): UpdateVerificationPromotionEmailPayload {
   return {
     from_name: '', from_email: '', subject: '', preheader: '',
     hero_image_url: '', hero_url: '', top_button_text: '', heading: '',
-    intro_text: '', secondary_text: '', cta_button_text: '', disclaimer_text: '',
+    intro_text: '', secondary_text: '', cta_button_text: '', cta_button_url: '',
+    disclaimer_text: '',
     unsubscribe_label: '',
+    preview_site_id: null,
     // New design components
     header_brand_text: '', confirmation_text: '', eyebrow_text: '',
+    hidden_blocks: [],
     highlight_text: '', offer_terms: [],
     responsible_notice_text: '', footer_tagline: '', footer_links: [],
     affiliate_disclosure_text: '',
@@ -225,7 +227,12 @@ onMounted(async () => {
   // server default.
   try {
     await sitesStore.fetchSites()
-    previewSiteId.value = sitesStore.sites[0]?.id ?? null
+    // Only default when the saved template names no site — otherwise this would
+    // overwrite the admin's stored choice on every load, which is the bug that
+    // made the picker look like it never saved.
+    if (form.preview_site_id === null) {
+      form.preview_site_id = sitesStore.sites[0]?.id ?? null
+    }
   } catch { /* preview falls back to a representative site server-side */ }
 
   // Key lists are loaded independently: one provider's endpoint failing must not
@@ -245,6 +252,7 @@ onMounted(async () => {
 
 function toPayload(t: VerificationPromotionEmail): UpdateVerificationPromotionEmailPayload {
   return {
+    preview_site_id: t.preview_site_id ?? null,
     from_name: t.from_name,
     from_email: t.from_email,
     subject: t.subject,
@@ -256,12 +264,16 @@ function toPayload(t: VerificationPromotionEmail): UpdateVerificationPromotionEm
     intro_text: t.intro_text ?? '',
     secondary_text: t.secondary_text ?? '',
     cta_button_text: t.cta_button_text ?? '',
+    cta_button_url: t.cta_button_url ?? '',
     disclaimer_text: t.disclaimer_text ?? '',
     unsubscribe_label: t.unsubscribe_label,
     // New design components
     header_brand_text: t.header_brand_text ?? '',
     confirmation_text: t.confirmation_text ?? '',
     eyebrow_text: t.eyebrow_text ?? '',
+    // Fresh array: the reactive form must never share a reference with the
+    // loaded resource, or restoring a block would not trip the preview watcher.
+    hidden_blocks: [...(t.hidden_blocks ?? [])],
     highlight_text: t.highlight_text ?? '',
     offer_terms: (t.offer_terms ?? []).map((o) => ({ label: o.label, value: o.value })),
     responsible_notice_text: t.responsible_notice_text ?? '',
@@ -302,7 +314,7 @@ function nullIfBlank(value: string | null | undefined): string | null {
 
 const REMOVABLE_FIELDS = [
   'preheader', 'hero_image_url', 'hero_url', 'top_button_text', 'heading',
-  'intro_text', 'secondary_text', 'cta_button_text', 'disclaimer_text',
+  'intro_text', 'secondary_text', 'cta_button_text', 'cta_button_url', 'disclaimer_text',
   'header_brand_text', 'confirmation_text', 'eyebrow_text',
   'highlight_text', 'responsible_notice_text', 'footer_tagline',
   'affiliate_disclosure_text', 'reason_text', 'age_disclaimer_text',
@@ -356,7 +368,7 @@ let previewTimer: ReturnType<typeof setTimeout> | undefined
 async function refreshPreview(): Promise<void> {
   previewLoading.value = true
   try {
-    const res = await api.previewVerificationPromotion(toPayloadForApi(), previewSiteId.value)
+    const res = await api.previewVerificationPromotion(toPayloadForApi(), form.preview_site_id)
     previewHtml.value = res.html
     previewError.value = ''
   } catch (e: unknown) {
@@ -376,9 +388,13 @@ watch(form, () => {
 }, { deep: true })
 
 // Re-render immediately when the preview site changes — no debounce, it is a
-// deliberate single action, not typing.
-watch(previewSiteId, () => {
-  if (!loading.value) refreshPreview()
+// deliberate single action, not typing. The deep `form` watcher above has already
+// queued a debounced refresh for this same edit, so cancel it first: without the
+// clearTimeout, one site change would cost two preview requests.
+watch(() => form.preview_site_id, () => {
+  if (loading.value) return
+  clearTimeout(previewTimer)
+  refreshPreview()
 })
 
 async function save(): Promise<void> {
@@ -413,7 +429,7 @@ async function sendTest(): Promise<void> {
     const res = await api.sendTestVerificationPromotion(
       testEmail.value.trim(),
       testName.value.trim() || undefined,
-      previewSiteId.value,
+      form.preview_site_id,
     )
     toast.add({ severity: 'success', summary: 'Sent', detail: res.message, life: 4000 })
     showTest.value = false
@@ -580,7 +596,11 @@ function err(field: string): string | undefined {
               <p v-if="err('subject')" class="mt-1 text-xs text-red-600">{{ err('subject') }}</p>
             </div>
             <div>
-              <RemovableLabel label="Preview (preheader) text" :value="form.preheader" @clear="form.preheader = ''" />
+              <OptionalBlockLabel
+                label="Preview (preheader) text"
+                block="preheader"
+                v-model:hidden="form.hidden_blocks"
+              />
               <InputText v-model="form.preheader" fluid />
               <p class="mt-1 text-xs text-gray-400">Hidden snippet shown next to the subject in the inbox.</p>
             </div>
@@ -592,7 +612,11 @@ function err(field: string): string | undefined {
           <h3 class="mb-3 text-sm font-semibold text-gray-800">Hero &amp; offer link</h3>
           <div class="space-y-3">
             <div>
-              <RemovableLabel label="Banner image URL" :value="form.hero_image_url" @clear="form.hero_image_url = ''" />
+              <OptionalBlockLabel
+                label="Banner image URL"
+                block="hero_image_url"
+                v-model:hidden="form.hidden_blocks"
+              />
               <InputText v-model="form.hero_image_url" fluid placeholder="https://…" />
               <p class="mt-1 text-xs text-gray-400">
                 Recommended <strong>600×300</strong>. The banner sits below the heading, so the message still
@@ -601,7 +625,11 @@ function err(field: string): string | undefined {
               <p v-if="err('hero_image_url')" class="mt-1 text-xs text-red-600">{{ err('hero_image_url') }}</p>
             </div>
             <div>
-              <RemovableLabel label="Offer link" :value="form.hero_url" @clear="form.hero_url = ''" />
+              <OptionalBlockLabel
+                label="Offer link"
+                block="hero_url"
+                v-model:hidden="form.hidden_blocks"
+              />
               <InputText v-model="form.hero_url" fluid />
               <p class="mt-1 text-xs text-gray-400">
                 Where the hero image and both buttons point. Use
@@ -609,11 +637,19 @@ function err(field: string): string | undefined {
               </p>
             </div>
             <div>
-              <RemovableLabel label="Top button text" :value="form.top_button_text" @clear="form.top_button_text = ''" />
+              <OptionalBlockLabel
+                label="Top button text"
+                block="top_button_text"
+                v-model:hidden="form.hidden_blocks"
+              />
               <InputText v-model="form.top_button_text" fluid />
             </div>
             <div>
-              <RemovableLabel label="Header brand text" :value="form.header_brand_text" @clear="form.header_brand_text = ''" />
+              <OptionalBlockLabel
+                label="Header brand text"
+                block="header_brand_text"
+                v-model:hidden="form.hidden_blocks"
+              />
               <InputText v-model="form.header_brand_text" fluid />
               <p class="mt-1 text-xs text-gray-400">
                 Shown in the coloured header band and linked to the offer. Use
@@ -621,7 +657,11 @@ function err(field: string): string | undefined {
               </p>
             </div>
             <div>
-              <RemovableLabel label="Confirmation strip" :value="form.confirmation_text" @clear="form.confirmation_text = ''" />
+              <OptionalBlockLabel
+                label="Confirmation strip"
+                block="confirmation_text"
+                v-model:hidden="form.hidden_blocks"
+              />
               <InputText v-model="form.confirmation_text" fluid placeholder="✓ Your email is confirmed — your offer is unlocked" />
               <p class="mt-1 text-xs text-gray-400">
                 Thin coloured bar at the very top: the one confirmation line, so the heading can focus on the offer.
@@ -639,12 +679,20 @@ function err(field: string): string | undefined {
           </p>
           <div class="space-y-3">
             <div>
-              <RemovableLabel label="Eyebrow label" :value="form.eyebrow_text" @clear="form.eyebrow_text = ''" />
+              <OptionalBlockLabel
+                label="Eyebrow label"
+                block="eyebrow_text"
+                v-model:hidden="form.hidden_blocks"
+              />
               <InputText v-model="form.eyebrow_text" fluid placeholder="Exclusive subscriber offer" />
               <p class="mt-1 text-xs text-gray-400">Small uppercase line above the heading.</p>
             </div>
             <div>
-              <RemovableLabel label="Bonus amount" :value="form.highlight_text" @clear="form.highlight_text = ''" />
+              <OptionalBlockLabel
+                label="Bonus amount"
+                block="highlight_text"
+                v-model:hidden="form.hidden_blocks"
+              />
               <InputText v-model="form.highlight_text" fluid placeholder="100 Free Spins" />
               <p class="mt-1 text-xs text-gray-400">
                 The big headline at the top of the ticket. Also available as
@@ -675,19 +723,35 @@ function err(field: string): string | undefined {
           <h3 class="mb-3 text-sm font-semibold text-gray-800">Body</h3>
           <div class="space-y-3">
             <div>
-              <RemovableLabel label="Heading" :value="form.heading" @clear="form.heading = ''" />
+              <OptionalBlockLabel
+                label="Heading"
+                block="heading"
+                v-model:hidden="form.hidden_blocks"
+              />
               <InputText v-model="form.heading" fluid />
             </div>
             <div>
-              <RemovableLabel label="Intro text" :value="form.intro_text" @clear="form.intro_text = ''" />
+              <OptionalBlockLabel
+                label="Intro text"
+                block="intro_text"
+                v-model:hidden="form.hidden_blocks"
+              />
               <Textarea v-model="form.intro_text" rows="3" fluid auto-resize />
             </div>
             <div>
-              <RemovableLabel label="Secondary text" :value="form.secondary_text" @clear="form.secondary_text = ''" />
+              <OptionalBlockLabel
+                label="Secondary text"
+                block="secondary_text"
+                v-model:hidden="form.hidden_blocks"
+              />
               <Textarea v-model="form.secondary_text" rows="3" fluid auto-resize />
             </div>
             <div>
-              <RemovableLabel label="CTA button text" :value="form.cta_button_text" @clear="form.cta_button_text = ''" />
+              <OptionalBlockLabel
+                label="CTA button text"
+                block="cta_button_text"
+                v-model:hidden="form.hidden_blocks"
+              />
               <InputText v-model="form.cta_button_text" fluid />
               <p class="mt-1 text-xs text-gray-400">
                 Keep it specific by building it from the offer:
@@ -696,11 +760,39 @@ function err(field: string): string | undefined {
               </p>
             </div>
             <div>
-              <RemovableLabel label="Disclaimer" :value="form.disclaimer_text" @clear="form.disclaimer_text = ''" />
+              <OptionalBlockLabel
+                label="CTA button link"
+                block="cta_button_url"
+                v-model:hidden="form.hidden_blocks"
+              />
+              <InputText
+                v-model="form.cta_button_url"
+                fluid
+                placeholder="https://example.com/offer"
+              />
+              <p v-if="err('cta_button_url')" class="mt-1 text-xs text-red-600">
+                {{ err('cta_button_url') }}
+              </p>
+              <p v-else class="mt-1 text-xs text-gray-400">
+                Where the button sends the reader. Leave empty to reuse the banner link, then
+                the site URL. Tracking macros and
+                <code class="font-mono">{{ SITE_URL_TOKEN }}</code> are allowed.
+              </p>
+            </div>
+            <div>
+              <OptionalBlockLabel
+                label="Disclaimer"
+                block="disclaimer_text"
+                v-model:hidden="form.hidden_blocks"
+              />
               <Textarea v-model="form.disclaimer_text" rows="2" fluid auto-resize />
             </div>
             <div>
-              <RemovableLabel label="Responsible gambling notice" :value="form.responsible_notice_text" @clear="form.responsible_notice_text = ''" />
+              <OptionalBlockLabel
+                label="Responsible gambling notice"
+                block="responsible_notice_text"
+                v-model:hidden="form.hidden_blocks"
+              />
               <Textarea v-model="form.responsible_notice_text" rows="2" fluid auto-resize />
               <p class="mt-1 text-xs text-gray-400">Boxed notice below the body. Supports <code class="font-mono">**bold**</code>.</p>
             </div>
@@ -718,7 +810,11 @@ function err(field: string): string | undefined {
           <h3 class="mb-3 text-sm font-semibold text-gray-800">Footer</h3>
           <div class="space-y-3">
             <div>
-              <RemovableLabel label="Footer tagline" :value="form.footer_tagline" @clear="form.footer_tagline = ''" />
+              <OptionalBlockLabel
+                label="Footer tagline"
+                block="footer_tagline"
+                v-model:hidden="form.hidden_blocks"
+              />
               <Textarea v-model="form.footer_tagline" rows="2" fluid auto-resize />
             </div>
 
@@ -740,7 +836,11 @@ function err(field: string): string | undefined {
             </div>
 
             <div>
-              <RemovableLabel label="Affiliate disclosure" :value="form.affiliate_disclosure_text" @clear="form.affiliate_disclosure_text = ''" />
+              <OptionalBlockLabel
+                label="Affiliate disclosure"
+                block="affiliate_disclosure_text"
+                v-model:hidden="form.hidden_blocks"
+              />
               <Textarea v-model="form.affiliate_disclosure_text" rows="2" fluid auto-resize />
             </div>
 
@@ -749,7 +849,11 @@ function err(field: string): string | undefined {
             </div>
 
             <div>
-              <RemovableLabel label="Reason for receipt" :value="form.reason_text" @clear="form.reason_text = ''" />
+              <OptionalBlockLabel
+                label="Reason for receipt"
+                block="reason_text"
+                v-model:hidden="form.hidden_blocks"
+              />
               <InputText v-model="form.reason_text" fluid />
               <p class="mt-1 text-xs text-gray-400">
                 Reminds the reader they opted in, so they unsubscribe instead of reporting spam. Use
@@ -759,11 +863,19 @@ function err(field: string): string | undefined {
 
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <RemovableLabel label="Email preferences label" :value="form.email_preferences_label" @clear="form.email_preferences_label = ''" />
+                <OptionalBlockLabel
+                label="Email preferences label"
+                block="email_preferences_label"
+                v-model:hidden="form.hidden_blocks"
+              />
                 <InputText v-model="form.email_preferences_label" fluid placeholder="Email preferences" />
               </div>
               <div>
-                <RemovableLabel label="Email preferences URL" :value="form.email_preferences_url" @clear="form.email_preferences_url = ''" />
+                <OptionalBlockLabel
+                label="Email preferences URL"
+                block="email_preferences_url"
+                v-model:hidden="form.hidden_blocks"
+              />
                 <InputText v-model="form.email_preferences_url" fluid placeholder="https://example.com/email-preferences" />
               </div>
             </div>
@@ -773,12 +885,20 @@ function err(field: string): string | undefined {
             </p>
 
             <div>
-              <RemovableLabel label="Age disclaimer" :value="form.age_disclaimer_text" @clear="form.age_disclaimer_text = ''" />
+              <OptionalBlockLabel
+                label="Age disclaimer"
+                block="age_disclaimer_text"
+                v-model:hidden="form.hidden_blocks"
+              />
               <InputText v-model="form.age_disclaimer_text" fluid placeholder="18+ only. Gambling can be addictive — play responsibly." />
             </div>
 
             <div>
-              <RemovableLabel label="Postal address" :value="form.postal_address" @clear="form.postal_address = ''" />
+              <OptionalBlockLabel
+                label="Postal address"
+                block="postal_address"
+                v-model:hidden="form.hidden_blocks"
+              />
               <InputText v-model="form.postal_address" fluid />
               <p class="mt-1 text-xs text-gray-400">
                 The company's registered postal address — mandatory under CAN-SPAM and weighed by Gmail/Outlook.
@@ -787,7 +907,11 @@ function err(field: string): string | undefined {
             </div>
 
             <div>
-              <RemovableLabel label="Contact email" :value="form.contact_email" @clear="form.contact_email = ''" />
+              <OptionalBlockLabel
+                label="Contact email"
+                block="contact_email"
+                v-model:hidden="form.hidden_blocks"
+              />
               <InputText v-model="form.contact_email" fluid placeholder="info@example.com" />
               <p class="mt-1 text-xs text-gray-400">
                 A <strong>monitored</strong> mailbox that accepts replies — never no-reply@ / promo@. Use
@@ -796,7 +920,11 @@ function err(field: string): string | undefined {
             </div>
 
             <div>
-              <RemovableLabel label="Copyright line" :value="form.copyright_text" @clear="form.copyright_text = ''" />
+              <OptionalBlockLabel
+                label="Copyright line"
+                block="copyright_text"
+                v-model:hidden="form.hidden_blocks"
+              />
               <InputText v-model="form.copyright_text" fluid />
               <p class="mt-1 text-xs text-gray-400">
                 Use <code class="font-mono">{{ YEAR_TOKEN }}</code> and
@@ -837,7 +965,7 @@ function err(field: string): string | undefined {
             <div class="flex items-center gap-2">
               <label class="text-xs font-medium text-gray-500">Preview as</label>
               <Select
-                v-model="previewSiteId"
+                v-model="form.preview_site_id"
                 :options="siteOptions"
                 option-label="label"
                 option-value="value"
