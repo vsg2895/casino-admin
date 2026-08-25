@@ -30,8 +30,10 @@ export interface WarmupSendResult {
 }
 
 // A template a warmup run may use. Served by /admin/warmup-emails/templates,
-// which is the catalog minus what warmup forbids (currently the verify email:
-// its payload is a confirmation link that means nothing for a seed address).
+// which is the catalog filtered by WarmupMailResolver::ALLOWED_TEMPLATES — all
+// four site templates. Verify is offered but carries a caveat: its confirmation
+// link means nothing for a seed address, so prefer subscribe/promotion for
+// routine warming.
 export interface WarmupTemplate {
   value: string
   label: string
@@ -64,6 +66,10 @@ export interface WarmupRecipientPreview {
   min_cooldown_days: number
   max_cooldown_days: number
   default_cooldown_days: number
+  // Site the send dialog opens on, from config('warmup.default_site_slug').
+  // Null when the configured slug names no active site — the dialog then just
+  // falls back to the first one.
+  default_site_id: number | null
 }
 
 export type WarmupSendStatus = 'sent' | 'failed'

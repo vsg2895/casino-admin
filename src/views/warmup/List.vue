@@ -308,10 +308,12 @@ async function openSend(): Promise<void> {
   showSend.value = true
   sendAll.value = true
   sendCount.value = null
-  sendSiteId.value = sitesStore.sites[0]?.id ?? null
+  sendSiteId.value = null
   await Promise.all([sitesStore.fetchSites(), loadTemplates(), loadPreview()])
-  if (sendSiteId.value === null) sendSiteId.value = sitesStore.sites[0]?.id ?? null
-  // Adopt the server's configured default once it is known.
+  // Adopt the server's configured defaults once they are known. The site comes
+  // from config('warmup.default_site_slug') rather than a slug hard-coded here,
+  // and falls back to the first registered site when it names none.
+  sendSiteId.value = preview.value?.default_site_id ?? sitesStore.sites[0]?.id ?? null
   sendCooldownDays.value = preview.value?.default_cooldown_days ?? DEFAULT_COOLDOWN_DAYS
 }
 

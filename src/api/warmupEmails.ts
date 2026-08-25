@@ -68,7 +68,7 @@ export function importWarmupEmails(file: File): Promise<WarmupImportSummary> {
     .then((r) => r.data)
 }
 
-// Templates a warmup run may use — the catalog minus what warmup forbids. Served
+// Templates a warmup run may use — the catalog filtered by the warmup allow-list. Served
 // from the same allow-list the server validates against, so the dropdown can
 // never offer something the send would reject.
 export function listWarmupTemplates(): Promise<{ data: WarmupTemplate[] }> {
