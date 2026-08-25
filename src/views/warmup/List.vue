@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import InputText from 'primevue/inputtext'
@@ -13,11 +14,24 @@ import axios from 'axios'
 import * as api from '@/api/warmupEmails'
 import RecordCount from '@/components/RecordCount.vue'
 import { useSitesStore } from '@/stores/sitesStore'
-import type { WarmupEmail, WarmupImportSummary, WarmupTemplate } from '@shared/types/warmupEmail'
+import type {
+  WarmupEmail,
+  WarmupImportSummary,
+  WarmupRecipientPreview,
+  WarmupTemplate,
+} from '@shared/types/warmupEmail'
 import type { ErrorResponse } from '@shared/types/api'
 
 const toast = useToast()
+const router = useRouter()
 const sitesStore = useSitesStore()
+
+// Cooldown bounds. Fallbacks only — the live values come from the recipients
+// preview, which reads WarmupSend::MIN/MAX_COOLDOWN_DAYS on the server, so the
+// rule is defined once and this file never drifts from the validator.
+const MIN_COOLDOWN_DAYS = 1
+const MAX_COOLDOWN_DAYS = 365
+const DEFAULT_COOLDOWN_DAYS = 1
 
 const items = ref<WarmupEmail[]>([])
 const loading = ref(false)
@@ -197,7 +211,7 @@ async function onFileSelected(e: Event): Promise<void> {
 }
 
 // ── Send ──────────────────────────────────────────────────────────────────────
-// The message is no longer typed here: a run renders one of the SITE's own email
+// The message is not typed here: a run renders one of the SITE's own email
 // templates, so warmup traffic looks like the operator's real mail rather than
 // hand-written prose — which is what actually teaches a receiving server to trust
 // the sending mailbox.
@@ -207,18 +221,22 @@ const sendSiteId = ref<number | null>(null)
 const sendTemplate = ref<string | null>(null)
 const templates = ref<WarmupTemplate[]>([])
 
-// null = every address on the list; a number takes that many, least recently
-// contacted first.
+// null = every address on the list; a number takes that many, MOST RECENTLY
+// ADDED first, minus anything inside the cooldown window below.
 const sendAll = ref(true)
 const sendCount = ref<number | null>(null)
+
+// Skip addresses successfully contacted within this many days. Only meaningful
+// for a limited run — "send to everyone" and "skip recent" are contradictory, and
+// the server discards the value in that case.
+const sendCooldownDays = ref<number>(DEFAULT_COOLDOWN_DAYS)
 
 const siteOptions = computed(() =>
   sitesStore.sites.map((s) => ({ label: `${s.name} (${s.domain})`, value: s.id })),
 )
 
-// Templates are resolved per site: the send renders THAT site's stored template,
-// so changing the site reloads what is on offer. The endpoint already excludes
-// anything warmup forbids, so the dropdown can never offer a rejected option.
+// The endpoint already excludes anything warmup forbids, so the dropdown can
+// never offer an option the send would reject.
 const templateOptions = computed(() =>
   templates.value.map((t) => ({ label: t.label, value: t.value, description: t.description })),
 )
@@ -227,21 +245,57 @@ const selectedTemplate = computed(() =>
   templates.value.find((t) => t.value === sendTemplate.value) ?? null,
 )
 
-const recipientCap = computed(() => recordTotal.value ?? 0)
+// ── Audience preview ──────────────────────────────────────────────────────────
+// Runs the same query as the send, so what the dialog promises is what gets
+// mailed. It also carries the cooldown bounds, so min/max are not duplicated here.
+const preview = ref<WarmupRecipientPreview | null>(null)
+const previewLoading = ref(false)
+let previewTimer: ReturnType<typeof setTimeout> | undefined
+
+// The WHOLE list, never the search-filtered count. `recordTotal` reflects the
+// table's active search box, and a send always targets the entire list — reading
+// it here made the cap and the "(N)" label wrong whenever a search was typed.
+const listTotal = computed(() => preview.value?.total ?? 0)
+
+// What this run would actually reach, once the cooldown has been applied.
+const willReach = computed(() => preview.value?.recipients ?? 0)
+
+const minCooldown = computed(() => preview.value?.min_cooldown_days ?? MIN_COOLDOWN_DAYS)
+const maxCooldown = computed(() => preview.value?.max_cooldown_days ?? MAX_COOLDOWN_DAYS)
 
 const canSend = computed(
   () =>
     sendSiteId.value !== null &&
     sendTemplate.value !== null &&
-    recipientCap.value > 0 &&
-    (sendAll.value || (sendCount.value !== null && sendCount.value >= 1 && sendCount.value <= recipientCap.value)),
+    willReach.value > 0 &&
+    (sendAll.value ||
+      (sendCount.value !== null && sendCount.value >= 1 && sendCount.value <= listTotal.value)),
 )
+
+async function loadPreview(): Promise<void> {
+  previewLoading.value = true
+  try {
+    preview.value = await api.previewWarmupRecipients({
+      count: sendAll.value ? null : sendCount.value,
+      cooldown_days: sendAll.value ? null : sendCooldownDays.value,
+    })
+  } catch {
+    preview.value = null
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+function schedulePreview(): void {
+  clearTimeout(previewTimer)
+  previewTimer = setTimeout(() => void loadPreview(), 300)
+}
 
 async function loadTemplates(): Promise<void> {
   try {
     const { data } = await api.listWarmupTemplates()
     templates.value = data
-    // Drop a selection the new site no longer offers.
+    // Drop a selection the list no longer offers.
     if (sendTemplate.value && !data.some((t) => t.value === sendTemplate.value)) {
       sendTemplate.value = null
     }
@@ -255,13 +309,16 @@ async function openSend(): Promise<void> {
   sendAll.value = true
   sendCount.value = null
   sendSiteId.value = sitesStore.sites[0]?.id ?? null
-  await Promise.all([sitesStore.fetchSites(), loadTemplates()])
+  await Promise.all([sitesStore.fetchSites(), loadTemplates(), loadPreview()])
   if (sendSiteId.value === null) sendSiteId.value = sitesStore.sites[0]?.id ?? null
+  // Adopt the server's configured default once it is known.
+  sendCooldownDays.value = preview.value?.default_cooldown_days ?? DEFAULT_COOLDOWN_DAYS
 }
 
-// Refilter the template list whenever the site changes.
-watch(sendSiteId, () => {
-  if (showSend.value) void loadTemplates()
+// Any change to the audience settings re-runs the preview, debounced so typing a
+// three-digit number issues one request rather than three.
+watch([sendAll, sendCount, sendCooldownDays], () => {
+  if (showSend.value) schedulePreview()
 })
 
 async function send(): Promise<void> {
@@ -272,6 +329,7 @@ async function send(): Promise<void> {
       site_id: sendSiteId.value as number,
       template: sendTemplate.value as string,
       count: sendAll.value ? null : sendCount.value,
+      cooldown_days: sendAll.value ? null : sendCooldownDays.value,
     })
     toast.add({ severity: 'success', summary: 'Queued', detail: res.message, life: 7000 })
     showSend.value = false
@@ -308,6 +366,7 @@ onMounted(async () => {
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <RecordCount label="Total Warmup Emails" :total="recordTotal" :loading="loading" />
+        <Button label="History" icon="pi pi-history" severity="secondary" outlined @click="router.push({ name: 'warmup-history' })" />
         <Button label="Import" icon="pi pi-upload" severity="secondary" outlined :loading="importing" @click="triggerImport" />
         <Button label="Send warmup" icon="pi pi-send" severity="secondary" outlined @click="openSend" />
         <Button label="Add email" icon="pi pi-plus" @click="openCreate" />
@@ -371,9 +430,20 @@ onMounted(async () => {
           </template>
         </Column>
 
-        <Column header="Added" :style="{ width: '220px' }">
+        <Column header="Added" :style="{ width: '190px' }">
           <template #body="{ data }: { data: WarmupEmail }">
             <span class="text-gray-600">{{ formatDate(data.created_at) }}</span>
+          </template>
+        </Column>
+
+        <!-- What the cooldown filter actually reads, so a skipped address is
+             explainable without opening the history. -->
+        <Column header="Last sent" :style="{ width: '190px' }">
+          <template #body="{ data }: { data: WarmupEmail }">
+            <span v-if="data.last_sent_at" class="text-gray-600">
+              {{ formatDate(data.last_sent_at) }}
+            </span>
+            <span v-else class="text-xs text-gray-400">Never contacted</span>
           </template>
         </Column>
 
@@ -466,28 +536,78 @@ onMounted(async () => {
             <ToggleSwitch v-model="sendAll" input-id="warmup-send-all" />
             <label for="warmup-send-all" class="cursor-pointer text-sm text-gray-700">
               Send to every address on the list
-              <span class="text-gray-400">({{ recipientCap.toLocaleString() }})</span>
+              <span class="text-gray-400">({{ listTotal.toLocaleString() }})</span>
             </label>
           </div>
 
-          <div v-if="!sendAll" class="mt-3">
-            <label class="mb-1 block text-xs font-medium text-gray-600">How many recipients</label>
-            <InputNumber
-              v-model="sendCount"
-              :min="1"
-              :max="recipientCap"
-              fluid
-              placeholder="e.g. 50"
-            />
-            <p class="mt-1 text-xs text-gray-500">
-              Takes the least recently contacted first, so the list warms evenly instead of the
-              same addresses absorbing every run. Max {{ recipientCap.toLocaleString() }}.
-            </p>
+          <div v-if="!sendAll" class="mt-3 space-y-3">
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600">How many recipients</label>
+              <InputNumber
+                v-model="sendCount"
+                :min="1"
+                :max="listTotal"
+                fluid
+                placeholder="e.g. 50"
+              />
+              <p class="mt-1 text-xs text-gray-500">
+                Takes the most recently added addresses first. Max
+                {{ listTotal.toLocaleString() }}.
+              </p>
+            </div>
+
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600">
+                Skip addresses contacted in the last
+              </label>
+              <div class="flex items-center gap-2">
+                <InputNumber
+                  v-model="sendCooldownDays"
+                  :min="minCooldown"
+                  :max="maxCooldown"
+                  :step="1"
+                  show-buttons
+                  class="w-40"
+                />
+                <span class="text-sm text-gray-600">
+                  day{{ sendCooldownDays === 1 ? '' : 's' }}
+                </span>
+              </div>
+              <p class="mt-1 text-xs text-gray-500">
+                An address is skipped if it was successfully warmed inside this window, so
+                successive runs walk further down the list instead of re-mailing the newest
+                addresses. Between {{ minCooldown }} and {{ maxCooldown }} days.
+              </p>
+            </div>
+          </div>
+
+          <!-- Same query as the send itself, so this number is the audience. -->
+          <div class="mt-3 border-t border-gray-200 pt-3 text-sm">
+            <span class="text-gray-500">This run will reach</span>
+            <span v-if="previewLoading" class="ml-1 text-gray-400">…</span>
+            <template v-else>
+              <span class="ml-1 font-semibold tabular-nums text-gray-900">
+                {{ willReach.toLocaleString() }}
+              </span>
+              <span class="text-gray-500"> address{{ willReach === 1 ? '' : 'es' }}</span>
+              <span v-if="!sendAll && preview" class="text-gray-400">
+                · {{ preview.eligible.toLocaleString() }} eligible of
+                {{ preview.total.toLocaleString() }} on the list
+              </span>
+            </template>
           </div>
         </div>
 
-        <p v-if="recipientCap === 0" class="text-sm text-amber-700">
+        <!-- Both guarded on `preview` so neither flashes before the first load. -->
+        <p v-if="preview && listTotal === 0" class="text-sm text-amber-700">
           The warmup list is empty — add or import addresses first.
+        </p>
+        <p
+          v-else-if="preview && !previewLoading && willReach === 0"
+          class="text-sm text-amber-700"
+        >
+          Every address has been contacted within the last {{ sendCooldownDays }}
+          day{{ sendCooldownDays === 1 ? '' : 's' }}. Lower the cooldown or add more addresses.
         </p>
       </div>
       <template #footer>

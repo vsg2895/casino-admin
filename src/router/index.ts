@@ -177,6 +177,12 @@ const router = createRouter({
           meta: { requiresAuth: true, title: 'Warmup' },
         },
         {
+          path: 'warmup/history',
+          name: 'warmup-history',
+          component: () => import('@/views/warmup/History.vue'),
+          meta: { requiresAuth: true, title: 'Warmup History' },
+        },
+        {
           path: 'social-links',
           name: 'social-links',
           component: () => import('@/views/socialLinks/List.vue'),

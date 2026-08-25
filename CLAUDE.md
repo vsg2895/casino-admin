@@ -1,128 +1,147 @@
 # Admin Panel (Vue 3) — context for Claude Code
 
-Private SPA. No SEO. Focus is on UX for content management across many registered sites.
+Private SPA. No SEO, no public exposure. The whole job is UX for managing content and
+messaging across many registered sites.
 
-## Core admin workflow
+Root context: [../CLAUDE.md](../CLAUDE.md) · Endpoints: [../docs/API.md](../docs/API.md) ·
+Conventions: [../docs/CONVENTIONS.md](../docs/CONVENTIONS.md)
 
-1. **Sites section** — register new domains, view list of registered sites, rotate API keys, deactivate sites.
-2. **Casinos / Bonuses / Banners / Articles** — create and manage master content. Each entity has an "Attach to Sites" tab.
-3. **Attachments** — multi-select which sites a piece of content appears on, set per-site overrides (affiliate URL, position, zone, featured).
-4. **Analytics** — clicks and conversions broken down by site.
+---
 
-## Site registration flow (key UI pattern)
+## What the panel manages
 
-1. User clicks "Register Domain" → modal opens
-2. Fills: `name`, `slug`, `domain`, `currency`, `revalidation_url` (the Next.js webhook URL)
-3. Submits → backend creates the site and returns the **plain API key once** in the response
-4. UI shows a one-time modal: "**Copy this key now — it will not be shown again.** Paste into your Next.js .env.local as `API_SITE_KEY`."
-5. After the user confirms they copied it, the modal closes. The key is hashed in DB and unrecoverable.
+| Area | Screens |
+|------|---------|
+| **Sites** | list, register (one-time key modal), edit, rotate key, deactivate |
+| **Content** | Casinos (+ Attach to Sites), Special Offers, Categories, CMS/Legal Pages, Social Links |
+| **Email templates** | per site: Email Template (welcome), Verify Email, Promotion Email; plus the **global** Promotion-after-verification |
+| **Audience** | Newsletter (email), Newsletter Phones (SMS), Unsubscribes |
+| **Delivery** | Schedules, Promotion History, SendGrid Keys, Mailgun Keys, Twilio Configs, SMS Templates, Warmup |
 
-If a user later loses the key, they use "Rotate Key" — same one-time-display flow with a new key. The old key is invalidated immediately.
+Routes live in `src/router/index.ts`; each area has a folder under `src/views/`.
 
-## Attachment UI pattern (for Casinos, Bonuses, Banners)
+---
 
-The entity edit form has tabs:
-- **Details** — global fields (name, logo, rating, etc.)
-- **Attach to Sites** — table with one row per registered site, each row has:
-    - Checkbox: "Show on this site"
-    - Site-specific override fields (e.g. for Casino: `affiliate_url`, `position`, `featured`)
-    - Quick actions: "Apply same overrides to all selected"
+## Site registration flow — the key UI pattern
 
-Save sends a `POST /api/v1/admin/casinos/{id}/sites/sync` with the full attachment array — backend replaces the pivot state in one transaction.
+1. "Register Domain" → modal: `name`, `slug`, `domain`, `revalidation_url`.
+2. Submit → the backend creates the site and returns the **plain API key once**.
+3. Show a one-time modal that explicitly says: **"Copy this key now — it will not be
+   shown again. Paste it into your Next.js `.env.local` as `API_SITE_KEY`."**
+4. The key is hashed in the DB and unrecoverable afterwards. A lost key can only be
+   **rotated** (same one-time-display flow; the old key dies immediately).
+
+Security UX rules:
+
+- Any key or credential renders as `••••••••`. Never the real value.
+- **Rotate Key** requires typing the site name to confirm.
+- **Delete Site** requires double confirmation, and cascades to detach content.
+- Provider credentials (SendGrid / Mailgun / Twilio) are never displayed after saving —
+  the operator proves they work with the **Test** button, which sends a real message.
+
+---
+
+## Attachment UI pattern
+
+The casino edit form is tabbed:
+
+- **Details** — global fields (name, images, rating, bonuses, description, SEO).
+- **Attach to Sites** — one row per registered site with a "show on this site" checkbox
+  and the per-site overrides: `affiliate_url`, `position`, `featured`, `active`, plus an
+  "apply to all selected" shortcut.
+
+Save posts the **full** attachment array to
+`POST /api/v1/admin/casinos/{id}/sites/sync` — the backend replaces the pivot state in
+one transaction. Do not emit per-row attach/detach calls from the form.
+
+`components/attachments/SitesAttachmentTable.vue` is generic and is the component any
+future many-to-many entity should reuse. It takes the entity type/id and a declarative
+list of override fields, loads sites from `sitesStore`, and emits `update:attachments`.
+
+---
 
 ## Technologies
 
-- Vue 3 (Composition API + `<script setup>` only)
-- Vite
-- TypeScript (strict, no `any`)
-- Pinia
-- Vue Router 4
-- Tailwind CSS
-- PrimeVue (UI components, DataTable, Dialog, MultiSelect)
-- TinyMCE (article editor)
-- Chart.js + vue-chartjs (analytics)
-- Axios with interceptors
+Vue 3 (Composition API), Vite 7, TypeScript (strict), Pinia, Vue Router, Tailwind 4,
+PrimeVue 4 (DataTable, Dialog, MultiSelect), TinyMCE (rich text), Chart.js + vue-chartjs,
+Axios, `@vueuse/core`.
 
-## Folder structure
+---
+
+## Structure
 
 ```
 src/
-├── api/
-│   ├── client.ts                — axios with auth interceptor
-│   ├── sites.ts                 — register, list, rotate
-│   ├── casinos.ts
-│   ├── casinoAttachments.ts     — attach/detach/sync for casino_site pivot
-│   ├── bonuses.ts
-│   ├── bonusAttachments.ts
-│   ├── banners.ts
-│   ├── bannerAttachments.ts
-│   ├── articles.ts
-│   ├── analytics.ts
-│   └── auth.ts
-├── stores/
-│   ├── authStore.ts
-│   ├── sitesStore.ts            — list of registered sites, cached
-│   ├── casinosStore.ts
-│   └── uiStore.ts
-├── views/
-│   ├── auth/Login.vue
-│   ├── sites/{List,Register,Edit}.vue
-│   ├── casinos/{List,Edit,Create}.vue
-│   ├── bonuses/...
-│   ├── banners/...
-│   ├── articles/...
-│   └── analytics/Dashboard.vue
+├── api/           one file per API surface — all go through client.ts
+│                  auth, sites, casinos, casinoAttachments, categories, specialOffers,
+│                  cmsPages, socialLinks, newsletter, newsletterPhones, smsTemplates,
+│                  twilioConfigs, sendgridKeys, mailgunKeys, emailSchedules,
+│                  siteEmailTemplates, siteVerifyEmails, sitePromotionEmails,
+│                  verificationPromotion, warmupEmails, promotionHistory, unsubscribes,
+│                  emailTemplateTypes, uploads, download
+├── stores/        Pinia — auth, sites, casinos, categories, specialOffers, cmsPages,
+│                  newsletter, socialLinks   (only where state is genuinely shared)
+├── views/         one folder per area (see the table above)
 ├── components/
-│   ├── layout/{Sidebar,Topbar,AppLayout}.vue
-│   ├── attachments/SitesAttachmentTable.vue   — REUSABLE across entities
-│   ├── modals/ApiKeyDisplayModal.vue          — one-time key display
-│   └── forms/...
+│   ├── layout/        Sidebar, Topbar, AppLayout
+│   ├── attachments/   SitesAttachmentTable.vue — REUSABLE
+│   ├── modals/        ApiKeyDisplayModal.vue — one-time key display
+│   └── forms/
 ├── router/index.ts
-├── composables/
-├── types/                       — re-exports from shared/types
+├── config/        runtime config
+├── shared-types/  VENDORED copy of /shared/types — see below
+├── types/
 └── utils/
 ```
 
-## Reusable attachment component
+---
 
-`SitesAttachmentTable.vue` is generic and used by Casino/Bonus/Banner edit views.
+## `@shared/types` is vendored
 
-Props:
-- `entity-type: 'casino' | 'bonus' | 'banner'`
-- `entity-id: number`
-- `override-fields: FormField[]` — declarative list of per-site override fields
+`@shared/types` resolves to **`admin/src/shared-types/`**, not to `shared/types/` at the
+repo root. Editing the root alone changes nothing here.
 
-It loads the list of sites from `sitesStore` and the current attachments for the entity, renders a table, and emits `update:attachments`.
+```bash
+# 1. edit shared/types/<thing>.ts   ← source of truth
+./scripts/sync-shared-types.sh      # 2. propagate
+cd admin && npm run build           # 3. verify
+```
+
+---
 
 ## Conventions
 
-- **Components:** PascalCase
-- **Composables:** `use{X}.ts`, exported as `useX()`
-- **Stores:** `{name}Store.ts`, exported as `use{Name}Store()`
-- **Never use Options API.** Only `<script setup lang="ts">`
-- **No `any`.** Type everything. Import shared types from `@shared/types`
-- **All requests through `src/api/client.ts`** — Bearer token added automatically
+- **`<script setup lang="ts">` only.** Never the Options API.
+- **No `any`.** Import API shapes from `@shared/types` — never redeclare them locally.
+- Components PascalCase · composables `useX()` in `use{X}.ts` · stores
+  `use{Name}Store()` in `{name}Store.ts`.
+- **Every request goes through `src/api/client.ts`**, which attaches the bearer token and
+  handles `401 → logout`. Never call `axios` from a component.
+- API JSON is snake_case; convert at the boundary, don't reshape the API.
+- A Pinia store is for state more than one view needs. A one-off list doesn't need one.
+- Long lists use PrimeVue DataTable with server-side paging where a `count` endpoint
+  exists (`casinos/count`, `newsletters/count`, `promotion-history/count`, …).
+- Queued work (imports) exposes a status endpoint — poll `…/imports/{import}` until
+  `finished_at` and show real progress rather than a spinner.
 
 ## Auth flow
 
-1. Login → POST `/api/v1/auth/login` → receive Sanctum token
-2. Token stored in `authStore` + localStorage
-3. Axios interceptor: `Authorization: Bearer {token}` on every request
-4. 401 → auto-logout → redirect to `/login`
+1. `POST /api/v1/admin/auth/login` → Sanctum token.
+2. Stored in `authStore` + localStorage.
+3. Axios interceptor adds `Authorization: Bearer {token}`.
+4. `401` → auto-logout → redirect to `/login`.
 
-## Security UX rules
-
-- **API key display modal** must explicitly warn the user the key won't be shown again
-- **API key field** in any list/edit view shows `••••••••` placeholder — never the actual key
-- **Rotate Key button** requires confirmation (typed site name) before proceeding
-- **Delete Site button** requires double confirmation — and cascades to detach all content
+---
 
 ## Commands
 
 ```bash
-pnpm dev
-pnpm build
+pnpm dev            # http://localhost:5173
+npm run build       # vue-tsc -b + vite build — THE verification gate
 pnpm preview
-pnpm lint
-pnpm type-check
 ```
+
+`npm run build` is the single most valuable check in the repo: it type-checks the whole
+SPA and is what catches a shared type that drifted from a changed Laravel API Resource.
+Run it after **any** change that touches the API contract, and before reporting work as
+done — there is no CI.
