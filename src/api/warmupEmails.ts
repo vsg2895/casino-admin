@@ -98,6 +98,25 @@ export function previewWarmupRecipients(params?: {
     .then((r) => r.data.data)
 }
 
+// Stops the current run: queued batches will not send, and the run lock is freed
+// so a new run can start immediately. Safe when nothing is running.
+export interface WarmupCancelResult {
+  ok: boolean
+  warmup_send_id: number | null
+  // Freeing the lock is what actually unblocks a new run; stopping queued
+  // batches is reported separately because it can be unavailable on its own
+  // (e.g. the cancelled_at migration has not run on this environment yet).
+  lock_freed: boolean
+  queued_work_stopped: boolean
+  message: string
+}
+
+export function cancelWarmupRun(): Promise<WarmupCancelResult> {
+  return client
+    .post<WarmupCancelResult>('/admin/warmup-emails/cancel')
+    .then((r) => r.data)
+}
+
 // ── History ───────────────────────────────────────────────────────────────────
 // Per-address delivery log: which address, from which site, with which template,
 // and when. Read-only.

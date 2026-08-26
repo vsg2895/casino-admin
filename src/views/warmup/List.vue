@@ -304,6 +304,39 @@ async function loadTemplates(): Promise<void> {
   }
 }
 
+// ── Stop a run ────────────────────────────────────────────────────────────────
+// The escape hatch for a wedged run: a failure between taking the run lock and
+// queueing the fan-out used to strand the lock, leaving "already running" for the
+// full 15-minute TTL with no way back.
+const showCancel = ref(false)
+const cancelling = ref(false)
+
+async function confirmCancel(): Promise<void> {
+  cancelling.value = true
+  try {
+    const res = await api.cancelWarmupRun()
+    // The lock is what unblocks the operator; stopping queued batches is a bonus.
+    // Report them separately so a partial success does not read as a failure.
+    toast.add({
+      severity: res.queued_work_stopped ? 'success' : 'warn',
+      summary: res.queued_work_stopped ? 'Stopped' : 'Lock cleared',
+      detail: res.message,
+      life: 8000,
+    })
+    showCancel.value = false
+    await reload()
+  } catch {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Could not reach the server to stop the run. Please try again.',
+      life: 5000,
+    })
+  } finally {
+    cancelling.value = false
+  }
+}
+
 async function openSend(): Promise<void> {
   showSend.value = true
   sendAll.value = true
@@ -371,6 +404,7 @@ onMounted(async () => {
         <Button label="History" icon="pi pi-history" severity="secondary" outlined @click="router.push({ name: 'warmup-history' })" />
         <Button label="Import" icon="pi pi-upload" severity="secondary" outlined :loading="importing" @click="triggerImport" />
         <Button label="Send warmup" icon="pi pi-send" severity="secondary" outlined @click="openSend" />
+        <Button label="Stop run" icon="pi pi-ban" severity="danger" outlined @click="showCancel = true" />
         <Button label="Add email" icon="pi pi-plus" @click="openCreate" />
       </div>
     </div>
@@ -489,6 +523,28 @@ onMounted(async () => {
       <template #footer>
         <Button label="Cancel" text @click="showBulkDelete = false" />
         <Button label="Remove" icon="pi pi-trash" severity="danger" :loading="actionLoading" @click="confirmBulkDelete" />
+      </template>
+    </Dialog>
+
+    <!-- Stop the current run -->
+    <Dialog v-model:visible="showCancel" modal header="Stop the current run" :style="{ width: '480px' }">
+      <p class="text-sm text-gray-700">
+        Cancels the run in progress and frees the lock so a new one can start.
+      </p>
+      <ul class="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-600">
+        <li>Batches still queued will not send.</li>
+        <li>Addresses already mailed stay mailed — their history is kept.</li>
+        <li>Safe to use when nothing is running; it just clears the lock.</li>
+      </ul>
+      <template #footer>
+        <Button label="Cancel" text @click="showCancel = false" />
+        <Button
+          label="Stop run"
+          icon="pi pi-ban"
+          severity="danger"
+          :loading="cancelling"
+          @click="confirmCancel"
+        />
       </template>
     </Dialog>
 
