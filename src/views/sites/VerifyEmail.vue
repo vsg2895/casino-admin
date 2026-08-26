@@ -8,6 +8,7 @@ import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import { useToast } from 'primevue/usetoast'
 import RemovableLabel from '@/components/forms/RemovableLabel.vue'
+import OptionalBlockLabel from '@/components/forms/OptionalBlockLabel.vue'
 import axios from 'axios'
 import * as api from '@/api/siteVerifyEmails'
 import * as sitesApi from '@/api/sites'
@@ -51,7 +52,12 @@ function emptyForm(): UpdateSiteVerifyEmailPayload {
     footer_note: '',
     unsubscribe_label: '',
     unsubscribe_enabled: true,
+    postal_address: '',
+    contact_email: '',
     copyright_text: '',
+    // Nothing hidden by default — a block is only ever hidden by an explicit
+    // Remove, and the server treats an absent key as visible.
+    hidden_blocks: [],
     accent_color: '#4f1d96',
     active: true,
   }
@@ -99,7 +105,12 @@ function toPayload(t: SiteVerifyEmail): UpdateSiteVerifyEmailPayload {
     // Defaulted so a row written before the column existed reads as "shown",
     // matching how the server coalesces it.
     unsubscribe_enabled: t.unsubscribe_enabled ?? true,
+    postal_address: t.postal_address ?? '',
+    contact_email: t.contact_email ?? '',
     copyright_text: t.copyright_text ?? '',
+    // Copied, not referenced: OptionalBlockLabel emits a new array, and the
+    // deep watcher that drives the live preview must see it change.
+    hidden_blocks: [...(t.hidden_blocks ?? [])],
     accent_color: t.accent_color,
     active: t.active,
   }
@@ -133,6 +144,15 @@ watch(
   },
   { deep: true },
 )
+
+/**
+ * Whether an optional block is currently switched off. Only greys the input out —
+ * the text stays in the form and is still saved, which is what makes Restore
+ * bring back the original wording rather than a default.
+ */
+function hidden(block: string): boolean {
+  return form.hidden_blocks.includes(block)
+}
 
 // ── Save ────────────────────────────────────────────────────────────────────
 async function save(): Promise<void> {
@@ -341,9 +361,60 @@ function err(field: string): string | undefined {
                 </p>
               </div>
               <div>
-                <RemovableLabel label="Copyright line" :value="form.copyright_text" @clear="form.copyright_text = ''" />
-                <InputText v-model="form.copyright_text" fluid />
+                <!-- Remove / Restore rather than clearing: the wording is kept in
+                     the database while hidden, so Restore brings back exactly what
+                     was written instead of a default. -->
+                <OptionalBlockLabel
+                  label="Copyright line"
+                  block="copyright_text"
+                  v-model:hidden="form.hidden_blocks"
+                />
+                <InputText
+                  v-model="form.copyright_text"
+                  fluid
+                  :disabled="hidden('copyright_text')"
+                />
                 <p v-if="err('copyright_text')" class="mt-1 text-xs text-red-600">{{ err('copyright_text') }}</p>
+              </div>
+            </div>
+
+            <!-- Footer identity — the sender's postal address and a monitored
+                 contact address. Both are removable and both keep their text. -->
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <OptionalBlockLabel
+                  label="Postal address"
+                  block="postal_address"
+                  v-model:hidden="form.hidden_blocks"
+                />
+                <InputText
+                  v-model="form.postal_address"
+                  fluid
+                  placeholder="1234 Example Ave, Suite 100, City, ST 00000"
+                  :disabled="hidden('postal_address')"
+                />
+                <p v-if="err('postal_address')" class="mt-1 text-xs text-red-600">{{ err('postal_address') }}</p>
+                <p v-else class="mt-1 text-xs text-gray-500">
+                  Shown after the site name. A physical mailing address is required by
+                  CAN-SPAM for commercial email.
+                </p>
+              </div>
+              <div>
+                <OptionalBlockLabel
+                  label="Contact email"
+                  block="contact_email"
+                  v-model:hidden="form.hidden_blocks"
+                />
+                <InputText
+                  v-model="form.contact_email"
+                  fluid
+                  placeholder="support@example.com"
+                  :disabled="hidden('contact_email')"
+                />
+                <p v-if="err('contact_email')" class="mt-1 text-xs text-red-600">{{ err('contact_email') }}</p>
+                <p v-else class="mt-1 text-xs text-gray-500">
+                  Rendered as a mailto link. Use a mailbox someone actually reads.
+                </p>
               </div>
             </div>
           </div>

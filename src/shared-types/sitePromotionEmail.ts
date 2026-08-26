@@ -23,6 +23,11 @@ export interface SitePromotionEmail {
   disclaimer_text: string | null
   // Structural — the opt-out link is legally required and cannot be removed.
   unsubscribe_label: string
+  // Footer identity lines. Kept in the database even while hidden, so removing
+  // one is a toggle rather than a retype — see `hidden_blocks`.
+  postal_address: string | null
+  contact_email: string | null
+  copyright_text: string | null
   // Blocks the admin has switched OFF. Each still has its content stored in its
   // own field, so restoring one means dropping its key from here — never a
   // retype. Keys come from `optional_blocks`.

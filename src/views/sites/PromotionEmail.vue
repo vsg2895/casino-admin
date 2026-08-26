@@ -88,6 +88,9 @@ function emptyForm(): UpdateSitePromotionEmailPayload {
     hidden_blocks: [],
     disclaimer_text: '',
     unsubscribe_label: '',
+    postal_address: '',
+    contact_email: '',
+    copyright_text: '',
     ...COLOR_DEFAULTS,
     active: true,
   }
@@ -141,6 +144,9 @@ function toPayload(t: SitePromotionEmail): UpdateSitePromotionEmailPayload {
     hidden_blocks: [...(t.hidden_blocks ?? [])],
     disclaimer_text: t.disclaimer_text ?? '',
     unsubscribe_label: t.unsubscribe_label,
+    postal_address: t.postal_address ?? '',
+    contact_email: t.contact_email ?? '',
+    copyright_text: t.copyright_text ?? '',
     background_color: t.background_color ?? COLOR_DEFAULTS.background_color,
     heading_color: t.heading_color ?? COLOR_DEFAULTS.heading_color,
     text_color: t.text_color ?? COLOR_DEFAULTS.text_color,
@@ -171,7 +177,19 @@ const REMOVABLE_FIELDS = [
   'secondary_text',
   'cta_button_url',
   'disclaimer_text',
+  'postal_address',
+  'contact_email',
+  'copyright_text',
 ] as const
+
+/**
+ * Whether an optional block is currently switched off. Only greys the input out —
+ * the text stays in the form and is still saved, which is what makes Restore
+ * bring back the original wording rather than a default.
+ */
+function hidden(block: string): boolean {
+  return form.hidden_blocks.includes(block)
+}
 
 function toPayloadForApi(): UpdateSitePromotionEmailPayload {
   const payload = { ...form }
@@ -409,6 +427,59 @@ function err(field: string): string | undefined {
               <label class="mb-1 block text-xs font-medium text-gray-600">Unsubscribe label</label>
               <InputText v-model="form.unsubscribe_label" fluid />
               <p v-if="err('unsubscribe_label')" class="mt-1 text-xs text-red-600">{{ err('unsubscribe_label') }}</p>
+            </div>
+
+            <!-- Footer identity — postal address, monitored contact, copyright.
+                 Each removable, each keeping its text so Restore is one click. -->
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <OptionalBlockLabel
+                  label="Postal address"
+                  block="postal_address"
+                  v-model:hidden="form.hidden_blocks"
+                />
+                <InputText
+                  v-model="form.postal_address"
+                  fluid
+                  placeholder="1234 Example Ave, Suite 100, City, ST 00000"
+                  :disabled="hidden('postal_address')"
+                />
+                <p v-if="err('postal_address')" class="mt-1 text-xs text-red-600">{{ err('postal_address') }}</p>
+                <p v-else class="mt-1 text-xs text-gray-500">
+                  Shown after the site name. A physical mailing address is required by
+                  CAN-SPAM for commercial email.
+                </p>
+              </div>
+              <div>
+                <OptionalBlockLabel
+                  label="Contact email"
+                  block="contact_email"
+                  v-model:hidden="form.hidden_blocks"
+                />
+                <InputText
+                  v-model="form.contact_email"
+                  fluid
+                  placeholder="support@example.com"
+                  :disabled="hidden('contact_email')"
+                />
+                <p v-if="err('contact_email')" class="mt-1 text-xs text-red-600">{{ err('contact_email') }}</p>
+                <p v-else class="mt-1 text-xs text-gray-500">
+                  Rendered as a mailto link. Use a mailbox someone actually reads.
+                </p>
+              </div>
+            </div>
+            <div>
+              <OptionalBlockLabel
+                label="Copyright line"
+                block="copyright_text"
+                v-model:hidden="form.hidden_blocks"
+              />
+              <InputText
+                v-model="form.copyright_text"
+                fluid
+                :disabled="hidden('copyright_text')"
+              />
+              <p v-if="err('copyright_text')" class="mt-1 text-xs text-red-600">{{ err('copyright_text') }}</p>
             </div>
           </div>
         </section>

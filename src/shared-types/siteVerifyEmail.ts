@@ -21,7 +21,18 @@ export interface SiteVerifyEmail {
   // Hiding the link never affects the unsubscribe process itself — the
   // List-Unsubscribe headers and the /unsubscribe/{token} endpoint are unchanged.
   unsubscribe_enabled: boolean
+  // Footer identity lines. Kept in the database even while hidden, so removing
+  // one is a toggle rather than a retype — see `hidden_blocks`.
+  postal_address: string | null
+  contact_email: string | null
   copyright_text: string | null
+  // Optional blocks the admin switched OFF. Anything NOT listed is visible, so
+  // an existing row renders unchanged. Keys are limited to
+  // SiteVerifyEmail::OPTIONAL_BLOCKS server-side.
+  hidden_blocks: string[]
+  // Read-only catalogue of what can be hidden, served by the API so the editor
+  // never duplicates the list.
+  optional_blocks: string[]
   accent_color: string
   active: boolean
   // The SendGrid-verified domain the from address must use (read-only hint).
@@ -33,5 +44,11 @@ export interface SiteVerifyEmail {
 // Payload for PUT /admin/sites/{id}/verify-email — every editable field.
 export type UpdateSiteVerifyEmailPayload = Omit<
   SiteVerifyEmail,
-  'id' | 'site_id' | 'from_domain' | 'created_at' | 'updated_at'
+  | 'id'
+  | 'site_id'
+  | 'from_domain'
+  // Server-owned catalogue; the editor reads it but never sends it back.
+  | 'optional_blocks'
+  | 'created_at'
+  | 'updated_at'
 >
