@@ -217,7 +217,6 @@ async function onFileSelected(e: Event): Promise<void> {
 // the sending mailbox.
 const showSend = ref(false)
 const sending = ref(false)
-const sendSiteId = ref<number | null>(null)
 const sendTemplate = ref<string | null>(null)
 const templates = ref<WarmupTemplate[]>([])
 
@@ -231,9 +230,8 @@ const sendCount = ref<number | null>(null)
 // the server discards the value in that case.
 const sendCooldownDays = ref<number>(DEFAULT_COOLDOWN_DAYS)
 
-const siteOptions = computed(() =>
-  sitesStore.sites.map((s) => ({ label: `${s.name} (${s.domain})`, value: s.id })),
-)
+// The pinned warmup site, resolved by the server from config('warmup.site_slug').
+const warmupSiteName = computed(() => preview.value?.site_name ?? null)
 
 // The endpoint already excludes anything warmup forbids, so the dropdown can
 // never offer an option the send would reject.
@@ -265,7 +263,7 @@ const maxCooldown = computed(() => preview.value?.max_cooldown_days ?? MAX_COOLD
 
 const canSend = computed(
   () =>
-    sendSiteId.value !== null &&
+    warmupSiteName.value !== null &&
     sendTemplate.value !== null &&
     willReach.value > 0 &&
     (sendAll.value ||
@@ -341,12 +339,10 @@ async function openSend(): Promise<void> {
   showSend.value = true
   sendAll.value = true
   sendCount.value = null
-  sendSiteId.value = null
-  await Promise.all([sitesStore.fetchSites(), loadTemplates(), loadPreview()])
+  await Promise.all([loadTemplates(), loadPreview()])
   // Adopt the server's configured defaults once they are known. The site comes
   // from config('warmup.default_site_slug') rather than a slug hard-coded here,
   // and falls back to the first registered site when it names none.
-  sendSiteId.value = preview.value?.default_site_id ?? sitesStore.sites[0]?.id ?? null
   sendCooldownDays.value = preview.value?.default_cooldown_days ?? DEFAULT_COOLDOWN_DAYS
 }
 
@@ -361,7 +357,6 @@ async function send(): Promise<void> {
   sending.value = true
   try {
     const res = await api.sendWarmupEmails({
-      site_id: sendSiteId.value as number,
       template: sendTemplate.value as string,
       count: sendAll.value ? null : sendCount.value,
       cooldown_days: sendAll.value ? null : sendCooldownDays.value,
@@ -557,16 +552,28 @@ onMounted(async () => {
           your genuine mail, which is what actually builds the mailbox's reputation.
         </p>
 
+        <!-- Not a picker: warmup is pinned to one site server-side, so the send
+             endpoint does not accept a site at all. Shown for confirmation only. -->
         <div>
           <label class="mb-1 block text-xs font-medium text-gray-600">Site</label>
-          <Select
-            v-model="sendSiteId"
-            :options="siteOptions"
-            option-label="label"
-            option-value="value"
-            fluid
-            placeholder="Select a site"
-          />
+          <div
+            v-if="warmupSiteName"
+            class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800"
+          >
+            {{ warmupSiteName }}
+          </div>
+          <div
+            v-else
+            class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+          >
+            No active site matches the configured warmup slug
+            <code class="font-mono">{{ preview?.site_slug || '(unset)' }}</code>.
+            Set <code class="font-mono">WARMUP_SITE_SLUG</code> or reactivate that site.
+          </div>
+          <p class="mt-1 text-xs text-gray-500">
+            Warmup always sends as this site. Change it with
+            <code class="font-mono">WARMUP_SITE_SLUG</code>.
+          </p>
         </div>
 
         <div>
@@ -577,7 +584,7 @@ onMounted(async () => {
             option-label="label"
             option-value="value"
             fluid
-            :disabled="sendSiteId === null"
+            :disabled="warmupSiteName === null"
             placeholder="Select a template"
           />
           <p v-if="selectedTemplate" class="mt-1 text-xs text-gray-500">

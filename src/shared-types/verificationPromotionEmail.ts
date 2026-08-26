@@ -28,8 +28,15 @@ export interface VerificationPromotionEmail {
   hero_image_url: string | null
   hero_url: string | null
   top_button_text: string | null
+  // Where the TOP button points. Empty falls back to `hero_url`, then the site.
+  top_button_url: string | null
   heading: string | null
   intro_text: string | null
+  // Intro paragraph styling. Null means "as before": the layout's own 16px, and
+  // no panel. A background colour turns the paragraph into a padded panel like
+  // the responsible-gambling notice.
+  intro_text_font_size: number | null
+  intro_text_background_color: string | null
   secondary_text: string | null
   cta_button_text: string | null
   // Where the CTA points. Empty falls back to `hero_url`, then the site URL — so
@@ -45,6 +52,10 @@ export interface VerificationPromotionEmail {
   // Read-only catalogue of everything that can be hidden, served by the API so
   // the editor never duplicates the list.
   optional_blocks: string[]
+  // Read-only sizing bounds, so the admin input never hard-codes them.
+  intro_text_min_size: number
+  intro_text_max_size: number
+  intro_text_default_size: number
   // Which site the PREVIEW and test render {{site_name}} / {{site_url}} against.
   // Persisted so reopening the editor keeps the admin's choice. NOT ownership —
   // this template is global, and the automatic send resolves the site from each
@@ -128,6 +139,9 @@ export type UpdateVerificationPromotionEmailPayload = Omit<
   | 'sendgrid_env_available'
   // Server-owned catalogue; the editor reads it but never sends it back.
   | 'optional_blocks'
+  | 'intro_text_min_size'
+  | 'intro_text_max_size'
+  | 'intro_text_default_size'
   | 'created_at'
   | 'updated_at'
 >

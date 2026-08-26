@@ -46,6 +46,8 @@ const previewSiteName = computed(
 )
 
 const fromDomain = ref('example.com')
+const introMin = ref(12)
+const introMax = ref(32)
 const maxDelay = ref(43200)
 const loading = ref(true)
 const saving = ref(false)
@@ -132,8 +134,10 @@ const COLOR_FIELDS = [
 function emptyForm(): UpdateVerificationPromotionEmailPayload {
   return {
     from_name: '', from_email: '', subject: '', preheader: '',
-    hero_image_url: '', hero_url: '', top_button_text: '', heading: '',
-    intro_text: '', secondary_text: '', cta_button_text: '', cta_button_url: '',
+    hero_image_url: '', hero_url: '', top_button_text: '', top_button_url: '',
+    heading: '',
+    intro_text: '', intro_text_font_size: null, intro_text_background_color: null,
+    secondary_text: '', cta_button_text: '', cta_button_url: '',
     disclaimer_text: '',
     unsubscribe_label: '',
     preview_site_id: null,
@@ -217,6 +221,8 @@ onMounted(async () => {
     Object.assign(form, toPayload(tpl))
     fromDomain.value = tpl.from_domain
     maxDelay.value = tpl.max_delay_minutes
+    introMin.value = tpl.intro_text_min_size ?? introMin.value
+    introMax.value = tpl.intro_text_max_size ?? introMax.value
     sendgridEnvAvailable.value = tpl.sendgrid_env_available
   } catch {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load the promotion.', life: 5000 })
@@ -260,8 +266,12 @@ function toPayload(t: VerificationPromotionEmail): UpdateVerificationPromotionEm
     hero_image_url: t.hero_image_url ?? '',
     hero_url: t.hero_url ?? '',
     top_button_text: t.top_button_text ?? '',
+    top_button_url: t.top_button_url ?? '',
     heading: t.heading ?? '',
     intro_text: t.intro_text ?? '',
+    // Null on both = render exactly as before: default size, no panel.
+    intro_text_font_size: t.intro_text_font_size ?? null,
+    intro_text_background_color: t.intro_text_background_color ?? null,
     secondary_text: t.secondary_text ?? '',
     cta_button_text: t.cta_button_text ?? '',
     cta_button_url: t.cta_button_url ?? '',
@@ -313,7 +323,7 @@ function nullIfBlank(value: string | null | undefined): string | null {
 }
 
 const REMOVABLE_FIELDS = [
-  'preheader', 'hero_image_url', 'hero_url', 'top_button_text', 'heading',
+  'preheader', 'hero_image_url', 'hero_url', 'top_button_text', 'top_button_url', 'heading',
   'intro_text', 'secondary_text', 'cta_button_text', 'cta_button_url', 'disclaimer_text',
   'header_brand_text', 'confirmation_text', 'eyebrow_text',
   'highlight_text', 'responsible_notice_text', 'footer_tagline',
@@ -643,6 +653,24 @@ function err(field: string): string | undefined {
                 v-model:hidden="form.hidden_blocks"
               />
               <InputText v-model="form.top_button_text" fluid />
+              <p class="mt-1 text-xs text-gray-400">
+                Shown under the banner. Leave empty to hide the button.
+              </p>
+            </div>
+            <div>
+              <OptionalBlockLabel
+                label="Top button link"
+                block="top_button_url"
+                v-model:hidden="form.hidden_blocks"
+                remove-label="Remove link"
+              />
+              <InputText v-model="form.top_button_url" fluid placeholder="https://example.com/offer" />
+              <p v-if="err('top_button_url')" class="mt-1 text-xs text-red-600">
+                {{ err('top_button_url') }}
+              </p>
+              <p v-else class="mt-1 text-xs text-gray-400">
+                Where the top button sends the reader. Leave empty to reuse the offer link.
+              </p>
             </div>
             <div>
               <OptionalBlockLabel
@@ -737,6 +765,65 @@ function err(field: string): string | undefined {
                 v-model:hidden="form.hidden_blocks"
               />
               <Textarea v-model="form.intro_text" rows="3" fluid auto-resize />
+
+              <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label class="mb-1 block text-xs font-medium text-gray-600">Text size</label>
+                  <div class="flex items-center gap-2">
+                    <InputNumber
+                      v-model="form.intro_text_font_size"
+                      :min="introMin"
+                      :max="introMax"
+                      :step="1"
+                      show-buttons
+                      class="w-36"
+                      :placeholder="String(introMin)"
+                    />
+                    <span class="text-sm text-gray-600">px</span>
+                  </div>
+                  <p v-if="err('intro_text_font_size')" class="mt-1 text-xs text-red-600">
+                    {{ err('intro_text_font_size') }}
+                  </p>
+                  <p v-else class="mt-1 text-xs text-gray-400">
+                    Leave empty for the default. Between {{ introMin }} and {{ introMax }} px.
+                  </p>
+                </div>
+
+                <div>
+                  <div class="mb-1 flex items-center justify-between gap-2">
+                    <label class="block text-xs font-medium text-gray-600">Background panel</label>
+                    <Button
+                      v-if="form.intro_text_background_color"
+                      label="Remove"
+                      icon="pi pi-trash"
+                      text
+                      severity="danger"
+                      size="small"
+                      @click="form.intro_text_background_color = null"
+                    />
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <input
+                      type="color"
+                      :value="form.intro_text_background_color ?? '#f3f4f6'"
+                      class="h-9 w-12 cursor-pointer rounded border border-gray-300"
+                      @input="form.intro_text_background_color = ($event.target as HTMLInputElement).value"
+                    />
+                    <InputText
+                      :model-value="form.intro_text_background_color ?? ''"
+                      placeholder="#f3f4f6"
+                      class="w-32"
+                      @update:model-value="form.intro_text_background_color = ($event || null) as string | null"
+                    />
+                  </div>
+                  <p v-if="err('intro_text_background_color')" class="mt-1 text-xs text-red-600">
+                    {{ err('intro_text_background_color') }}
+                  </p>
+                  <p v-else class="mt-1 text-xs text-gray-400">
+                    Empty = no panel. Set a colour to sit the paragraph on a tinted block.
+                  </p>
+                </div>
+              </div>
             </div>
             <div>
               <OptionalBlockLabel

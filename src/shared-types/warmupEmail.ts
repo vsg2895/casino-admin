@@ -49,7 +49,7 @@ export interface WarmupTemplate {
 // successfully contacted within that many days, which is what stops the newest
 // addresses absorbing every run. The server discards it for a whole-list send.
 export interface WarmupSendPayload {
-  site_id: number
+  // No site_id: warmup is pinned server-side to config('warmup.site_slug').
   template: string
   count?: number | null
   cooldown_days?: number | null
@@ -66,10 +66,13 @@ export interface WarmupRecipientPreview {
   min_cooldown_days: number
   max_cooldown_days: number
   default_cooldown_days: number
-  // Site the send dialog opens on, from config('warmup.default_site_slug').
-  // Null when the configured slug names no active site — the dialog then just
-  // falls back to the first one.
-  default_site_id: number | null
+  // The ONE site warmup sends as, from config('warmup.site_slug'). Shown
+  // read-only: warmup is pinned to a single brand and the send endpoint does not
+  // accept a site at all. Null means the configured slug names no active site,
+  // and a run cannot start until that is fixed.
+  site_id: number | null
+  site_name: string | null
+  site_slug: string
 }
 
 export type WarmupSendStatus = 'sent' | 'failed'
