@@ -12,6 +12,10 @@ export interface CreateSitePayload {
 export interface UpdateSitePayload {
   name?: string
   domain?: string
+  // One short sentence saying what makes this brand different. Appended to every
+  // generated legal page's meta description so the eleven standard pages stop
+  // reading identically across the sibling domains.
+  positioning?: string | null
   revalidation_url?: string | null
   active?: boolean
 }

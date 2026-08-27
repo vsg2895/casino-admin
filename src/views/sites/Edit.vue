@@ -11,6 +11,7 @@ import type { ErrorResponse } from '@shared/types/api'
 interface SiteEditForm {
   name: string
   domain: string
+  positioning: string
   revalidation_url: string
 }
 
@@ -27,6 +28,7 @@ const emit = defineEmits<{
 const form = reactive<SiteEditForm>({
   name: '',
   domain: '',
+  positioning: '',
   revalidation_url: '',
 })
 
@@ -40,6 +42,7 @@ watch(
     if (val && props.site) {
       form.name = props.site.name
       form.domain = props.site.domain
+      form.positioning = props.site.positioning ?? ''
       form.revalidation_url = props.site.revalidation_url ?? ''
       fieldErrors.value = {}
       globalError.value = null
@@ -57,6 +60,7 @@ async function submit(): Promise<void> {
     const response = await sitesApi.updateSite(props.site.id, {
       name: form.name,
       domain: form.domain,
+      positioning: form.positioning.trim() || null,
       revalidation_url: form.revalidation_url.trim() || null,
     })
     emit('updated', response.data)
@@ -118,6 +122,24 @@ async function submit(): Promise<void> {
         </label>
         <InputText v-model="form.domain" fluid required />
         <p v-if="fieldErrors.domain" class="mt-1 text-xs text-red-600">{{ fieldErrors.domain }}</p>
+      </div>
+
+      <div>
+        <label class="mb-1 block text-sm font-medium text-gray-700">Positioning</label>
+        <InputText
+          v-model="form.positioning"
+          fluid
+          maxlength="200"
+          placeholder="Roulette and live table games, reviewed by players"
+        />
+        <p v-if="fieldErrors.positioning" class="mt-1 text-xs text-red-600">{{ fieldErrors.positioning }}</p>
+        <p v-else class="mt-1 text-xs text-gray-500">
+          One short sentence saying what makes this brand different. It is appended to the meta
+          description of the eleven standard legal pages, which are otherwise generated from the
+          same template on every domain and read as duplicate content. Keep it under ~60
+          characters so it survives search-result truncation. Changing it here does not rewrite
+          existing pages — run <code class="font-mono">php artisan cms:refresh-page-meta</code>.
+        </p>
       </div>
 
       <div>
