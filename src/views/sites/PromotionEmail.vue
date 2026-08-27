@@ -81,6 +81,7 @@ function emptyForm(): UpdateSitePromotionEmailPayload {
     hero_image_url: '',
     hero_url: '',
     top_button_text: '',
+    top_button_url: '',
     heading: '',
     intro_text: '',
     secondary_text: '',
@@ -135,6 +136,7 @@ function toPayload(t: SitePromotionEmail): UpdateSitePromotionEmailPayload {
     hero_image_url: t.hero_image_url ?? '',
     hero_url: t.hero_url ?? '',
     top_button_text: t.top_button_text ?? '',
+    top_button_url: t.top_button_url ?? '',
     heading: t.heading ?? '',
     intro_text: t.intro_text ?? '',
     secondary_text: t.secondary_text ?? '',
@@ -172,6 +174,7 @@ const REMOVABLE_FIELDS = [
   'hero_image_url',
   'hero_url',
   'top_button_text',
+  'top_button_url',
   'heading',
   'intro_text',
   'secondary_text',
@@ -378,7 +381,19 @@ function err(field: string): string | undefined {
             <div>
               <OptionalBlockLabel label="Top button text" block="top_button_text" v-model:hidden="form.hidden_blocks" remove-label="Remove button" />
               <InputText v-model="form.top_button_text" fluid placeholder="Leave empty to hide this button" />
+              <p class="mt-1 text-xs text-gray-400">Shown above the banner. Leave empty to hide the button.</p>
               <p v-if="err('top_button_text')" class="mt-1 text-xs text-red-600">{{ err('top_button_text') }}</p>
+            </div>
+            <div>
+              <OptionalBlockLabel label="Top button link" block="top_button_url" v-model:hidden="form.hidden_blocks" remove-label="Remove link" />
+              <InputText
+                v-model="form.top_button_url"
+                fluid
+                placeholder="Leave empty to reuse the offer link"
+                :disabled="hidden('top_button_url')"
+              />
+              <p class="mt-1 text-xs text-gray-400">Where the top button sends the reader. You may use <code v-pre class="font-mono">{{site_url}}</code>. Leave empty to reuse the offer link.</p>
+              <p v-if="err('top_button_url')" class="mt-1 text-xs text-red-600">{{ err('top_button_url') }}</p>
             </div>
             <div>
               <OptionalBlockLabel label="Heading" block="heading" v-model:hidden="form.hidden_blocks" />
