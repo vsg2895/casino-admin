@@ -48,6 +48,9 @@ const previewSiteName = computed(
 const fromDomain = ref('example.com')
 const introMin = ref(12)
 const introMax = ref(32)
+// Button label bounds, served by the API so this input never hard-codes them.
+const buttonMin = ref(12)
+const buttonMax = ref(24)
 const maxDelay = ref(43200)
 const loading = ref(true)
 const saving = ref(false)
@@ -137,7 +140,7 @@ function emptyForm(): UpdateVerificationPromotionEmailPayload {
     hero_image_url: '', hero_url: '', top_button_text: '', top_button_url: '',
     heading: '',
     intro_text: '', intro_text_font_size: null, intro_text_background_color: null,
-    secondary_text: '', cta_button_text: '', cta_button_url: '',
+    secondary_text: '', cta_button_text: '', cta_button_url: '', button_text_font_size: null,
     disclaimer_text: '',
     unsubscribe_label: '',
     preview_site_id: null,
@@ -223,6 +226,8 @@ onMounted(async () => {
     maxDelay.value = tpl.max_delay_minutes
     introMin.value = tpl.intro_text_min_size ?? introMin.value
     introMax.value = tpl.intro_text_max_size ?? introMax.value
+    buttonMin.value = tpl.button_text_min_size ?? buttonMin.value
+    buttonMax.value = tpl.button_text_max_size ?? buttonMax.value
     sendgridEnvAvailable.value = tpl.sendgrid_env_available
   } catch {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load the promotion.', life: 5000 })
@@ -275,6 +280,7 @@ function toPayload(t: VerificationPromotionEmail): UpdateVerificationPromotionEm
     secondary_text: t.secondary_text ?? '',
     cta_button_text: t.cta_button_text ?? '',
     cta_button_url: t.cta_button_url ?? '',
+    button_text_font_size: t.button_text_font_size ?? null,
     disclaimer_text: t.disclaimer_text ?? '',
     unsubscribe_label: t.unsubscribe_label,
     // New design components
@@ -864,6 +870,30 @@ function err(field: string): string | undefined {
                 Where the button sends the reader. Leave empty to reuse the banner link, then
                 the site URL. Tracking macros and
                 <code class="font-mono">{{ SITE_URL_TOKEN }}</code> are allowed.
+              </p>
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600">Button text size</label>
+              <div class="flex items-center gap-2">
+                <InputNumber
+                  v-model="form.button_text_font_size"
+                  :min="buttonMin"
+                  :max="buttonMax"
+                  :step="1"
+                  show-buttons
+                  class="w-36"
+                  :placeholder="String(buttonMin)"
+                />
+                <span class="text-sm text-gray-600">px</span>
+              </div>
+              <p v-if="err('button_text_font_size')" class="mt-1 text-xs text-red-600">
+                {{ err('button_text_font_size') }}
+              </p>
+              <p v-else class="mt-1 text-xs text-gray-400">
+                Applies to BOTH buttons — the one above the banner and the one below it. They
+                share a fixed width so they read as one repeated call to action, and sizing
+                them separately would undo that. Leave empty for the default. Between
+                {{ buttonMin }} and {{ buttonMax }} px.
               </p>
             </div>
             <div>
