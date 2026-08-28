@@ -34,6 +34,8 @@ const buttonDefault = ref(15)
 // Fallback caption, served by the API so the placeholder here cannot drift
 // from what the email actually renders.
 const buttonTextDefault = ref('Verify My Email')
+// Fallback footer grey, served by the API so the swatch and the email agree.
+const footerColorDefault = ref('#9ca3af')
 
 // Live-preview state
 const previewHtml = ref('')
@@ -69,6 +71,7 @@ function emptyForm(): UpdateSiteVerifyEmailPayload {
     // Remove, and the server treats an absent key as visible.
     hidden_blocks: [],
     accent_color: '#4f1d96',
+    footer_text_color: null,
     active: true,
   }
 }
@@ -93,6 +96,7 @@ onMounted(async () => {
     buttonMax.value = tplRes.data.button_text_max_size ?? buttonMax.value
     buttonDefault.value = tplRes.data.button_text_default_size ?? buttonDefault.value
     buttonTextDefault.value = tplRes.data.verify_button_text_default ?? buttonTextDefault.value
+    footerColorDefault.value = tplRes.data.footer_text_color_default ?? footerColorDefault.value
     siteName.value = siteRes.data.name
     await refreshPreview()
   } catch {
@@ -128,6 +132,7 @@ function toPayload(t: SiteVerifyEmail): UpdateSiteVerifyEmailPayload {
     // deep watcher that drives the live preview must see it change.
     hidden_blocks: [...(t.hidden_blocks ?? [])],
     accent_color: t.accent_color,
+    footer_text_color: t.footer_text_color ?? null,
     active: t.active,
   }
 }
@@ -427,6 +432,39 @@ function err(field: string): string | undefined {
               <p v-else class="mt-1 text-xs text-gray-500">
                 Leave empty for the default ({{ buttonDefault }} px). Between {{ buttonMin }} and
                 {{ buttonMax }} px.
+              </p>
+            </div>
+
+            <div>
+              <div class="flex items-center gap-3">
+                <label class="text-xs font-medium text-gray-600">Footer text color</label>
+                <input
+                  type="color"
+                  :value="form.footer_text_color ?? footerColorDefault"
+                  @input="form.footer_text_color = ($event.target as HTMLInputElement).value"
+                  class="h-9 w-14 cursor-pointer rounded border border-gray-300 bg-white p-0.5"
+                />
+                <InputText
+                  :model-value="form.footer_text_color ?? ''"
+                  @update:model-value="form.footer_text_color = (($event as string) || null)"
+                  class="w-32"
+                  :placeholder="footerColorDefault"
+                />
+                <Button
+                  v-if="form.footer_text_color"
+                  label="Reset"
+                  icon="pi pi-replay"
+                  text
+                  severity="secondary"
+                  size="small"
+                  @click="form.footer_text_color = null"
+                />
+              </div>
+              <p v-if="err('footer_text_color')" class="mt-1 text-xs text-red-600">{{ err('footer_text_color') }}</p>
+              <p v-else class="mt-1 text-xs text-gray-500">
+                Applies to all three footer lines — the note, the address/contact line and the
+                copyright. Links keep the accent colour, so the unsubscribe link never blends
+                into the text around it. Empty uses the default ({{ footerColorDefault }}).
               </p>
             </div>
 
