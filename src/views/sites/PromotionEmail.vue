@@ -2,6 +2,7 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import InputText from 'primevue/inputtext'
+import InputNumber from 'primevue/inputnumber'
 import Textarea from 'primevue/textarea'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Button from 'primevue/button'
@@ -28,6 +29,10 @@ const fromDomain = ref('example.com')
 const loading = ref(true)
 const saving = ref(false)
 const fieldErrors = ref<Record<string, string>>({})
+// Button label bounds, served by the API so this input never hard-codes them.
+const buttonMin = ref(12)
+const buttonMax = ref(24)
+const buttonDefault = ref(18)
 
 // Live-preview state
 const previewHtml = ref('')
@@ -92,6 +97,7 @@ function emptyForm(): UpdateSitePromotionEmailPayload {
     postal_address: '',
     contact_email: '',
     copyright_text: '',
+    button_text_font_size: null,
     ...COLOR_DEFAULTS,
     active: true,
   }
@@ -117,6 +123,9 @@ onMounted(async () => {
     ])
     Object.assign(form, toPayload(tplRes.data))
     fromDomain.value = tplRes.data.from_domain
+    buttonMin.value = tplRes.data.button_text_min_size ?? buttonMin.value
+    buttonMax.value = tplRes.data.button_text_max_size ?? buttonMax.value
+    buttonDefault.value = tplRes.data.button_text_default_size ?? buttonDefault.value
     siteName.value = siteRes.data.name
     await refreshPreview()
   } catch {
@@ -149,6 +158,7 @@ function toPayload(t: SitePromotionEmail): UpdateSitePromotionEmailPayload {
     postal_address: t.postal_address ?? '',
     contact_email: t.contact_email ?? '',
     copyright_text: t.copyright_text ?? '',
+    button_text_font_size: t.button_text_font_size ?? null,
     background_color: t.background_color ?? COLOR_DEFAULTS.background_color,
     heading_color: t.heading_color ?? COLOR_DEFAULTS.heading_color,
     text_color: t.text_color ?? COLOR_DEFAULTS.text_color,
@@ -394,6 +404,28 @@ function err(field: string): string | undefined {
               />
               <p class="mt-1 text-xs text-gray-400">Where the top button sends the reader. You may use <code v-pre class="font-mono">{{site_url}}</code>. Leave empty to reuse the offer link.</p>
               <p v-if="err('top_button_url')" class="mt-1 text-xs text-red-600">{{ err('top_button_url') }}</p>
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600">Button text size</label>
+              <div class="flex items-center gap-2">
+                <InputNumber
+                  v-model="form.button_text_font_size"
+                  :min="buttonMin"
+                  :max="buttonMax"
+                  :step="1"
+                  show-buttons
+                  class="w-36"
+                  :placeholder="String(buttonDefault)"
+                />
+                <span class="text-sm text-gray-600">px</span>
+              </div>
+              <p v-if="err('button_text_font_size')" class="mt-1 text-xs text-red-600">
+                {{ err('button_text_font_size') }}
+              </p>
+              <p v-else class="mt-1 text-xs text-gray-500">
+                Leave empty for the default ({{ buttonDefault }} px). Between {{ buttonMin }} and
+                {{ buttonMax }} px.
+              </p>
             </div>
             <div>
               <OptionalBlockLabel label="Heading" block="heading" v-model:hidden="form.hidden_blocks" />

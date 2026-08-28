@@ -2,6 +2,7 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import InputText from 'primevue/inputtext'
+import InputNumber from 'primevue/inputnumber'
 import Textarea from 'primevue/textarea'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Button from 'primevue/button'
@@ -26,6 +27,13 @@ const fromDomain = ref('example.com')
 const loading = ref(true)
 const saving = ref(false)
 const fieldErrors = ref<Record<string, string>>({})
+// Button label bounds, served by the API so this input never hard-codes them.
+const buttonMin = ref(12)
+const buttonMax = ref(24)
+const buttonDefault = ref(15)
+// Fallback caption, served by the API so the placeholder here cannot drift
+// from what the email actually renders.
+const buttonTextDefault = ref('Verify My Email')
 
 // Live-preview state
 const previewHtml = ref('')
@@ -55,6 +63,8 @@ function emptyForm(): UpdateSiteVerifyEmailPayload {
     postal_address: '',
     contact_email: '',
     copyright_text: '',
+    verify_button_text: '',
+    button_text_font_size: null,
     // Nothing hidden by default — a block is only ever hidden by an explicit
     // Remove, and the server treats an absent key as visible.
     hidden_blocks: [],
@@ -79,6 +89,10 @@ onMounted(async () => {
     ])
     Object.assign(form, toPayload(tplRes.data))
     fromDomain.value = tplRes.data.from_domain
+    buttonMin.value = tplRes.data.button_text_min_size ?? buttonMin.value
+    buttonMax.value = tplRes.data.button_text_max_size ?? buttonMax.value
+    buttonDefault.value = tplRes.data.button_text_default_size ?? buttonDefault.value
+    buttonTextDefault.value = tplRes.data.verify_button_text_default ?? buttonTextDefault.value
     siteName.value = siteRes.data.name
     await refreshPreview()
   } catch {
@@ -108,6 +122,8 @@ function toPayload(t: SiteVerifyEmail): UpdateSiteVerifyEmailPayload {
     postal_address: t.postal_address ?? '',
     contact_email: t.contact_email ?? '',
     copyright_text: t.copyright_text ?? '',
+    verify_button_text: t.verify_button_text ?? '',
+    button_text_font_size: t.button_text_font_size ?? null,
     // Copied, not referenced: OptionalBlockLabel emits a new array, and the
     // deep watcher that drives the live preview must see it change.
     hidden_blocks: [...(t.hidden_blocks ?? [])],
@@ -376,6 +392,42 @@ function err(field: string): string | undefined {
                 />
                 <p v-if="err('copyright_text')" class="mt-1 text-xs text-red-600">{{ err('copyright_text') }}</p>
               </div>
+            </div>
+
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600">Button label</label>
+              <InputText v-model="form.verify_button_text" fluid :placeholder="buttonTextDefault" />
+              <p v-if="err('verify_button_text')" class="mt-1 text-xs text-red-600">
+                {{ err('verify_button_text') }}
+              </p>
+              <p v-else class="mt-1 text-xs text-gray-500">
+                The caption on the verify button. Placeholders are allowed. This button cannot be
+                removed — it is how subscribers confirm — so clearing this restores
+                “{{ buttonTextDefault }}”.
+              </p>
+            </div>
+
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600">Button text size</label>
+              <div class="flex items-center gap-2">
+                <InputNumber
+                  v-model="form.button_text_font_size"
+                  :min="buttonMin"
+                  :max="buttonMax"
+                  :step="1"
+                  show-buttons
+                  class="w-36"
+                  :placeholder="String(buttonDefault)"
+                />
+                <span class="text-sm text-gray-600">px</span>
+              </div>
+              <p v-if="err('button_text_font_size')" class="mt-1 text-xs text-red-600">
+                {{ err('button_text_font_size') }}
+              </p>
+              <p v-else class="mt-1 text-xs text-gray-500">
+                Leave empty for the default ({{ buttonDefault }} px). Between {{ buttonMin }} and
+                {{ buttonMax }} px.
+              </p>
             </div>
 
             <!-- Footer identity — the sender's postal address and a monitored
