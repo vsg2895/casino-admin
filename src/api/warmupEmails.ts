@@ -24,6 +24,13 @@ export interface WarmupHistoryFilters {
   site_id?: number
   template?: string
   status?: WarmupSendStatus
+  /**
+   * Inclusive `sent_at` bounds, as `YYYY-MM-DD`. Both ends cover the whole day
+   * in UTC — the zone the column is stored in — so a row sent near midnight can
+   * fall on the adjacent day from the one the table displays locally.
+   */
+  sent_from?: string
+  sent_to?: string
 }
 
 export function listWarmupEmails(params?: WarmupFilters): Promise<PaginatedResponse<WarmupEmail>> {

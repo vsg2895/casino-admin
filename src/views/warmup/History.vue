@@ -49,6 +49,9 @@ const search = ref('')
 const siteId = ref<number | null>(null)
 const template = ref<string | null>(null)
 const status = ref<WarmupSendStatus | null>(null)
+// `sent_at` range, as YYYY-MM-DD strings straight from <input type="date">.
+const sentFrom = ref('')
+const sentTo = ref('')
 const templates = ref<WarmupTemplate[]>([])
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -73,7 +76,9 @@ const hasFilters = computed(
     search.value.trim() !== '' ||
     siteId.value !== null ||
     template.value !== null ||
-    status.value !== null,
+    status.value !== null ||
+    sentFrom.value !== '' ||
+    sentTo.value !== '',
 )
 
 /** One filter object drives the listing and the count, so they cannot disagree. */
@@ -84,6 +89,8 @@ function activeFilters(): Omit<api.WarmupHistoryFilters, 'page' | 'per_page'> {
   if (siteId.value !== null) filters.site_id = siteId.value
   if (template.value !== null) filters.template = template.value
   if (status.value !== null) filters.status = status.value
+  if (sentFrom.value !== '') filters.sent_from = sentFrom.value
+  if (sentTo.value !== '') filters.sent_to = sentTo.value
   return filters
 }
 
@@ -127,6 +134,8 @@ function clearFilters(): void {
   siteId.value = null
   template.value = null
   status.value = null
+  sentFrom.value = ''
+  sentTo.value = ''
 }
 
 watch(search, () => {
@@ -135,7 +144,7 @@ watch(search, () => {
 })
 
 // Dropdowns apply immediately — there is nothing to debounce.
-watch([siteId, template, status], () => void reloadFromFirstPage())
+watch([siteId, template, status, sentFrom, sentTo], () => void reloadFromFirstPage())
 
 function formatDate(iso: string | null | undefined): string {
   return iso
@@ -209,6 +218,30 @@ onMounted(async () => {
         class="w-44"
         placeholder="All outcomes"
       />
+      <!-- `sent_at` range. Native date inputs rather than a PrimeVue DatePicker:
+           they emit exactly the YYYY-MM-DD the API expects, with no parsing or
+           locale round-trip in between. `max`/`min` cross-bind the two so the
+           range cannot be inverted into a query that can never match. -->
+      <div class="flex items-center gap-2">
+        <label class="text-xs font-medium text-gray-500" for="sent-from">Sent from</label>
+        <input
+          id="sent-from"
+          v-model="sentFrom"
+          type="date"
+          :max="sentTo || undefined"
+          class="h-10 rounded-md border border-gray-300 px-3 text-sm"
+        />
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="text-xs font-medium text-gray-500" for="sent-to">to</label>
+        <input
+          id="sent-to"
+          v-model="sentTo"
+          type="date"
+          :min="sentFrom || undefined"
+          class="h-10 rounded-md border border-gray-300 px-3 text-sm"
+        />
+      </div>
       <Button
         v-if="hasFilters"
         label="Clear"
