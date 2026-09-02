@@ -11,7 +11,7 @@
  * Follows the same shape as Promotion History and the phone SMS history: lazy
  * DataTable, server-side filters, and a dedicated COUNT endpoint for the badge.
  */
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -45,6 +45,8 @@ const first = computed(() => (page.value - 1) * perPage.value)
 const recordTotal = ref<number | null>(null)
 
 // ── Filters ───────────────────────────────────────────────────────────────────
+// These inputs are a DRAFT. Nothing reaches the API until Apply is pressed, so
+// a half-typed address or a half-picked date range never fires a query.
 const search = ref('')
 const siteId = ref<number | null>(null)
 const template = ref<string | null>(null)
@@ -53,7 +55,6 @@ const status = ref<WarmupSendStatus | null>(null)
 const sentFrom = ref('')
 const sentTo = ref('')
 const templates = ref<WarmupTemplate[]>([])
-let searchTimer: ReturnType<typeof setTimeout> | undefined
 
 const siteOptions = computed(() => [
   { label: 'All sites', value: null },
@@ -71,19 +72,11 @@ const statusOptions: { label: string; value: WarmupSendStatus | null }[] = [
   { label: 'Failed', value: 'failed' },
 ]
 
-const hasFilters = computed(
-  () =>
-    search.value.trim() !== '' ||
-    siteId.value !== null ||
-    template.value !== null ||
-    status.value !== null ||
-    sentFrom.value !== '' ||
-    sentTo.value !== '',
-)
+type HistoryFilters = Omit<api.WarmupHistoryFilters, 'page' | 'per_page'>
 
-/** One filter object drives the listing and the count, so they cannot disagree. */
-function activeFilters(): Omit<api.WarmupHistoryFilters, 'page' | 'per_page'> {
-  const filters: Omit<api.WarmupHistoryFilters, 'page' | 'per_page'> = {}
+/** The draft as it WOULD be sent — read from the inputs, not yet committed. */
+function draftFilters(): HistoryFilters {
+  const filters: HistoryFilters = {}
   const term = search.value.trim()
   if (term !== '') filters.search = term
   if (siteId.value !== null) filters.site_id = siteId.value
@@ -93,6 +86,37 @@ function activeFilters(): Omit<api.WarmupHistoryFilters, 'page' | 'per_page'> {
   if (sentTo.value !== '') filters.sent_to = sentTo.value
   return filters
 }
+
+/**
+ * The COMMITTED filters — the only thing the API is ever given.
+ *
+ * Held separately from the inputs on purpose. Paging must not pick up edits the
+ * admin has typed but not applied, which is exactly what would happen if each
+ * request rebuilt its query from the refs at call time.
+ */
+const applied = ref<HistoryFilters>({})
+
+/** One filter object drives the listing and the count, so they cannot disagree. */
+function activeFilters(): HistoryFilters {
+  return applied.value
+}
+
+/** Order-independent compare, so key order can never fake a difference. */
+function sameFilters(a: HistoryFilters, b: HistoryFilters): boolean {
+  const ra = a as Record<string, unknown>
+  const rb = b as Record<string, unknown>
+  const ka = Object.keys(ra).sort()
+  const kb = Object.keys(rb).sort()
+  return ka.length === kb.length && ka.every((k, i) => k === kb[i] && ra[k] === rb[k])
+}
+
+/** Unapplied edits are pending — drives the Apply button's enabled state. */
+const isDirty = computed(() => !sameFilters(draftFilters(), applied.value))
+
+/** Clear is offered whenever there is something to clear, drafted or applied. */
+const hasFilters = computed(
+  () => Object.keys(draftFilters()).length > 0 || Object.keys(applied.value).length > 0,
+)
 
 async function reload(): Promise<void> {
   loading.value = true
@@ -129,22 +153,27 @@ async function onPage(event: { page: number; rows: number }): Promise<void> {
   await reload()
 }
 
-function clearFilters(): void {
+/** Commit the draft and reload from page 1. */
+async function applyFilters(): Promise<void> {
+  applied.value = draftFilters()
+  await reloadFromFirstPage()
+}
+
+/**
+ * Reset the inputs AND commit that reset.
+ *
+ * Clearing then applies straight away: a Clear that left the old results on
+ * screen until a second click would read as broken.
+ */
+async function clearFilters(): Promise<void> {
   search.value = ''
   siteId.value = null
   template.value = null
   status.value = null
   sentFrom.value = ''
   sentTo.value = ''
+  await applyFilters()
 }
-
-watch(search, () => {
-  clearTimeout(searchTimer)
-  searchTimer = setTimeout(reloadFromFirstPage, 400)
-})
-
-// Dropdowns apply immediately — there is nothing to debounce.
-watch([siteId, template, status, sentFrom, sentTo], () => void reloadFromFirstPage())
 
 function formatDate(iso: string | null | undefined): string {
   return iso
@@ -193,7 +222,12 @@ onMounted(async () => {
 
     <!-- Filters -->
     <div class="flex flex-wrap items-center gap-3">
-      <InputText v-model="search" placeholder="Search by email" class="w-64" />
+      <InputText
+        v-model="search"
+        placeholder="Search by email"
+        class="w-64"
+        @keyup.enter="applyFilters"
+      />
       <Select
         v-model="siteId"
         :options="siteOptions"
@@ -242,6 +276,16 @@ onMounted(async () => {
           class="h-10 rounded-md border border-gray-300 px-3 text-sm"
         />
       </div>
+      <!-- Apply is the ONLY thing that commits the draft. Disabled while the
+           inputs match what is already on screen, so the button cannot be used
+           to fire a redundant identical query. -->
+      <Button
+        label="Apply"
+        icon="pi pi-filter"
+        :disabled="!isDirty"
+        :loading="loading"
+        @click="applyFilters"
+      />
       <Button
         v-if="hasFilters"
         label="Clear"

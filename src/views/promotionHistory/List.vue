@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Select from 'primevue/select'
@@ -9,7 +9,11 @@ import Tag from 'primevue/tag'
 import Paginator, { type PageState } from 'primevue/paginator'
 import { useToast } from 'primevue/usetoast'
 import { useSitesStore } from '@/stores/sitesStore'
-import { listPromotionHistory, countPromotionHistory } from '@/api/promotionHistory'
+import {
+  listPromotionHistory,
+  countPromotionHistory,
+  type PromotionHistoryFilters,
+} from '@/api/promotionHistory'
 import RecordCount from '@/components/RecordCount.vue'
 import type { PromotionEmailHistory, PromotionEmailStatus } from '@shared/types/promotionEmailHistory'
 
@@ -55,19 +59,54 @@ function formatDateTime(iso: string | null | undefined): string {
 // query entirely.
 const recordTotal = ref<number | null>(null)
 
+type HistoryFilters = Omit<PromotionHistoryFilters, 'page'>
+
+/** The draft as it WOULD be sent — read from the inputs, not yet committed. */
+function draftFilters(): HistoryFilters {
+  return {
+    site_id: siteId.value ?? undefined,
+    from: from.value || undefined,
+    to: to.value || undefined,
+    search: search.value.trim() || undefined,
+    status: status.value ?? undefined,
+  }
+}
+
+/**
+ * The COMMITTED filters — the only thing the API is ever given.
+ *
+ * Held separately from the inputs on purpose. Paging must not pick up edits the
+ * admin has typed but not applied, which is exactly what would happen if each
+ * request rebuilt its query from the refs at call time.
+ */
+const applied = ref<HistoryFilters>({})
+
+/** Order-independent compare, so key order can never fake a difference. */
+function sameFilters(a: HistoryFilters, b: HistoryFilters): boolean {
+  const ra = a as Record<string, unknown>
+  const rb = b as Record<string, unknown>
+  const ka = Object.keys(ra).filter((k) => ra[k] !== undefined).sort()
+  const kb = Object.keys(rb).filter((k) => rb[k] !== undefined).sort()
+  return ka.length === kb.length && ka.every((k, i) => k === kb[i] && ra[k] === rb[k])
+}
+
+/** Unapplied edits are pending — drives the Apply button's enabled state. */
+const isDirty = computed(() => !sameFilters(draftFilters(), applied.value))
+
+/** Clear is offered whenever there is something to clear, drafted or applied. */
+const hasFilters = computed(
+  () =>
+    Object.values(draftFilters()).some((v) => v !== undefined) ||
+    Object.values(applied.value).some((v) => v !== undefined),
+)
+
 async function reload(): Promise<void> {
   loading.value = true
   try {
     const page = Math.floor(first.value / perPage.value) + 1
     // One filter object drives both calls, so the badge can never disagree with
     // the rows on screen. They run concurrently — the count never delays the list.
-    const filters = {
-      site_id: siteId.value ?? undefined,
-      from: from.value || undefined,
-      to: to.value || undefined,
-      search: search.value.trim() || undefined,
-      status: status.value ?? undefined,
-    }
+    const filters = applied.value
     const [res, count] = await Promise.all([
       listPromotionHistory({ page, ...filters }),
       // Never fatal: a COUNT over millions of history rows is the slowest thing
@@ -96,20 +135,25 @@ function resetToFirstAndReload(): void {
   reload()
 }
 
-// Filters reset to page 1; search is debounced.
-let searchTimer: ReturnType<typeof setTimeout> | undefined
-watch([siteId, from, to, status], resetToFirstAndReload)
-watch(search, () => {
-  clearTimeout(searchTimer)
-  searchTimer = setTimeout(resetToFirstAndReload, 400)
-})
+/** Commit the draft and reload from page 1. */
+function applyFilters(): void {
+  applied.value = draftFilters()
+  resetToFirstAndReload()
+}
 
+/**
+ * Reset the inputs AND commit that reset.
+ *
+ * Clearing then applies straight away: a Clear that left the old results on
+ * screen until a second click would read as broken.
+ */
 function clearFilters(): void {
   siteId.value = null
   from.value = ''
   to.value = ''
   search.value = ''
   status.value = null
+  applyFilters()
 }
 
 onMounted(async () => {
@@ -152,10 +196,33 @@ onMounted(async () => {
         </div>
         <div>
           <label class="mb-1 block text-xs font-medium text-gray-500">Email starts with</label>
-          <InputText v-model="search" placeholder="e.g. john" class="w-56" />
+          <InputText
+            v-model="search"
+            placeholder="e.g. john"
+            class="w-56"
+            @keyup.enter="applyFilters"
+          />
         </div>
       </div>
-      <Button label="Clear" icon="pi pi-filter-slash" text size="small" @click="clearFilters" />
+      <!-- Apply is the ONLY thing that commits the draft. Disabled while the
+           inputs match what is already on screen, so the button cannot be used
+           to fire a redundant identical query. -->
+      <Button
+        label="Apply"
+        icon="pi pi-filter"
+        size="small"
+        :disabled="!isDirty"
+        :loading="loading"
+        @click="applyFilters"
+      />
+      <Button
+        v-if="hasFilters"
+        label="Clear"
+        icon="pi pi-filter-slash"
+        text
+        size="small"
+        @click="clearFilters"
+      />
     </div>
 
     <!-- Table -->
