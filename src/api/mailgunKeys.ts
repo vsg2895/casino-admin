@@ -32,7 +32,8 @@ export function updateMailgunKey(
 
 export interface MailgunKeyTestPayload {
   to: string
-  site_id: number // which website's content to render
+  // No site_id: this dialog has no website picker. The backend renders against
+  // the first active site and names it in the success message.
   template: string // catalog value, e.g. 'promotion'
 }
 

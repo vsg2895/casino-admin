@@ -26,7 +26,7 @@ const navItems: NavItem[] = [
   { label: 'Promotion After Verification', to: '/promotion-after-verification', icon: 'pi-verified' },
   { label: 'Schedule Setting', to: '/schedules',        icon: 'pi-clock' },
   { label: 'SendGrid Keys', to: '/sendgrid-keys', icon: 'pi-key' },
-  { label: 'Mailgun Keys', to: '/mailgun-keys', icon: 'pi-key' },
+  { label: 'Mailgun Credentials', to: '/mailgun-keys', icon: 'pi-key' },
   { label: 'Warmup', to: '/warmup', icon: 'pi-sun' },
   { label: 'Warmup History', to: '/warmup/history', icon: 'pi-history' },
   { label: 'Promotion History', to: '/promotion-history', icon: 'pi-history' },

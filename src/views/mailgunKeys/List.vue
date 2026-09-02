@@ -13,14 +13,12 @@ import axios from 'axios'
 import * as api from '@/api/mailgunKeys'
 import { listEmailTemplateTypes } from '@/api/emailTemplateTypes'
 import { useAuthStore } from '@/stores/authStore'
-import { useSitesStore } from '@/stores/sitesStore'
 import type { MailgunKey, MailgunRegion, UpsertMailgunKeyPayload } from '@shared/types/mailgunKey'
 import type { EmailTemplateType } from '@shared/types/emailTemplateType'
 import type { ErrorResponse } from '@shared/types/api'
 
 const toast = useToast()
 const authStore = useAuthStore()
-const sitesStore = useSitesStore()
 
 const items = ref<MailgunKey[]>([])
 const loading = ref(false)
@@ -34,7 +32,7 @@ async function reload(): Promise<void> {
   try {
     items.value = (await api.listMailgunKeys()).data
   } catch {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load Mailgun keys.', life: 4000 })
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load Mailgun credentials.', life: 4000 })
   } finally {
     loading.value = false
   }
@@ -53,11 +51,16 @@ interface KeyForm {
   domain: string
   api_key: string
   region: MailgunRegion
+  // Sender identity registered with Mailgun for this domain. Recorded for
+  // reference only — no send path reads it; every send takes its sender from
+  // the site template's own from_email.
+  from_address: string
+  from_name: string
   active: boolean
 }
 
 function emptyForm(): KeyForm {
-  return { name: '', domain: '', api_key: '', region: 'us', active: true }
+  return { name: '', domain: '', api_key: '', region: 'us', from_address: '', from_name: '', active: true }
 }
 
 const REGION_OPTIONS: Array<{ label: string; value: MailgunRegion }> = [
@@ -74,7 +77,15 @@ function openCreate(): void {
 }
 
 function openEdit(k: MailgunKey): void {
-  Object.assign(form, { name: k.name, domain: k.domain, api_key: '', region: k.region, active: k.status === 'active' })
+  Object.assign(form, {
+    name: k.name,
+    domain: k.domain,
+    api_key: '',
+    region: k.region,
+    from_address: k.from_address ?? '',
+    from_name: k.from_name ?? '',
+    active: k.status === 'active',
+  })
   editingId.value = k.id
   fieldErrors.value = {}
   showDialog.value = true
@@ -85,6 +96,10 @@ function payload(): UpsertMailgunKeyPayload {
     name: form.name,
     domain: form.domain.trim(),
     region: form.region,
+    // null rather than '' so emptying the box actually clears the stored value;
+    // '' would fail the backend's `email` rule instead of meaning "unset".
+    from_address: form.from_address.trim() || null,
+    from_name: form.from_name.trim() || null,
     status: form.active ? 'active' : 'inactive',
   }
   // Only send the key when the admin typed one (required on create, optional on
@@ -145,7 +160,6 @@ async function toggleStatus(k: MailgunKey): Promise<void> {
 // ── Send test — renders a real template and proves the key delivers ─────────────
 const testing = ref<MailgunKey | null>(null)
 const testEmail = ref('')
-const testSiteId = ref<number | null>(null)
 const testTemplate = ref<string | null>(null)
 const testSending = ref(false)
 const testErrors = ref<Record<string, string>>({})
@@ -156,25 +170,34 @@ const testResult = ref<{ ok: boolean; message: string } | null>(null)
 // Templates come from the backend catalog, so a newly registered one appears
 // here with no change to this component.
 const templateTypes = ref<EmailTemplateType[]>([])
-const templateOptions = computed(() =>
-  templateTypes.value.map((t) => ({ label: t.label, value: t.value })),
-)
-const siteOptions = computed(() =>
-  sitesStore.sites.map((s) => ({ label: `${s.name} (${s.domain})`, value: s.id })),
-)
-const selectedTemplateHint = computed(
-  () => templateTypes.value.find((t) => t.value === testTemplate.value)?.description ?? '',
+// This screen's own connection test, prepended to the shared catalog list.
+// It is NOT registered in EmailTemplateCatalog: that list is also used by the
+// SendGrid dialog and the warmup picker, which must stay as they are.
+const CONNECTION_TEST = {
+  value: 'mailgun_connection_test',
+  label: 'Connection test (no website content)',
+  description:
+    'Plain diagnostic message. Confirms the credential authenticates and delivers, without rendering any site template.',
+}
+
+const templateOptions = computed(() => [
+  { label: CONNECTION_TEST.label, value: CONNECTION_TEST.value },
+  ...templateTypes.value.map((t) => ({ label: t.label, value: t.value })),
+])
+const selectedTemplateHint = computed(() =>
+  testTemplate.value = CONNECTION_TEST.value
+    ? CONNECTION_TEST.description
+    : (templateTypes.value.find((t) => t.value === testTemplate.value)?.description ?? ''),
 )
 
 const canSendTest = computed(
-  () => testEmail.value.trim() !== '' && testSiteId.value !== null && testTemplate.value !== null,
+  () => testEmail.value.trim() !== '' && testTemplate.value !== null,
 )
 
 function openTest(k: MailgunKey): void {
   testing.value = k
   testEmail.value = authStore.user?.email ?? ''
   // Sensible defaults so the common case is one click.
-  testSiteId.value = sitesStore.sites[0]?.id ?? null
   testTemplate.value = templateTypes.value[0]?.value ?? null
   testErrors.value = {}
   testResult.value = null
@@ -194,7 +217,6 @@ async function runTest(): Promise<void> {
   try {
     const res = await api.testMailgunKey(testing.value.id, {
       to: testEmail.value.trim(),
-      site_id: testSiteId.value as number,
       template: testTemplate.value as string,
     })
     testResult.value = { ok: true, message: res.message }
@@ -243,11 +265,11 @@ function err(field: string): string | undefined {
 }
 
 onMounted(async () => {
-  // Sites + templates back the test dialog's dropdowns; neither is fatal to the
-  // key list itself, so a failure there just leaves the dropdown empty.
+  // The template list backs the test dialog's dropdown; a failure there is not
+  // fatal to the credential list itself, it just leaves the dropdown empty.
+  // Sites are not fetched: this dialog has no website picker.
   await Promise.all([
     reload(),
-    sitesStore.fetchSites().catch(() => undefined),
     listEmailTemplateTypes()
       .then((types) => (templateTypes.value = types))
       .catch(() => (templateTypes.value = [])),
@@ -260,12 +282,12 @@ onMounted(async () => {
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h2 class="text-lg font-semibold text-gray-900">Mailgun Keys</h2>
+        <h2 class="text-lg font-semibold text-gray-900">Mailgun Credentials</h2>
         <p class="text-sm text-gray-500">
           Store Mailgun API keys to send scheduled promotion campaigns through the Mailgun API.
         </p>
       </div>
-      <Button label="New key" icon="pi pi-plus" @click="openCreate" />
+      <Button label="New credential" icon="pi pi-plus" @click="openCreate" />
     </div>
 
     <!-- Table -->
@@ -273,7 +295,7 @@ onMounted(async () => {
       <DataTable :value="items" :loading="loading" striped-rows data-key="id" :pt="{ root: { class: 'text-sm' } }">
         <template #empty>
           <div class="py-10 text-center text-sm text-gray-400">
-            No Mailgun keys yet. Add one to use it in Schedule Settings.
+            No Mailgun credentials yet. Add one to use it in Schedule Settings.
           </div>
         </template>
 
@@ -284,6 +306,15 @@ onMounted(async () => {
             <template #body="{ data }: { data: MailgunKey }">
               <span class="text-gray-700">{{ data.domain }}</span>
               <span class="ml-2 text-xs uppercase text-gray-400">{{ data.region }}</span>
+            </template>
+          </Column>
+
+          <Column header="From" :style="{ width: '210px' }">
+            <template #body="{ data }: { data: MailgunKey }">
+              <span v-if="data.from_address" class="text-gray-700">{{ data.from_address }}</span>
+              <!-- Not a warning: the site template supplies the sender, so a
+                   credential without one is complete and works. -->
+              <span v-else class="text-xs text-gray-400">from site template</span>
             </template>
           </Column>
 
@@ -356,6 +387,31 @@ onMounted(async () => {
           <p v-if="err('region')" class="mt-1 text-xs text-red-600">{{ err('region') }}</p>
         </div>
 
+        <!-- Sender identity, recorded for reference. Optional on purpose, and
+             not used when sending: every site template defines its own
+             from_email, which is what a send actually uses. Leaving both blank
+             is a perfectly valid, working credential. -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="mb-1 block text-xs font-medium text-gray-600">
+              From address <span class="font-normal text-gray-400">(optional)</span>
+            </label>
+            <InputText v-model="form.from_address" fluid autocomplete="off" placeholder="offers@mg.example.com" />
+            <p v-if="err('from_address')" class="mt-1 text-xs text-red-600">{{ err('from_address') }}</p>
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-medium text-gray-600">
+              From name <span class="font-normal text-gray-400">(optional)</span>
+            </label>
+            <InputText v-model="form.from_name" fluid autocomplete="off" placeholder="Example Offers" />
+            <p v-if="err('from_name')" class="mt-1 text-xs text-red-600">{{ err('from_name') }}</p>
+          </div>
+          <p class="col-span-2 -mt-1 text-xs text-gray-400">
+            Used only when a site's email template has no From address of its own. A template that
+            defines one always takes precedence, so filling these in never changes an existing send.
+          </p>
+        </div>
+
         <div>
           <label class="mb-1 block text-xs font-medium text-gray-600">API key</label>
           <InputText
@@ -381,7 +437,7 @@ onMounted(async () => {
 
       <template #footer>
         <Button label="Cancel" text @click="showDialog = false" />
-        <Button :label="editingId ? 'Save changes' : 'Add key'" icon="pi pi-check" :loading="saving" @click="save" />
+        <Button :label="editingId ? 'Save changes' : 'Add credential'" icon="pi pi-check" :loading="saving" @click="save" />
       </template>
     </Dialog>
 
@@ -395,9 +451,10 @@ onMounted(async () => {
     >
       <div class="space-y-4">
         <p class="text-sm text-gray-700">
-          Renders the selected template with the selected website's content and sends it through
-          <strong>{{ testing?.name }}</strong> to confirm the key authenticates and can deliver.
-          Inactive keys can be tested too.
+          Sends a message through <strong>{{ testing?.name }}</strong> to confirm the credential
+          authenticates and can deliver. The connection test renders no site content; the other
+          templates use your first active website's, and the confirmation names which one.
+          Inactive credentials can be tested too.
         </p>
 
         <div>
@@ -412,20 +469,6 @@ onMounted(async () => {
           />
           <p v-if="selectedTemplateHint" class="mt-1 text-xs text-gray-400">{{ selectedTemplateHint }}</p>
           <p v-if="testErr('template')" class="mt-1 text-xs text-red-600">{{ testErr('template') }}</p>
-        </div>
-
-        <div>
-          <label class="mb-1 block text-xs font-medium text-gray-600">Website</label>
-          <Select
-            v-model="testSiteId"
-            :options="siteOptions"
-            option-label="label"
-            option-value="value"
-            placeholder="Select a website"
-            fluid
-          />
-          <p class="mt-1 text-xs text-gray-400">The template is rendered with this site's content.</p>
-          <p v-if="testErr('site_id')" class="mt-1 text-xs text-red-600">{{ testErr('site_id') }}</p>
         </div>
 
         <div>
