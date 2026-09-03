@@ -5,15 +5,24 @@ import Column from 'primevue/column'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import ToggleSwitch from 'primevue/toggleswitch'
+import InputNumber from 'primevue/inputnumber'
+import Textarea from 'primevue/textarea'
+import Checkbox from 'primevue/checkbox'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
 import axios from 'axios'
 import * as api from '@/api/mailgunKeys'
+import * as receiversApi from '@/api/mailgunReceivers'
 import { listEmailTemplateTypes } from '@/api/emailTemplateTypes'
 import { useAuthStore } from '@/stores/authStore'
 import type { MailgunKey, MailgunRegion, UpsertMailgunKeyPayload } from '@shared/types/mailgunKey'
+import type {
+  MailgunReceiver as MailgunReceiverType,
+  MailgunReceiverSettings,
+  MailgunReceiverTemplate,
+} from '@shared/types/mailgunReceiver'
 import type { EmailTemplateType } from '@shared/types/emailTemplateType'
 import type { ErrorResponse } from '@shared/types/api'
 
@@ -161,6 +170,154 @@ async function toggleStatus(k: MailgunKey): Promise<void> {
 const testing = ref<MailgunKey | null>(null)
 const testEmail = ref('')
 const testTemplate = ref<string | null>(null)
+
+// ── Per-credential receiver settings ─────────────────────────────────────────
+// Attached to the credential, so there is no credential picker in here: whichever
+// row's button was clicked IS the sender.
+const showSettings = ref(false)
+const settingsFor = ref<MailgunKey | null>(null)
+const settingsLoading = ref(false)
+const settingsSaving = ref(false)
+const settingsErrors = ref<Record<string, string>>({})
+const settings = ref<MailgunReceiverSettings | null>(null)
+const previewRows = ref<MailgunReceiverType[]>([])
+const previewLoading = ref(false)
+
+const NAME_TOKEN = '{{name}}'
+const EMAIL_TOKEN = '{{email}}'
+
+const orderOptions = [
+  { label: 'Newest added first', value: 'newest' },
+  { label: 'Oldest added first', value: 'oldest' },
+]
+
+// The palette, declared once. `key` is typed against the template so a renamed
+// field is a build error rather than a colour that silently stops applying.
+type ColorField = {
+  [K in keyof MailgunReceiverTemplate]: MailgunReceiverTemplate[K] extends string ? K : never
+}[keyof MailgunReceiverTemplate]
+
+const colorFields: { key: ColorField; label: string }[] = [
+  { key: 'background_color', label: 'Background' },
+  { key: 'heading_color', label: 'Heading' },
+  { key: 'text_color', label: 'Text' },
+  { key: 'secondary_text_color', label: 'Secondary' },
+  { key: 'muted_text_color', label: 'Muted' },
+  { key: 'button_color', label: 'Button' },
+  { key: 'accent_color', label: 'Link' },
+]
+
+function setColor(key: ColorField, event: Event): void {
+  if (settings.value === null) return
+  settings.value.message_template[key] = (event.target as HTMLInputElement).value
+}
+
+function sErr(field: string): string {
+  return settingsErrors.value[field] ?? ''
+}
+
+// Re-seed every field from the source site's promotion email. Destructive by
+// design — it is the "start over" control — so it replaces the subject too.
+const templateResetLoading = ref(false)
+
+async function resetTemplateFromSource(): Promise<void> {
+  if (settings.value === null || settingsFor.value === null) return
+  templateResetLoading.value = true
+  try {
+    const seed = await receiversApi.getReceiverTemplateSource(settingsFor.value.id)
+    settings.value.message_template = seed.template
+    settings.value.message_subject = seed.subject
+    settings.value.template_source = seed.site_name
+    settingsErrors.value = {}
+  } catch {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Could not load the promotion template.', life: 4000 })
+  } finally {
+    templateResetLoading.value = false
+  }
+}
+
+// ── Message preview — the rendered email, from the fields as they stand now ───
+const showMessagePreview = ref(false)
+const messagePreviewLoading = ref(false)
+const messagePreviewHtml = ref('')
+
+async function loadMessagePreview(): Promise<void> {
+  if (settings.value === null || settingsFor.value === null) return
+  messagePreviewLoading.value = true
+  try {
+    messagePreviewHtml.value = await receiversApi.previewReceiverMessage(
+      settingsFor.value.id,
+      settings.value.message_template,
+    )
+    showMessagePreview.value = true
+  } catch {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Could not render the preview.', life: 4000 })
+  } finally {
+    messagePreviewLoading.value = false
+  }
+}
+
+async function openSettings(k: MailgunKey): Promise<void> {
+  settingsFor.value = k
+  settings.value = null
+  previewRows.value = []
+  settingsErrors.value = {}
+  showSettings.value = true
+  settingsLoading.value = true
+  try {
+    settings.value = (await receiversApi.getReceiverSettings(k.id)).data
+  } catch {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Could not load settings.', life: 4000 })
+  } finally {
+    settingsLoading.value = false
+  }
+}
+
+async function saveSettings(): Promise<void> {
+  if (settings.value === null || settingsFor.value === null) return
+  settingsErrors.value = {}
+  settingsSaving.value = true
+  try {
+    const res = await receiversApi.saveReceiverSettings(settingsFor.value.id, settings.value)
+    settings.value.eligible_count = res.eligible_count
+    settings.value.next_batch_count = res.next_batch_count
+    settings.value.blocked_reason = res.blocked_reason
+    toast.add({ severity: 'success', summary: 'Settings saved', life: 2500 })
+  } catch (e: unknown) {
+    const errors = (e as { response?: { data?: { errors?: Record<string, string[]> } } })?.response?.data?.errors
+    if (errors) settingsErrors.value = Object.fromEntries(Object.entries(errors).map(([k2, v]) => [k2, v[0] ?? '']))
+    else toast.add({ severity: 'error', summary: 'Error', detail: 'Could not save.', life: 4000 })
+  } finally {
+    settingsSaving.value = false
+  }
+}
+
+/** Lists the exact receivers the next run would take, via the shared selector. */
+async function loadPreview(): Promise<void> {
+  if (settingsFor.value === null) return
+  previewLoading.value = true
+  try {
+    const res = await receiversApi.previewReceiverBatch(settingsFor.value.id)
+    previewRows.value = res.data
+    if (settings.value) {
+      settings.value.eligible_count = res.meta.eligible_count
+      settings.value.next_batch_count = res.meta.next_batch_count
+    }
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+async function runNow(): Promise<void> {
+  if (settingsFor.value === null) return
+  try {
+    const res = await receiversApi.runReceiverCampaign(settingsFor.value.id)
+    toast.add({ severity: 'success', summary: res.message, life: 3000 })
+  } catch (e: unknown) {
+    const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+    toast.add({ severity: 'warn', summary: msg ?? 'Could not queue the run.', life: 4000 })
+  }
+}
 const testSending = ref(false)
 const testErrors = ref<Record<string, string>>({})
 // Result stays on screen (rather than a toast) so the admin gets a definitive,
@@ -344,6 +501,7 @@ onMounted(async () => {
         </Column>
         <Column header="Actions" :style="{ width: '150px' }">
           <template #body="{ data }: { data: MailgunKey }">
+            <Button icon="pi pi-users" text severity="secondary" size="small" v-tooltip.top="'Receiver settings'" @click="openSettings(data)" />
             <Button icon="pi pi-send" text severity="secondary" size="small" v-tooltip.top="'Send test email'" @click="openTest(data)" />
             <Button icon="pi pi-pencil" text severity="secondary" size="small" v-tooltip.top="'Edit'" @click="openEdit(data)" />
             <Button icon="pi pi-trash" text severity="danger" size="small" v-tooltip.top="'Delete'" @click="deleting = data" />
@@ -512,4 +670,220 @@ onMounted(async () => {
       </template>
     </Dialog>
   </div>
+
+    <!-- Per-credential receiver settings. No credential picker: the row that
+         opened this dialog is the sender. -->
+    <Dialog
+      v-model:visible="showSettings"
+      modal
+      :header="`Receiver settings — ${settingsFor?.name ?? ''}`"
+      :style="{ width: '760px' }"
+    >
+      <div v-if="settingsLoading" class="py-8 text-center text-sm text-gray-400">Loading…</div>
+
+      <div v-else-if="settings" class="space-y-4">
+        <div v-if="settings.blocked_reason" class="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          This credential will not send: {{ settings.blocked_reason }}.
+        </div>
+
+        <div class="flex items-center gap-2">
+          <Checkbox v-model="settings.send_enabled" binary input-id="s-enabled" />
+          <label for="s-enabled" class="text-sm text-gray-700">Send to receivers through this credential</label>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="mb-1 block text-xs font-medium text-gray-600">Receivers per run</label>
+            <InputNumber v-model="settings.batch_size" :min="1" :max="10000" fluid />
+            <p v-if="sErr('batch_size')" class="mt-1 text-xs text-red-600">{{ sErr('batch_size') }}</p>
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-medium text-gray-600">Order</label>
+            <Select v-model="settings.selection_order" :options="orderOptions" option-label="label" option-value="value" fluid />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-medium text-gray-600">Cooldown (days)</label>
+            <InputNumber v-model="settings.cooldown_days" :min="0" :max="365" fluid />
+            <p class="mt-1 text-xs text-gray-400">Skip anyone this credential mailed within N days. Leave empty for no cooldown.</p>
+          </div>
+          <!-- No "active receivers only": every receiver on the list is mailed.
+               The only exclusions left are a person's own unsubscribe and the
+               shared suppression list, neither of which is a setting. -->
+        </div>
+
+        <div>
+          <label class="mb-1 block text-xs font-medium text-gray-600">Subject</label>
+          <InputText v-model="settings.message_subject" fluid />
+          <p v-if="sErr('message_subject')" class="mt-1 text-xs text-red-600">{{ sErr('message_subject') }}</p>
+        </div>
+        <!-- The message template. The admin fills in blocks; the backend renders
+             the email HTML from them, so no raw markup is authored here. Every
+             block is optional — clearing a field removes it from the email. -->
+        <div class="rounded-lg border border-gray-200">
+          <div class="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-3 py-2">
+            <span class="text-sm font-medium text-gray-700">Email template</span>
+            <div class="flex items-center gap-1">
+              <Button
+                label="Reset to promotion template"
+                icon="pi pi-replay"
+                size="small"
+                text
+                severity="secondary"
+                :loading="templateResetLoading"
+                @click="resetTemplateFromSource"
+              />
+              <Button
+                label="Preview email"
+                icon="pi pi-eye"
+                size="small"
+                text
+                :loading="messagePreviewLoading"
+                @click="loadMessagePreview"
+              />
+            </div>
+          </div>
+
+          <div class="space-y-3 p-3">
+            <p v-if="settings.template_source" class="text-xs text-gray-400">
+              Starting copy and colours come from the <strong>{{ settings.template_source }}</strong>
+              promotion email. Everything below is editable and nothing is saved until you press
+              Save settings.
+            </p>
+
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600">Preview line</label>
+              <InputText v-model="settings.message_template.preheader" fluid />
+              <p class="mt-1 text-xs text-gray-400">Shown under the subject in the inbox list. Not visible in the message itself.</p>
+              <p v-if="sErr('message_template.preheader')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.preheader') }}</p>
+            </div>
+
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600">Heading</label>
+              <InputText v-model="settings.message_template.heading" fluid />
+              <p v-if="sErr('message_template.heading')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.heading') }}</p>
+            </div>
+
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600">Message text</label>
+              <Textarea v-model="settings.message_template.intro_text" rows="4" fluid />
+              <p class="mt-1 text-xs text-gray-400">
+                <code>**bold**</code> becomes bold. <code>{{ NAME_TOKEN }}</code> and
+                <code>{{ EMAIL_TOKEN }}</code> are substituted per recipient.
+              </p>
+              <p v-if="sErr('message_template.intro_text')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.intro_text') }}</p>
+            </div>
+
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600">Secondary text</label>
+              <Textarea v-model="settings.message_template.secondary_text" rows="3" fluid />
+              <p v-if="sErr('message_template.secondary_text')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.secondary_text') }}</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="mb-1 block text-xs font-medium text-gray-600">Button label</label>
+                <InputText v-model="settings.message_template.button_text" fluid />
+                <p v-if="sErr('message_template.button_text')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.button_text') }}</p>
+              </div>
+              <div>
+                <label class="mb-1 block text-xs font-medium text-gray-600">Button link</label>
+                <InputText v-model="settings.message_template.button_url" placeholder="https://…" fluid />
+                <p v-if="sErr('message_template.button_url')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.button_url') }}</p>
+              </div>
+              <div>
+                <label class="mb-1 block text-xs font-medium text-gray-600">Banner image URL</label>
+                <InputText v-model="settings.message_template.hero_image_url" placeholder="https://…" fluid />
+                <p v-if="sErr('message_template.hero_image_url')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.hero_image_url') }}</p>
+              </div>
+              <div>
+                <label class="mb-1 block text-xs font-medium text-gray-600">Banner link</label>
+                <InputText v-model="settings.message_template.hero_url" placeholder="https://…" fluid />
+                <p v-if="sErr('message_template.hero_url')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.hero_url') }}</p>
+              </div>
+            </div>
+
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600">Disclaimer</label>
+              <Textarea v-model="settings.message_template.disclaimer_text" rows="2" fluid />
+              <p v-if="sErr('message_template.disclaimer_text')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.disclaimer_text') }}</p>
+            </div>
+
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600">Footer</label>
+              <Textarea v-model="settings.message_template.footer_text" rows="2" fluid />
+              <p class="mt-1 text-xs text-gray-400">
+                Sender name, postal address and a monitored contact belong here — commercial mail is
+                expected to carry them, and their absence is itself a spam signal. The unsubscribe
+                link is added automatically and cannot be removed.
+              </p>
+              <p v-if="sErr('message_template.footer_text')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.footer_text') }}</p>
+            </div>
+
+            <!-- Palette. Native colour inputs: they emit #rrggbb, which is the
+                 exact shape the backend validates. -->
+            <div>
+              <label class="mb-2 block text-xs font-medium text-gray-600">Colours</label>
+              <div class="flex flex-wrap gap-3">
+                <label v-for="c in colorFields" :key="c.key" class="flex items-center gap-2 text-xs text-gray-600">
+                  <input
+                    type="color"
+                    class="h-7 w-9 cursor-pointer rounded border border-gray-300 bg-white p-0.5"
+                    :value="settings.message_template[c.key]"
+                    @input="setColor(c.key, $event)"
+                  />
+                  {{ c.label }}
+                </label>
+              </div>
+              <div class="mt-3 w-40">
+                <label class="mb-1 block text-xs font-medium text-gray-600">Button text size</label>
+                <InputNumber v-model="settings.message_template.button_text_font_size" :min="12" :max="24" suffix=" px" fluid />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-lg bg-gray-50 px-3 py-2 text-sm">
+          <span class="text-gray-600">Matching receivers now:</span>
+          <strong class="ml-1 tabular-nums">{{ settings.eligible_count.toLocaleString() }}</strong>
+          <span class="ml-3 text-gray-600">Next run would take:</span>
+          <strong class="ml-1 tabular-nums">{{ settings.next_batch_count.toLocaleString() }}</strong>
+        </div>
+
+        <div>
+          <Button label="Preview batch" icon="pi pi-eye" size="small" outlined :loading="previewLoading" @click="loadPreview" />
+          <div v-if="previewRows.length" class="mt-2 max-h-44 overflow-auto rounded-lg border border-gray-200">
+            <table class="w-full text-xs">
+              <tbody>
+                <tr v-for="r in previewRows" :key="r.id" class="border-b border-gray-100 last:border-0">
+                  <td class="px-3 py-1.5 text-gray-800">{{ r.email }}</td>
+                  <td class="px-3 py-1.5 text-right text-gray-400">sent {{ r.sent_count }}×</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <Button label="Close" text @click="showSettings = false" />
+        <Button label="Run now" icon="pi pi-play" outlined severity="secondary" @click="runNow" />
+        <Button label="Save settings" icon="pi pi-check" :loading="settingsSaving" @click="saveSettings" />
+      </template>
+    </Dialog>
+
+    <!-- Rendered through the same view the send path uses, so what is approved
+         here is what the list receives. srcdoc, not v-html: the email carries its
+         own document and must not inherit the admin panel's stylesheet. -->
+    <Dialog v-model:visible="showMessagePreview" modal header="Email preview" :style="{ width: '700px' }">
+      <iframe
+        :srcdoc="messagePreviewHtml"
+        sandbox=""
+        title="Email preview"
+        class="h-[560px] w-full rounded-lg border border-gray-200 bg-white"
+      ></iframe>
+      <template #footer>
+        <Button label="Close" text @click="showMessagePreview = false" />
+      </template>
+    </Dialog>
+
 </template>
