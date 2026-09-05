@@ -176,6 +176,12 @@ const router = createRouter({
           meta: { requiresAuth: true, title: 'Mailgun Keys' },
         },
         {
+          path: 'smtp-credentials',
+          name: 'smtp-credentials',
+          component: () => import('@/views/smtpCredentials/List.vue'),
+          meta: { requiresAuth: true, title: 'Email Configs' },
+        },
+        {
           path: 'warmup',
           name: 'warmup',
           component: () => import('@/views/warmup/List.vue'),

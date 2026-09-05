@@ -12,6 +12,18 @@ export interface Site {
   revalidation_url: string | null
   settings: Record<string, unknown> | null
   active: boolean
+  /**
+   * Does this site publish the countries filter? Opt-in per site, off by
+   * default. The public /countries endpoints 404 when it is false, so this is
+   * what the front end reads to decide whether to render the nav link at all.
+   */
+  countries_enabled: boolean
+  /**
+   * Does this site display AND accept visitor reviews? Opt-in per site, off by
+   * default. Gates both directions — the public read and write endpoints 404
+   * when it is false.
+   */
+  reviews_enabled: boolean
   created_at: string
   updated_at: string
 }

@@ -28,6 +28,7 @@ const navItems: NavItem[] = [
   { label: 'SendGrid Keys', to: '/sendgrid-keys', icon: 'pi-key' },
   { label: 'Mailgun Credentials', to: '/mailgun-keys', icon: 'pi-key' },
   { label: 'Mailgun Receivers', to: '/mailgun-receivers', icon: 'pi-users' },
+  { label: 'Email Configs', to: '/smtp-credentials', icon: 'pi-server' },
   { label: 'Warmup', to: '/warmup', icon: 'pi-sun' },
   { label: 'Warmup History', to: '/warmup/history', icon: 'pi-history' },
   { label: 'Promotion History', to: '/promotion-history', icon: 'pi-history' },

@@ -1,4 +1,5 @@
 import type { Category } from './category'
+import type { Country } from './country'
 import type { SpecialOffer } from './specialOffer'
 
 // Per-site row in the casinos list shown in the admin (CasinoResource "sites").
@@ -32,6 +33,9 @@ export interface Casino {
   active: boolean
   category_ids?: number[]
   categories?: Category[]
+  /** Countries this casino accepts players from. Loaded on show/store/update, not on the list. */
+  country_ids?: number[]
+  countries?: Country[]
   special_offers?: SpecialOffer[]
   sites?: CasinoSiteRow[]
   created_at: string
@@ -59,6 +63,7 @@ export interface CasinoWithAttachment {
   meta_title: string | null
   meta_description: string | null
   categories?: Category[]
+  countries?: Country[]
   special_offers?: SpecialOffer[]
   featured_special_offer?: SpecialOffer | null
   updated_at: string
