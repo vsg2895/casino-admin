@@ -18,6 +18,20 @@ const router = createRouter({
       meta: { requiresAuth: false },
     },
     {
+      path: '/forgot-password',
+      name: 'forgot-password',
+      component: () => import('@/views/auth/ForgotPassword.vue'),
+      meta: { requiresAuth: false },
+    },
+    {
+      // Opened from the emailed link, which carries ?token= and ?email=.
+      // The API builds this URL from FRONTEND_URL — see AppServiceProvider.
+      path: '/reset-password',
+      name: 'reset-password',
+      component: () => import('@/views/auth/ResetPassword.vue'),
+      meta: { requiresAuth: false },
+    },
+    {
       path: '/',
       component: () => import('@/components/layout/AppLayout.vue'),
       meta: { requiresAuth: true },

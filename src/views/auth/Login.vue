@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'
+import { takeLogoutReason } from '@/api/client'
 import axios from 'axios'
 
 const router = useRouter()
@@ -10,14 +11,35 @@ const auth = useAuthStore()
 const email = ref('')
 const password = ref('')
 const error = ref<string | null>(null)
+const notice = ref<string | null>(null)
 const loading = ref(false)
+
+// Read once, on arrival: whoever was redirected here by an expired or revoked
+// token deserves to know that is what happened, rather than assuming the panel
+// logged them out at random.
+onMounted(() => {
+  if (takeLogoutReason() === 'expired') {
+    notice.value = 'Your session ended. Sign in again to continue.'
+  }
+})
 
 async function submit(): Promise<void> {
   error.value = null
   loading.value = true
 
   try {
-    await auth.login({ email: email.value, password: password.value })
+    const revoked = await auth.login({ email: email.value, password: password.value })
+
+    // Signing in is exclusive — the API revokes every other session for this
+    // account. Saying so is not a nicety: an admin whose other device silently
+    // stops working needs to recognise their own doing.
+    if (revoked > 0) {
+      sessionStorage.setItem(
+        'auth_login_notice',
+        `Signed out ${revoked} other session${revoked === 1 ? '' : 's'} on this account.`,
+      )
+    }
+
     await router.push({ name: 'casinos' })
   } catch (e: unknown) {
     if (axios.isAxiosError(e) && e.response?.status === 422) {
@@ -44,6 +66,10 @@ async function submit(): Promise<void> {
 
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
         <form class="space-y-5" @submit.prevent="submit">
+          <div v-if="notice" class="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+            {{ notice }}
+          </div>
+
           <div v-if="error" class="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
             {{ error }}
           </div>
@@ -67,9 +93,17 @@ async function submit(): Promise<void> {
           </div>
 
           <div>
-            <label for="password" class="block text-sm font-medium text-gray-700 mb-1">
-              Password
-            </label>
+            <div class="mb-1 flex items-baseline justify-between">
+              <label for="password" class="block text-sm font-medium text-gray-700">
+                Password
+              </label>
+              <RouterLink
+                :to="{ name: 'forgot-password' }"
+                class="text-xs font-medium text-indigo-600 hover:text-indigo-500"
+              >
+                Forgot password?
+              </RouterLink>
+            </div>
             <input
               id="password"
               v-model="password"
