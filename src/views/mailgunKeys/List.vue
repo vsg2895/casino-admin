@@ -417,6 +417,35 @@ async function confirmDelete(): Promise<void> {
   }
 }
 
+// ── Reset receiver send counters ────────────────────────────────────────────────
+// Whole-list, not per-credential: receivers are a single global pool, and each
+// credential only decides which of them it sends to. Twin of the artisan command
+// `mailgun:reset-receiver-sends`, sharing one service server-side.
+const showResetSends = ref(false)
+const resetSendsLoading = ref(false)
+const resetSendsClearErrors = ref(false)
+
+async function confirmResetSends(): Promise<void> {
+  resetSendsLoading.value = true
+  try {
+    const affected = await receiversApi.resetMailgunReceiverSends(resetSendsClearErrors.value)
+    toast.add({
+      severity: 'success',
+      summary: 'Send counters reset',
+      detail: affected === 0
+        ? 'No receiver was carrying send state.'
+        : `Cleared last sent and sent count on ${affected} receiver(s).`,
+      life: 4000,
+    })
+    showResetSends.value = false
+    resetSendsClearErrors.value = false
+  } catch {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to reset the send counters.', life: 4000 })
+  } finally {
+    resetSendsLoading.value = false
+  }
+}
+
 function err(field: string): string | undefined {
   return fieldErrors.value[field]
 }
@@ -444,7 +473,17 @@ onMounted(async () => {
           Store Mailgun API keys to send scheduled promotion campaigns through the Mailgun API.
         </p>
       </div>
-      <Button label="New credential" icon="pi pi-plus" @click="openCreate" />
+      <div class="flex items-center gap-2">
+        <Button
+          label="Reset send counters"
+          icon="pi pi-refresh"
+          outlined
+          severity="secondary"
+          v-tooltip.top="'Clear Last sent and Sent on every receiver'"
+          @click="showResetSends = true"
+        />
+        <Button label="New credential" icon="pi pi-plus" @click="openCreate" />
+      </div>
     </div>
 
     <!-- Table -->
@@ -667,6 +706,38 @@ onMounted(async () => {
       <template #footer>
         <Button label="Cancel" text @click="deleting = null" />
         <Button label="Delete" severity="danger" :loading="deletingLoading" @click="confirmDelete" />
+      </template>
+    </Dialog>
+
+    <!-- Reset send counters confirm. Warns about the cooldown, because that is
+         the consequence people do not expect from "clear a column". -->
+    <Dialog v-model:visible="showResetSends" modal header="Reset receiver send counters" :style="{ width: '480px' }">
+      <p class="text-sm text-gray-700">
+        Clears <strong>Last sent</strong> and <strong>Sent</strong> on
+        <strong>every</strong> Mailgun receiver, not just this credential's.
+      </p>
+      <p class="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        Last sent is what the cooldown window checks. After this, every receiver
+        qualifies again — the next campaign can mail the whole list.
+      </p>
+      <p class="mt-3 text-sm text-gray-500">
+        Unsubscribes, suppressions and the delivery history are not affected.
+      </p>
+      <div class="mt-4 flex items-center gap-2">
+        <Checkbox v-model="resetSendsClearErrors" input-id="reset-clear-errors" binary />
+        <label for="reset-clear-errors" class="text-sm text-gray-700">
+          Also clear the last error on each receiver
+        </label>
+      </div>
+      <template #footer>
+        <Button label="Cancel" text @click="showResetSends = false" />
+        <Button
+          label="Reset counters"
+          icon="pi pi-refresh"
+          severity="danger"
+          :loading="resetSendsLoading"
+          @click="confirmResetSends"
+        />
       </template>
     </Dialog>
   </div>

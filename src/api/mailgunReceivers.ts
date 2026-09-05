@@ -63,6 +63,22 @@ export function bulkMailgunReceivers(ids: number[]): Promise<number> {
 }
 
 /**
+ * Clear "Last sent" and "Sent" on EVERY receiver. Returns the rows changed.
+ *
+ * Takes no id list by design — this is the whole-list reset, the same one
+ * `php artisan mailgun:reset-receiver-sends` performs, sharing one service on
+ * the server so the panel and the CLI cannot reset different things.
+ *
+ * Clearing the last-sent timestamp drops the cooldown filter for everyone, so
+ * the next campaign can mail the whole list. Always confirm before calling.
+ */
+export function resetMailgunReceiverSends(clearErrors = false): Promise<number> {
+  return client
+    .post<{ affected: number }>('/admin/mailgun-receivers/reset-sends', { clear_errors: clearErrors })
+    .then((r) => r.data.affected)
+}
+
+/**
  * Upload a spreadsheet. Returns immediately with the import row — the work is
  * queued, so the caller polls `getMailgunReceiverImport` until `finished_at`.
  *
