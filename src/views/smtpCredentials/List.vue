@@ -578,8 +578,9 @@ onMounted(reload)
     >
       <div class="space-y-3">
         <p class="text-sm text-gray-600">
-          Sends this server's own configured message. If no message is configured yet, a short
-          connection test is sent instead, so you can check the settings before writing any copy.
+          Sends this server's own configured message — the same subject and body a run
+          delivers, so what arrives is what receivers get. A server with no message of its
+          own sends the shared promotion template, exactly as the preview shows it.
         </p>
         <div>
           <label class="mb-1 block text-xs font-medium text-gray-600">To</label>
