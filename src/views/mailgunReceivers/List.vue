@@ -21,6 +21,7 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
+import DatePicker from 'primevue/datepicker'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
@@ -45,15 +46,33 @@ const recordTotal = ref<number | null>(null)
 
 // ── Filters (Apply-driven, matching the other list screens) ──────────────────
 const search = ref('')
-const status = ref<string | null>(null)
 
-// Active/Inactive are gone: every receiver is active. What remains are the two
-// states that genuinely remove someone from a send, and that an admin cannot set.
-const statusOptions = [
-  { label: 'All receivers', value: null },
-  { label: 'Unsubscribed', value: 'unsubscribed' },
-  { label: 'Suppressed', value: 'suppressed' },
+// Has this address been mailed, and when. Both read `last_sent_at`, the same
+// column the "Last sent" table column shows and the reset action clears, so the
+// filter can never claim something the row contradicts.
+const sent = ref<api.MailgunSentFilter | null>(null)
+const sentFrom = ref<Date | null>(null)
+const sentTo = ref<Date | null>(null)
+
+const sentOptions = [
+  { label: 'Sent and not sent', value: null },
+  { label: 'Sent', value: 'yes' },
+  { label: 'Never sent', value: 'no' },
 ]
+
+/** A date range only means something for addresses that HAVE been sent to. */
+const dateRangeDisabled = computed(() => sent.value === 'no')
+
+/**
+ * `YYYY-MM-DD` in LOCAL time.
+ *
+ * Not `toISOString()`: that converts to UTC first, so any timezone behind it
+ * would send the previous day and silently shift the whole range by one.
+ */
+function toIsoDate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
 
 type Filters = Omit<api.MailgunReceiverFilters, 'page' | 'per_page'>
 
@@ -61,8 +80,15 @@ function activeFilters(): Filters {
   const f: Filters = {}
   const term = search.value.trim()
   if (term !== '') f.search = term
-  if (status.value === 'unsubscribed') f.unsubscribed = true
-  if (status.value === 'suppressed') f.suppressed = true
+  if (sent.value !== null) f.sent = sent.value
+
+  // Dropped when "Never sent" is selected: those rows have no last-sent date, so
+  // sending a range would return nothing and read as a broken filter.
+  if (!dateRangeDisabled.value) {
+    if (sentFrom.value) f.last_sent_from = toIsoDate(sentFrom.value)
+    if (sentTo.value) f.last_sent_to = toIsoDate(sentTo.value)
+  }
+
   return f
 }
 
@@ -92,7 +118,9 @@ async function applyFilters(): Promise<void> {
 
 async function clearFilters(): Promise<void> {
   search.value = ''
-  status.value = null
+  sent.value = null
+  sentFrom.value = null
+  sentTo.value = null
   await applyFilters()
 }
 
@@ -249,7 +277,27 @@ onMounted(reload)
     <!-- Filters -->
     <div class="flex flex-wrap items-center gap-3">
       <InputText v-model="search" placeholder="Search email or name" class="w-64" @keyup.enter="applyFilters" />
-      <Select v-model="status" :options="statusOptions" option-label="label" option-value="value" class="w-52" />
+      <Select v-model="sent" :options="sentOptions" option-label="label" option-value="value" class="w-52" />
+      <DatePicker
+        v-model="sentFrom"
+        date-format="yy-mm-dd"
+        show-icon
+        show-button-bar
+        :disabled="dateRangeDisabled"
+        :max-date="sentTo ?? undefined"
+        placeholder="Last sent from"
+        class="w-48"
+      />
+      <DatePicker
+        v-model="sentTo"
+        date-format="yy-mm-dd"
+        show-icon
+        show-button-bar
+        :disabled="dateRangeDisabled"
+        :min-date="sentFrom ?? undefined"
+        placeholder="Last sent to"
+        class="w-48"
+      />
       <Button label="Apply" icon="pi pi-filter" :loading="loading" @click="applyFilters" />
       <Button label="Clear" icon="pi pi-filter-slash" text severity="secondary" @click="clearFilters" />
 

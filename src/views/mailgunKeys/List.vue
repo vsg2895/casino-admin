@@ -765,7 +765,7 @@ onMounted(async () => {
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="mb-1 block text-xs font-medium text-gray-600">Receivers per run</label>
-            <InputNumber v-model="settings.batch_size" :min="1" :max="10000" fluid />
+            <InputNumber v-model="settings.batch_size" :min="1" :max="100000" fluid />
             <p v-if="sErr('batch_size')" class="mt-1 text-xs text-red-600">{{ sErr('batch_size') }}</p>
           </div>
           <div>

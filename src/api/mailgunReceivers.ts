@@ -9,12 +9,18 @@ import type {
   UpsertMailgunReceiverPayload,
 } from '@shared/types/mailgunReceiver'
 
+/** Whether an address has ever been mailed. Keyed on `last_sent_at`. */
+export type MailgunSentFilter = 'yes' | 'no'
+
 export interface MailgunReceiverFilters {
   page?: number
   per_page?: number
   search?: string
-  unsubscribed?: boolean
-  suppressed?: boolean
+  /** 'yes' = has been sent to, 'no' = never sent to. Omit for both. */
+  sent?: MailgunSentFilter
+  /** Inclusive `YYYY-MM-DD` bounds on the last-sent date. */
+  last_sent_from?: string
+  last_sent_to?: string
   source?: 'import' | 'manual'
 }
 
