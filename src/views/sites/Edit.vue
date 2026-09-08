@@ -2,10 +2,7 @@
 import { ref, reactive, watch } from 'vue'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
-<<<<<<< Updated upstream
-=======
 import Textarea from 'primevue/textarea'
->>>>>>> Stashed changes
 import ToggleSwitch from 'primevue/toggleswitch'
 import Button from 'primevue/button'
 import axios from 'axios'
@@ -18,9 +15,7 @@ interface SiteEditForm {
   domain: string
   positioning: string
   revalidation_url: string
-<<<<<<< Updated upstream
   newsletter_emails_enabled: boolean
-=======
   countries_enabled: boolean
   reviews_enabled: boolean
   operator_profile_enabled: boolean
@@ -30,7 +25,6 @@ interface SiteEditForm {
   author_role: string | null
   author_bio: string | null
   methodology_page_slug: string | null
->>>>>>> Stashed changes
 }
 
 const props = defineProps<{
@@ -48,9 +42,7 @@ const form = reactive<SiteEditForm>({
   domain: '',
   positioning: '',
   revalidation_url: '',
-<<<<<<< Updated upstream
   newsletter_emails_enabled: true,
-=======
   countries_enabled: false,
   reviews_enabled: false,
   operator_profile_enabled: false,
@@ -60,7 +52,6 @@ const form = reactive<SiteEditForm>({
   author_role: null,
   author_bio: null,
   methodology_page_slug: null,
->>>>>>> Stashed changes
 })
 
 const loading = ref(false)
@@ -75,9 +66,7 @@ watch(
       form.domain = props.site.domain
       form.positioning = props.site.positioning ?? ''
       form.revalidation_url = props.site.revalidation_url ?? ''
-<<<<<<< Updated upstream
       form.newsletter_emails_enabled = props.site.newsletter_emails_enabled
-=======
       form.countries_enabled = props.site.countries_enabled
       form.reviews_enabled = props.site.reviews_enabled
       form.operator_profile_enabled = props.site.operator_profile_enabled
@@ -87,7 +76,6 @@ watch(
       form.author_role = props.site.author_role
       form.author_bio = props.site.author_bio
       form.methodology_page_slug = props.site.methodology_page_slug
->>>>>>> Stashed changes
       fieldErrors.value = {}
       globalError.value = null
     }
@@ -106,9 +94,7 @@ async function submit(): Promise<void> {
       domain: form.domain,
       positioning: form.positioning.trim() || null,
       revalidation_url: form.revalidation_url.trim() || null,
-<<<<<<< Updated upstream
       newsletter_emails_enabled: form.newsletter_emails_enabled,
-=======
       countries_enabled: form.countries_enabled,
       reviews_enabled: form.reviews_enabled,
       operator_profile_enabled: form.operator_profile_enabled,
@@ -118,7 +104,6 @@ async function submit(): Promise<void> {
       author_role: form.author_role,
       author_bio: form.author_bio,
       methodology_page_slug: form.methodology_page_slug,
->>>>>>> Stashed changes
     })
     emit('updated', response.data)
     emit('update:visible', false)

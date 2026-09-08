@@ -18,9 +18,7 @@ export interface UpdateSitePayload {
   positioning?: string | null
   revalidation_url?: string | null
   active?: boolean
-<<<<<<< Updated upstream
   newsletter_emails_enabled?: boolean
-=======
   countries_enabled?: boolean
   reviews_enabled?: boolean
   // Whether this site renders each casino's factual operator profile. Default
@@ -36,7 +34,6 @@ export interface UpdateSitePayload {
   author_bio?: string | null
   author_avatar_path?: string | null
   methodology_page_slug?: string | null
->>>>>>> Stashed changes
 }
 
 export function listSites(): Promise<PaginatedResponse<Site>> {
