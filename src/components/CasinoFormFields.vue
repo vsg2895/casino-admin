@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
+import Textarea from 'primevue/textarea'
 import InputNumber from 'primevue/inputnumber'
 import Select from 'primevue/select'
 import MultiSelect from 'primevue/multiselect'
@@ -9,6 +10,7 @@ import ToggleSwitch from 'primevue/toggleswitch'
 import ImageDropzone from '@/components/ImageDropzone.vue'
 import RichTextEditor from '@/components/RichTextEditor.vue'
 import type { Category } from '@shared/types/category'
+import type { Country } from '@shared/types/country'
 import type { SpecialOffer } from '@shared/types/specialOffer'
 
 export interface CasinoFormModel {
@@ -22,15 +24,19 @@ export interface CasinoFormModel {
   rating: number
   sort_order: number
   featured_special_offer_id: number | null
+  bonuses_intro: string | null
+  reviewed_at: string | null
   meta_title: string | null
   meta_description: string | null
   active: boolean
   category_ids: number[]
+  country_ids: number[]
 }
 
 const props = defineProps<{
   form: CasinoFormModel
   categories: Category[]
+  countries: Country[]
   offers: SpecialOffer[]
   errors?: Record<string, string>
   /**
@@ -42,6 +48,28 @@ const props = defineProps<{
 }>()
 
 const ratingOptions = [0, 1, 2, 3, 4, 5].map((n) => ({ label: String(n), value: n }))
+
+/**
+ * Countries grouped by continent for the multi-select.
+ *
+ * Built here from each row's eager-loaded `continent` rather than taken as a
+ * second prop: the admin endpoint already returns the list in grid order, so
+ * walking it in order and keying by continent reproduces that grouping exactly.
+ * A row without a continent (possible only if the API stopped loading it) falls
+ * into "Other" rather than disappearing from the picker.
+ */
+const countryGroups = computed<{ label: string; items: Country[] }[]>(() => {
+  const groups = new Map<string, { label: string; items: Country[] }>()
+
+  for (const country of props.countries) {
+    const label = country.continent?.name ?? 'Other'
+    const group = groups.get(label) ?? { label, items: [] }
+    group.items.push(country)
+    groups.set(label, group)
+  }
+
+  return [...groups.values()]
+})
 
 // Mirrors the backend's Str::slug() so the admin sees the value that will
 // actually be stored, rather than discovering it after saving.
@@ -157,6 +185,24 @@ const slugDiffers = computed(
           <label class="mb-1 block text-sm font-medium text-gray-700">Bonuses</label>
           <InputText v-model="form.bonuses" fluid placeholder="e.g. 500$ + 180 Free Spins" />
         </div>
+        <div>
+          <label class="mb-1 block text-sm font-medium text-gray-700">Reviewed on</label>
+          <InputText v-model="form.reviewed_at" type="date" fluid />
+          <p class="mt-1 text-xs text-gray-500">
+            The date a person actually re-checked this operator. Leave empty until that has
+            happened — it is what the public byline states, and it is not the same as the
+            entry's last-updated date.
+          </p>
+        </div>
+        <div>
+          <label class="mb-1 block text-sm font-medium text-gray-700">Bonuses page intro</label>
+          <Textarea v-model="form.bonuses_intro" rows="3" fluid
+            placeholder="40–60 words. Required before /casinos/{slug}/bonuses is published." />
+          <p class="mt-1 text-xs text-gray-500">
+            Publishes the operator's own bonuses page — but only when the casino also has at least
+            two live offers. Leave empty and no such page exists.
+          </p>
+        </div>
 
         <div>
           <label class="mb-1 block text-sm font-medium text-gray-700">Special Offer</label>
@@ -202,6 +248,25 @@ const slugDiffers = computed(
             display="chip"
             fluid
           />
+        </div>
+
+        <div>
+          <label class="mb-1 block text-sm font-medium text-gray-700">Countries</label>
+          <MultiSelect
+            v-model="form.country_ids"
+            :options="countryGroups"
+            option-label="name"
+            option-value="id"
+            option-group-label="label"
+            option-group-children="items"
+            placeholder="Select countries"
+            display="chip"
+            filter
+            fluid
+          />
+          <p class="mt-1 text-xs text-gray-400">
+            Countries this casino accepts players from. Global — not per site.
+          </p>
         </div>
 
         <div>

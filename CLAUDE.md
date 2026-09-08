@@ -13,7 +13,7 @@ Conventions: [../docs/CONVENTIONS.md](../docs/CONVENTIONS.md)
 | Area | Screens |
 |------|---------|
 | **Sites** | list, register (one-time key modal), edit, rotate key, deactivate |
-| **Content** | Casinos (+ Attach to Sites), Special Offers, Categories, CMS/Legal Pages, Social Links |
+| **Content** | Casinos (+ Attach to Sites, + Countries), Special Offers, Categories, Countries, Reviews (moderation), CMS/Legal Pages, Social Links |
 | **Email templates** | per site: Email Template (welcome), Verify Email, Promotion Email; plus the **global** Promotion-after-verification |
 | **Audience** | Newsletter (email), Newsletter Phones (SMS), Unsubscribes |
 | **Delivery** | Schedules, Promotion History, SendGrid Keys, Mailgun Keys, Twilio Configs, SMS Templates, Warmup |
@@ -73,13 +73,14 @@ Axios, `@vueuse/core`.
 ```
 src/
 ├── api/           one file per API surface — all go through client.ts
-│                  auth, sites, casinos, casinoAttachments, categories, specialOffers,
+│                  auth, sites, casinos, casinoAttachments, casinoReviews, categories,
+│                  countries, specialOffers,
 │                  cmsPages, socialLinks, newsletter, newsletterPhones, smsTemplates,
 │                  twilioConfigs, sendgridKeys, mailgunKeys, emailSchedules,
 │                  siteEmailTemplates, siteVerifyEmails, sitePromotionEmails,
 │                  verificationPromotion, warmupEmails, promotionHistory, unsubscribes,
 │                  emailTemplateTypes, uploads, download
-├── stores/        Pinia — auth, sites, casinos, categories, specialOffers, cmsPages,
+├── stores/        Pinia — auth, sites, casinos, categories, countries, specialOffers, cmsPages,
 │                  newsletter, socialLinks   (only where state is genuinely shared)
 ├── views/         one folder per area (see the table above)
 ├── components/

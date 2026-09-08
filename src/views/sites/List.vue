@@ -162,11 +162,54 @@ async function toggleActive(site: Site): Promise<void> {
           </template>
         </Column>
 
+        <!-- Which sites publish the countries filter, visible without opening
+             each site's dialog — the whole point of the switch is choosing
+             between them. -->
+        <Column header="Countries">
+          <template #body="{ data: site }: { data: Site }">
+            <Tag v-if="site.countries_enabled" severity="info" value="On" />
+            <span v-else class="text-xs text-gray-400">Off</span>
+          </template>
+        </Column>
+
+        <Column header="Reviews">
+          <template #body="{ data: site }: { data: Site }">
+            <Tag v-if="site.reviews_enabled" severity="info" value="On" />
+            <span v-else class="text-xs text-gray-400">Off</span>
+          </template>
+        </Column>
+
         <Column header="API Key">
           <template #body>
             <span class="font-mono text-xs tracking-widest text-gray-400 select-none">
               ••••••••••••
             </span>
+          </template>
+        </Column>
+
+        <!-- Cache health at a glance. The point of the whole phase: a site
+             that stopped picking up changes must be visible from the list, not
+             only from a screen nobody thinks to open. -->
+        <Column header="Cache" style="width: 150px">
+          <template #body="{ data: site }: { data: Site }">
+            <button
+              type="button"
+              class="text-left"
+              @click="router.push({ name: 'site-cache', params: { id: site.id } })"
+            >
+              <Tag
+                v-if="site.last_revalidation_status === 'failed'"
+                value="Not updating"
+                severity="danger"
+                v-tooltip.top="site.last_revalidation_error ?? 'The site did not accept the last update'"
+              />
+              <Tag
+                v-else-if="site.last_revalidation_status === 'success'"
+                value="OK"
+                severity="success"
+              />
+              <Tag v-else value="Unknown" severity="secondary" />
+            </button>
           </template>
         </Column>
 
@@ -180,6 +223,54 @@ async function toggleActive(site: Site): Promise<void> {
                 severity="secondary"
                 v-tooltip="'Edit'"
                 @click="openEdit(site)"
+              />
+              <Button
+                icon="pi pi-bars"
+                size="small"
+                text
+                severity="secondary"
+                v-tooltip="'Navigation'"
+                @click="router.push({ name: 'site-navigation', params: { id: site.id } })"
+              />
+              <Button
+                icon="pi pi-search"
+                size="small"
+                text
+                severity="secondary"
+                v-tooltip="'SEO patterns'"
+                @click="router.push({ name: 'site-seo-templates', params: { id: site.id } })"
+              />
+              <Button
+                icon="pi pi-directions"
+                size="small"
+                text
+                severity="secondary"
+                v-tooltip="'Redirects'"
+                @click="router.push({ name: 'site-redirects', params: { id: site.id } })"
+              />
+              <Button
+                icon="pi pi-comments"
+                size="small"
+                text
+                severity="secondary"
+                v-tooltip="'Forum page'"
+                @click="router.push({ name: 'site-forum', params: { id: site.id } })"
+              />
+              <Button
+                icon="pi pi-book"
+                size="small"
+                text
+                severity="secondary"
+                v-tooltip="'Guides'"
+                @click="router.push({ name: 'site-guides', params: { id: site.id } })"
+              />
+              <Button
+                icon="pi pi-refresh"
+                size="small"
+                text
+                severity="secondary"
+                v-tooltip="'Cache & revalidation'"
+                @click="router.push({ name: 'site-cache', params: { id: site.id } })"
               />
               <Button
                 icon="pi pi-envelope"

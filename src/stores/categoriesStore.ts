@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import * as categoriesApi from '@/api/categories'
+import type { UpsertCategoryPayload } from '@/api/categories'
 import type { Category } from '@shared/types/category'
 
 export const useCategoriesStore = defineStore('categories', () => {
@@ -17,9 +18,22 @@ export const useCategoriesStore = defineStore('categories', () => {
     }
   }
 
-  async function add(name: string): Promise<void> {
-    const response = await categoriesApi.createCategory(name)
+  async function add(payload: UpsertCategoryPayload): Promise<void> {
+    const response = await categoriesApi.createCategory(payload)
     categories.value.push(response.data)
+    categories.value.sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  /**
+   * Replaces the row in place rather than refetching the list.
+   *
+   * The response is the saved category, so the table shows exactly what the
+   * server stored — including a logo the admin just attached.
+   */
+  async function update(id: number, payload: UpsertCategoryPayload): Promise<void> {
+    const response = await categoriesApi.updateCategory(id, payload)
+    const index = categories.value.findIndex((c) => c.id === id)
+    if (index !== -1) categories.value[index] = response.data
     categories.value.sort((a, b) => a.name.localeCompare(b.name))
   }
 
@@ -28,5 +42,5 @@ export const useCategoriesStore = defineStore('categories', () => {
     categories.value = categories.value.filter((c) => c.id !== id)
   }
 
-  return { categories, loading, fetchCategories, add, remove }
+  return { categories, loading, fetchCategories, add, update, remove }
 })

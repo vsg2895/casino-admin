@@ -9,16 +9,19 @@ import type { CasinoFormModel } from '@/components/CasinoFormFields.vue'
 import * as casinosApi from '@/api/casinos'
 import { useCasinosStore } from '@/stores/casinosStore'
 import { useCategoriesStore } from '@/stores/categoriesStore'
+import { useCountriesStore } from '@/stores/countriesStore'
 import type { ErrorResponse } from '@shared/types/api'
 
 const router = useRouter()
 const toast = useToast()
 const store = useCasinosStore()
 const categoriesStore = useCategoriesStore()
+const countriesStore = useCountriesStore()
 
 const form = reactive<CasinoFormModel>({
   name: '',
   slug: '',
+  bonuses_intro: null, reviewed_at: null,
   image_path: null,
   banner_image: null,
   bonuses: null,
@@ -31,6 +34,7 @@ const form = reactive<CasinoFormModel>({
   meta_description: null,
   active: false,
   category_ids: [],
+  country_ids: [],
 })
 
 const loading = ref(false)
@@ -39,6 +43,7 @@ const formError = ref<string | null>(null)
 
 onMounted(() => {
   void categoriesStore.fetchCategories()
+  void countriesStore.ensureLoaded()
 })
 
 async function create(): Promise<void> {
@@ -72,7 +77,7 @@ function clearForm(): void {
   Object.assign(form, {
     name: '', slug: '', image_path: null, banner_image: null, bonuses: null, affiliate_url: null,
     description: null, rating: 0, sort_order: 0, featured_special_offer_id: null,
-    meta_title: null, meta_description: null, active: false, category_ids: [],
+    bonuses_intro: null, meta_title: null, meta_description: null, active: false, category_ids: [], country_ids: [],
   })
 }
 </script>
@@ -91,7 +96,7 @@ function clearForm(): void {
     <div v-if="formError" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ formError }}</div>
 
     <div class="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
-      <CasinoFormFields :form="form" :categories="categoriesStore.categories" :offers="[]" :errors="errors" />
+      <CasinoFormFields :form="form" :categories="categoriesStore.categories" :countries="countriesStore.countries" :offers="[]" :errors="errors" />
     </div>
   </div>
 </template>

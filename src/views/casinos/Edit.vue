@@ -11,13 +11,17 @@ import { useToast } from 'primevue/usetoast'
 import axios from 'axios'
 import CasinoFormFields from '@/components/CasinoFormFields.vue'
 import type { CasinoFormModel } from '@/components/CasinoFormFields.vue'
+import CasinoDetailFields from '@/components/CasinoDetailFields.vue'
 import SitesAttachmentTable from '@/components/attachments/SitesAttachmentTable.vue'
 import type { OverrideField, AttachmentEntry } from '@/components/attachments/SitesAttachmentTable.vue'
 import * as casinosApi from '@/api/casinos'
 import * as attachmentsApi from '@/api/casinoAttachments'
+import * as detailsApi from '@/api/casinoDetails'
 import { useCasinosStore } from '@/stores/casinosStore'
 import { useCategoriesStore } from '@/stores/categoriesStore'
+import { useCountriesStore } from '@/stores/countriesStore'
 import type { SpecialOffer } from '@shared/types/specialOffer'
+import type { CasinoDetail } from '@shared/types/casinoDetail'
 import type { ErrorResponse } from '@shared/types/api'
 
 const route = useRoute()
@@ -25,6 +29,7 @@ const router = useRouter()
 const toast = useToast()
 const store = useCasinosStore()
 const categoriesStore = useCategoriesStore()
+const countriesStore = useCountriesStore()
 
 const casinoId = Number(route.params.id)
 const activeTab = ref('details')
@@ -34,7 +39,7 @@ const loaded = ref(false)
 const form = reactive<CasinoFormModel>({
   name: '', slug: '', image_path: null, banner_image: null, bonuses: null, affiliate_url: null,
   description: null, rating: 0, sort_order: 0, featured_special_offer_id: null,
-  meta_title: null, meta_description: null, active: false, category_ids: [],
+  bonuses_intro: null, reviewed_at: null, meta_title: null, meta_description: null, active: false, category_ids: [], country_ids: [],
 })
 
 const saving = ref(false)
@@ -50,12 +55,21 @@ const CASINO_OVERRIDE_FIELDS: OverrideField[] = [
 const attachments = ref<AttachmentEntry[]>([])
 const attachSaving = ref(false)
 
+// The factual profile. Loaded and saved on its own endpoints, so the casino
+// save above is completely unchanged by this feature.
+const detail = ref<CasinoDetail | null>(null)
+const detailSaving = ref(false)
+
 onMounted(async () => {
   await categoriesStore.fetchCategories()
-  const [{ data: casino }, attachRes] = await Promise.all([
+  await countriesStore.ensureLoaded()
+  const [{ data: casino }, attachRes, detailRes] = await Promise.all([
     casinosApi.getCasino(casinoId),
     attachmentsApi.getCasinoAttachments(casinoId),
+    // Never 404s: a casino with no profile yet returns an all-null shell.
+    detailsApi.getCasinoDetail(casinoId),
   ])
+  detail.value = detailRes
   Object.assign(form, {
     name: casino.name,
     slug: casino.slug,
@@ -67,10 +81,13 @@ onMounted(async () => {
     rating: casino.rating,
     sort_order: casino.sort_order,
     featured_special_offer_id: casino.featured_special_offer_id,
+    bonuses_intro: casino.bonuses_intro ?? null,
+    reviewed_at: casino.reviewed_at ?? null,
     meta_title: casino.meta_title,
     meta_description: casino.meta_description,
     active: casino.active,
     category_ids: casino.category_ids ?? [],
+    country_ids: casino.country_ids ?? [],
   })
   offers.value = casino.special_offers ?? []
   attachments.value = attachRes.data.map((a) => ({
@@ -102,6 +119,25 @@ async function save(): Promise<void> {
     }
   } finally {
     saving.value = false
+  }
+}
+
+async function saveDetail(): Promise<void> {
+  if (detail.value === null) return
+  detailSaving.value = true
+  try {
+    detail.value = await detailsApi.saveCasinoDetail(casinoId, detail.value)
+    toast.add({ severity: 'success', summary: 'Saved', detail: 'Operator profile saved.', life: 3000 })
+  } catch (e: unknown) {
+    const data = axios.isAxiosError(e) ? (e.response?.data as ErrorResponse | undefined) : undefined
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: data?.message ?? 'Failed to save the operator profile.',
+      life: 4000,
+    })
+  } finally {
+    detailSaving.value = false
   }
 }
 
@@ -139,12 +175,21 @@ async function saveAttachments(): Promise<void> {
     <Tabs v-if="loaded" v-model:value="activeTab">
       <TabList>
         <Tab value="details">Details</Tab>
+        <Tab value="profile">Operator Profile</Tab>
         <Tab value="sites">Attach to Sites</Tab>
       </TabList>
       <TabPanels class="!pt-4">
         <TabPanel value="details">
           <div class="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
-            <CasinoFormFields :form="form" :categories="categoriesStore.categories" :offers="offers" :errors="errors" editing />
+            <CasinoFormFields :form="form" :categories="categoriesStore.categories" :countries="countriesStore.countries" :offers="offers" :errors="errors" editing />
+          </div>
+        </TabPanel>
+        <TabPanel value="profile">
+          <div v-if="detail" class="space-y-4">
+            <CasinoDetailFields v-model="detail" />
+            <div class="flex justify-end">
+              <Button label="Save profile" icon="pi pi-check" :loading="detailSaving" @click="saveDetail" />
+            </div>
           </div>
         </TabPanel>
         <TabPanel value="sites">

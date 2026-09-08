@@ -16,6 +16,7 @@ import { useCasinosStore } from '@/stores/casinosStore'
 import { useSitesStore } from '@/stores/sitesStore'
 import * as casinosApi from '@/api/casinos'
 import * as attachmentsApi from '@/api/casinoAttachments'
+import * as profilesApi from '@/api/casinoDetails'
 import RecordCount from '@/components/RecordCount.vue'
 import type { Casino } from '@shared/types/casino'
 import type { ErrorResponse } from '@shared/types/api'
@@ -161,6 +162,52 @@ onMounted(() => {
   sitesStore.fetchSites()
   refreshCount()
 })
+// ── Operator profile spreadsheet ────────────────────────────────────────────
+// Filling ~30 factual fields per casino one form at a time does not scale, so
+// the profiles round-trip through a sheet. The export includes casinos with no
+// profile yet, which makes the file double as the work list.
+const profileExporting = ref(false)
+const profileImporting = ref(false)
+const profileFileInput = ref<HTMLInputElement | null>(null)
+const importResult = ref<profilesApi.CasinoProfileImportResult | null>(null)
+const showImportResult = ref(false)
+
+async function exportProfiles(): Promise<void> {
+  profileExporting.value = true
+  try {
+    await profilesApi.exportCasinoProfiles()
+  } catch {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Could not export the profiles.', life: 4000 })
+  } finally {
+    profileExporting.value = false
+  }
+}
+
+async function onProfileFileChosen(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  // Reset immediately, so picking the SAME file again still fires a change event
+  // after a failed import.
+  input.value = ''
+  if (!file) return
+
+  profileImporting.value = true
+  try {
+    importResult.value = await profilesApi.importCasinoProfiles(file)
+    showImportResult.value = true
+  } catch (e: unknown) {
+    const data = axios.isAxiosError(e) ? (e.response?.data as ErrorResponse | undefined) : undefined
+    toast.add({
+      severity: 'error',
+      summary: 'Import failed',
+      detail: data?.message ?? 'Could not read that file.',
+      life: 5000,
+    })
+  } finally {
+    profileImporting.value = false
+  }
+}
+
 </script>
 
 <template>
@@ -173,6 +220,31 @@ onMounted(() => {
       </div>
       <div class="flex items-center gap-3">
         <RecordCount label="Total Casinos" :total="recordTotal" :loading="store.loading" />
+        <Button
+          label="Export profiles"
+          icon="pi pi-download"
+          outlined
+          severity="secondary"
+          :loading="profileExporting"
+          v-tooltip.top="'One row per casino, every operator-profile field'"
+          @click="exportProfiles"
+        />
+        <Button
+          label="Import profiles"
+          icon="pi pi-upload"
+          outlined
+          severity="secondary"
+          :loading="profileImporting"
+          v-tooltip.top="'Apply an edited profile sheet'"
+          @click="profileFileInput?.click()"
+        />
+        <input
+          ref="profileFileInput"
+          type="file"
+          accept=".csv,.xlsx"
+          class="hidden"
+          @change="onProfileFileChosen"
+        />
         <Button
           label="New Casino"
           icon="pi pi-plus"
@@ -378,4 +450,27 @@ onMounted(() => {
       </template>
     </Dialog>
   </div>
-</template>
+
+    <!-- Import result. A dialog rather than a toast: the error list can run to
+         several lines and a toast would time out before it is read. -->
+    <Dialog v-model:visible="showImportResult" modal header="Profile import" :style="{ width: '520px' }">
+      <div v-if="importResult" class="space-y-3 text-sm">
+        <p class="text-gray-700">
+          <strong class="tabular-nums">{{ importResult.updated }}</strong> profile(s) updated,
+          <strong class="tabular-nums">{{ importResult.unchanged }}</strong> unchanged.
+        </p>
+        <p v-if="importResult.updated === 0 && importResult.errors.length === 0" class="rounded-lg bg-amber-50 px-3 py-2 text-amber-800">
+          Nothing changed. If you expected edits, check you uploaded the edited file.
+        </p>
+        <div v-if="importResult.errors.length" class="rounded-lg bg-red-50 px-3 py-2 text-red-700">
+          <p class="font-medium">Rows that could not be applied:</p>
+          <ul class="mt-1 list-disc space-y-0.5 pl-5">
+            <li v-for="(err, i) in importResult.errors" :key="i">{{ err }}</li>
+          </ul>
+        </div>
+      </div>
+      <template #footer>
+        <Button label="Close" text @click="showImportResult = false" />
+      </template>
+    </Dialog>
+  </template>

@@ -18,7 +18,25 @@ export interface UpdateSitePayload {
   positioning?: string | null
   revalidation_url?: string | null
   active?: boolean
+<<<<<<< Updated upstream
   newsletter_emails_enabled?: boolean
+=======
+  countries_enabled?: boolean
+  reviews_enabled?: boolean
+  // Whether this site renders each casino's factual operator profile. Default
+  // false server-side, like the other two — a new surface never switches itself
+  // on for a live domain.
+  operator_profile_enabled?: boolean
+  // Editorial identity. The byline only renders when a name is set AND the
+  // casino has a review date — see the site form.
+  byline_enabled?: boolean
+  guides_enabled?: boolean
+  author_name?: string | null
+  author_role?: string | null
+  author_bio?: string | null
+  author_avatar_path?: string | null
+  methodology_page_slug?: string | null
+>>>>>>> Stashed changes
 }
 
 export function listSites(): Promise<PaginatedResponse<Site>> {

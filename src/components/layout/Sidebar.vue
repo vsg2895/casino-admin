@@ -15,6 +15,8 @@ const navItems: NavItem[] = [
   { label: 'Casinos',        to: '/casinos',        icon: 'pi-th-large' },
   { label: 'Special Offers', to: '/special-offers', icon: 'pi-percentage' },
   { label: 'Categories',     to: '/categories',     icon: 'pi-tags' },
+  { label: 'Countries',      to: '/countries',      icon: 'pi-globe' },
+  { label: 'Reviews',        to: '/reviews',        icon: 'pi-star' },
   { label: 'Newsletter',     to: '/newsletter',     icon: 'pi-envelope' },
   { label: 'Phone Newsletters', to: '/newsletter-phones', icon: 'pi-mobile' },
   { label: 'SMS Templates', to: '/sms-templates', icon: 'pi-comment' },

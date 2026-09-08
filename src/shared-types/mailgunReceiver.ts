@@ -13,6 +13,7 @@ export interface MailgunReceiver {
   email: string
   name: string | null
   source: MailgunReceiverSource
+<<<<<<< Updated upstream
   /**
    * WHERE this address came from, recorded at import or entry.
    *
@@ -23,6 +24,8 @@ export interface MailgunReceiver {
    * agree with them. Re-remove it when the stashes land.
    */
   consent_source: string | null
+=======
+>>>>>>> Stashed changes
   /** When the row was added. Set on every creation path. */
   consent_recorded_at: string | null
   is_active: boolean
@@ -37,8 +40,11 @@ export interface MailgunReceiver {
 export interface UpsertMailgunReceiverPayload {
   email: string
   name?: string | null
+<<<<<<< Updated upstream
   /** Required by the committed API on both create and update — see above. */
   consent_source: string
+=======
+>>>>>>> Stashed changes
 }
 
 /** Progress row for a queued spreadsheet import, polled until finished_at. */

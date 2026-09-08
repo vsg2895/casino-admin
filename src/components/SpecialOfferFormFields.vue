@@ -18,6 +18,14 @@ export interface SpecialOfferFormModel {
   rating: number
   sort_order: number
   active: boolean
+  // Structured bonus terms — all optional. An offer with none renders exactly
+  // as it did before this section existed.
+  wagering_requirement: string | null
+  min_deposit: string | null
+  max_cashout: string | null
+  bonus_code: string | null
+  expires_at: string | null
+  terms_url: string | null
 }
 
 defineProps<{
@@ -82,4 +90,56 @@ const ratingOptions = [0, 1, 2, 3, 4, 5].map((n) => ({ label: String(n), value: 
       <RichTextEditor v-model="form.description" />
     </div>
   </div>
+
+  <!-- Bonus terms. These are what a player needs before depositing, and what an
+       affiliate site is expected to state plainly rather than leave buried in
+       the operator's T&Cs. Everything is optional. -->
+  <div class="mt-6 rounded-xl border border-gray-200 bg-white p-4">
+    <h3 class="text-sm font-semibold text-gray-800">Bonus terms</h3>
+    <p class="mt-0.5 text-xs text-gray-500">
+      Shown as labelled figures beside the offer. Leave anything you have not confirmed blank —
+      blank fields are not rendered.
+    </p>
+
+    <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div>
+        <label class="mb-1 block text-xs font-medium text-gray-600">Wagering requirement</label>
+        <InputText v-model="form.wagering_requirement" fluid placeholder="35x (D+B)" />
+        <p v-if="errors?.wagering_requirement" class="mt-1 text-xs text-red-600">{{ errors.wagering_requirement }}</p>
+      </div>
+      <div>
+        <label class="mb-1 block text-xs font-medium text-gray-600">Bonus code</label>
+        <InputText v-model="form.bonus_code" fluid placeholder="Leave empty if none" />
+      </div>
+      <!-- Text, not numbers: these run in EUR, USD and crypto, and operators
+           state ranges. A number field would drop the currency. -->
+      <div>
+        <label class="mb-1 block text-xs font-medium text-gray-600">Minimum deposit</label>
+        <InputText v-model="form.min_deposit" fluid placeholder="€20" />
+      </div>
+      <div>
+        <label class="mb-1 block text-xs font-medium text-gray-600">Maximum cashout</label>
+        <InputText v-model="form.max_cashout" fluid placeholder="€5,000" />
+      </div>
+      <div>
+        <label class="mb-1 block text-xs font-medium text-gray-600">Expires on</label>
+        <!-- Native date input rather than PrimeVue's DatePicker: it yields a
+             YYYY-MM-DD string, which is exactly what the API stores and returns.
+             The DatePicker works in Date objects and would need converting in
+             both directions for no gain. -->
+        <InputText v-model="form.expires_at" type="date" fluid />
+        <p class="mt-1 text-xs text-amber-700">
+          After this date the offer disappears from every listing and stops showing a claim button.
+        </p>
+        <p v-if="errors?.expires_at" class="mt-1 text-xs text-red-600">{{ errors.expires_at }}</p>
+      </div>
+      <div>
+        <label class="mb-1 block text-xs font-medium text-gray-600">Full terms URL</label>
+        <InputText v-model="form.terms_url" fluid placeholder="https://operator.com/terms" />
+        <p class="mt-1 text-xs text-gray-400">Linked beside the offer, never as fine print.</p>
+        <p v-if="errors?.terms_url" class="mt-1 text-xs text-red-600">{{ errors.terms_url }}</p>
+      </div>
+    </div>
+  </div>
+
 </template>

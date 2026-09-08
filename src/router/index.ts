@@ -44,6 +44,45 @@ const router = createRouter({
           meta: { requiresAuth: true, title: 'Sites' },
         },
         {
+          // Nested under the site: a menu belongs to exactly one domain.
+          path: 'sites/:id/navigation',
+          name: 'site-navigation',
+          component: () => import('@/views/sites/Navigation.vue'),
+          meta: { requiresAuth: true, title: 'Navigation' },
+        },
+        {
+          path: 'sites/:id/seo-templates',
+          name: 'site-seo-templates',
+          component: () => import('@/views/sites/SeoTemplates.vue'),
+          meta: { requiresAuth: true, title: 'SEO patterns' },
+        },
+        {
+          path: 'sites/:id/redirects',
+          name: 'site-redirects',
+          component: () => import('@/views/sites/Redirects.vue'),
+          meta: { requiresAuth: true, title: 'Redirects' },
+        },
+        {
+          // The forum page's rules. Nested under the site: the page belongs to
+          // exactly one domain, the same reason navigation is.
+          path: 'sites/:id/forum',
+          name: 'site-forum',
+          component: () => import('@/views/sites/Forum.vue'),
+          meta: { requiresAuth: true, title: 'Forum page' },
+        },
+        {
+          path: 'sites/:id/guides',
+          name: 'site-guides',
+          component: () => import('@/views/sites/Articles.vue'),
+          meta: { requiresAuth: true, title: 'Guides' },
+        },
+        {
+          path: 'sites/:id/cache',
+          name: 'site-cache',
+          component: () => import('@/views/sites/CacheHealth.vue'),
+          meta: { requiresAuth: true, title: 'Cache & revalidation' },
+        },
+        {
           path: 'email-templates',
           name: 'email-templates',
           component: () => import('@/views/sites/EmailTemplates.vue'),
@@ -127,6 +166,18 @@ const router = createRouter({
           name: 'categories',
           component: () => import('@/views/categories/List.vue'),
           meta: { requiresAuth: true, title: 'Categories' },
+        },
+        {
+          path: 'countries',
+          name: 'countries',
+          component: () => import('@/views/countries/List.vue'),
+          meta: { requiresAuth: true, title: 'Countries' },
+        },
+        {
+          path: 'reviews',
+          name: 'reviews',
+          component: () => import('@/views/reviews/List.vue'),
+          meta: { requiresAuth: true, title: 'Reviews' },
         },
         {
           path: 'newsletter',

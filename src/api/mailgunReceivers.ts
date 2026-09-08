@@ -87,16 +87,12 @@ export function resetMailgunReceiverSends(clearErrors = false): Promise<number> 
 /**
  * Upload a spreadsheet. Returns immediately with the import row — the work is
  * queued, so the caller polls `getMailgunReceiverImport` until `finished_at`.
- *
- * `consent_source` is mandatory and applies to every row in the file.
  */
 export function importMailgunReceivers(
   file: File,
-  consentSource: string,
 ): Promise<ApiResponse<MailgunReceiverImport>> {
   const form = new FormData()
   form.append('file', file)
-  form.append('consent_source', consentSource)
 
   return client
     .post<ApiResponse<MailgunReceiverImport>>('/admin/mailgun-receivers/import', form)

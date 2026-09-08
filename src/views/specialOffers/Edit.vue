@@ -25,6 +25,8 @@ const formError = ref<string | null>(null)
 
 const form = reactive<SpecialOfferFormModel>({
   casino_id: null, title: '', image_path: null, banner_image: null, bonuses: null,
+  wagering_requirement: null, min_deposit: null, max_cashout: null,
+  bonus_code: null, expires_at: null, terms_url: null,
   affiliate_url: null, description: null, rating: 0, sort_order: 0, active: true,
 })
 
@@ -34,6 +36,12 @@ onMounted(async () => {
   Object.assign(form, {
     casino_id: offer.casino_id, title: offer.title, image_path: offer.image_path,
     banner_image: offer.banner_image, bonuses: offer.bonuses, affiliate_url: offer.affiliate_url,
+    wagering_requirement: offer.terms?.wagering_requirement ?? null,
+    min_deposit: offer.terms?.min_deposit ?? null,
+    max_cashout: offer.terms?.max_cashout ?? null,
+    bonus_code: offer.terms?.bonus_code ?? null,
+    expires_at: offer.terms?.expires_at ?? null,
+    terms_url: offer.terms?.terms_url ?? null,
     description: offer.description, rating: offer.rating, sort_order: offer.sort_order, active: offer.active,
   })
   loaded.value = true

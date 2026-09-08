@@ -13,8 +13,6 @@
  * the shared suppression list — neither of which an admin can set from here,
  * which is why both remain visible as filters.
  *
- * Consent source is still recorded on every write path; it simply is not a
- * column, because it never varies within a list an operator is scanning.
  */
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import DataTable from 'primevue/datatable'
@@ -135,14 +133,14 @@ const showForm = ref(false)
 const editingId = ref<number | null>(null)
 const saving = ref(false)
 const fieldErrors = ref<Record<string, string>>({})
-const form = ref({ email: '', name: '', consent_source: '' })
+const form = ref({ email: '', name: '' })
 
 function err(field: string): string {
   return fieldErrors.value[field] ?? ''
 }
 
 function openCreate(): void {
-  form.value = { email: '', name: '', consent_source: '' }
+  form.value = { email: '', name: '' }
   editingId.value = null
   fieldErrors.value = {}
   showForm.value = true
@@ -152,7 +150,6 @@ function openEdit(r: MailgunReceiver): void {
   form.value = {
     email: r.email,
     name: r.name ?? '',
-    consent_source: r.consent_source ?? '',
   }
   editingId.value = r.id
   fieldErrors.value = {}
@@ -166,7 +163,6 @@ async function save(): Promise<void> {
     const payload = {
       email: form.value.email.trim(),
       name: form.value.name.trim() || null,
-      consent_source: form.value.consent_source.trim(),
     }
     if (editingId.value === null) await api.createMailgunReceiver(payload)
     else await api.updateMailgunReceiver(editingId.value, payload)
@@ -203,7 +199,6 @@ async function bulkDelete(): Promise<void> {
 // ── Import ───────────────────────────────────────────────────────────────────
 const showImport = ref(false)
 const importFile = ref<File | null>(null)
-const importConsent = ref('')
 const importing = ref(false)
 const importRow = ref<MailgunReceiverImport | null>(null)
 let pollTimer: ReturnType<typeof setInterval> | undefined
@@ -212,13 +207,13 @@ function onFile(e: Event): void {
   importFile.value = (e.target as HTMLInputElement).files?.[0] ?? null
 }
 
-const canImport = computed(() => importFile.value !== null && importConsent.value.trim() !== '')
+const canImport = computed(() => importFile.value !== null)
 
 async function startImport(): Promise<void> {
   if (!canImport.value || importFile.value === null) return
   importing.value = true
   try {
-    const res = await api.importMailgunReceivers(importFile.value, importConsent.value.trim())
+    const res = await api.importMailgunReceivers(importFile.value)
     importRow.value = res.data
     poll(res.data.id)
   } catch {
@@ -344,6 +339,14 @@ onMounted(reload)
           </template>
         </Column>
 
+        <!-- When the address joined the list. Sits before "Last sent" so the two
+             dates read left to right in the order they happen. -->
+        <Column header="Added" :style="{ width: '160px' }">
+          <template #body="{ data }: { data: MailgunReceiver }">
+            <span class="text-sm text-gray-600">{{ formatDate(data.created_at) }}</span>
+          </template>
+        </Column>
+
         <Column header="Last sent" :style="{ width: '160px' }">
           <template #body="{ data }: { data: MailgunReceiver }">
             <span class="text-sm text-gray-600">{{ formatDate(data.last_sent_at) }}</span>
@@ -377,15 +380,6 @@ onMounted(reload)
           <label class="mb-1 block text-xs font-medium text-gray-600">Name <span class="font-normal text-gray-400">(optional)</span></label>
           <InputText v-model="form.name" fluid />
         </div>
-        <div>
-          <label class="mb-1 block text-xs font-medium text-gray-600">Consent source</label>
-          <InputText v-model="form.consent_source" fluid placeholder="e.g. CRM export, signup form, contract" />
-          <p class="mt-1 text-xs text-gray-400">
-            Where this address came from. Required — a bulk send needs a record of why you may email
-            each person.
-          </p>
-          <p v-if="err('consent_source')" class="mt-1 text-xs text-red-600">{{ err('consent_source') }}</p>
-        </div>
       </div>
       <template #footer>
         <Button label="Cancel" text @click="showForm = false" />
@@ -400,11 +394,6 @@ onMounted(reload)
           Upload an .xlsx or .csv file with an <strong>Email</strong> column. Duplicates, invalid
           addresses and anyone on the suppression list are skipped and reported.
         </p>
-        <div>
-          <label class="mb-1 block text-xs font-medium text-gray-600">Consent source for this file</label>
-          <InputText v-model="importConsent" fluid placeholder="e.g. CRM export 2026-09" />
-          <p class="mt-1 text-xs text-gray-400">Applied to every row in the file. Required.</p>
-        </div>
         <div>
           <label class="mb-1 block text-xs font-medium text-gray-600">File</label>
           <input type="file" accept=".xlsx,.csv" class="text-sm" @change="onFile" />
