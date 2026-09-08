@@ -21,6 +21,7 @@ import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
+import { attachAllCasinosToCountries, detachAllCasinosFromCountries } from '@/api/countries'
 import ImageDropzone from '@/components/ImageDropzone.vue'
 import { useCountriesStore } from '@/stores/countriesStore'
 import { STORAGE_BASE_URL } from '@/config/urls'
@@ -164,6 +165,33 @@ async function confirmDelete(): Promise<void> {
 }
 
 onMounted(() => store.fetchCountries())
+
+// ── Whole-list casino attachment ─────────────────────────────────────────────
+// Both are all-or-nothing operations on the entire pivot, so both sit behind a
+// confirmation. Detaching in particular clears hand-curated market lists as
+// readily as bulk-attached ones, and there is no undo.
+const bulkAction = ref<'attach' | 'detach' | null>(null)
+const bulkLoading = ref(false)
+
+async function runBulk(): Promise<void> {
+  if (!bulkAction.value) return
+  const attaching = bulkAction.value === 'attach'
+  bulkLoading.value = true
+  try {
+    const res = attaching
+      ? await attachAllCasinosToCountries()
+      : await detachAllCasinosFromCountries()
+    // The API returns the real counts, so the toast reports what happened
+    // rather than a generic "done".
+    toast.add({ severity: 'success', summary: attaching ? 'Attached' : 'Detached', detail: res.message, life: 6000 })
+    bulkAction.value = null
+    await store.fetchCountries()
+  } catch {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'That did not run.', life: 6000 })
+  } finally {
+    bulkLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -180,6 +208,20 @@ onMounted(() => store.fetchCountries())
         <span class="rounded-lg bg-gray-100 px-3 py-1.5 text-sm text-gray-600">
           {{ total }} countries
         </span>
+        <Button
+          label="Attach all casinos"
+          icon="pi pi-link"
+          severity="secondary"
+          outlined
+          @click="bulkAction = 'attach'"
+        />
+        <Button
+          label="Detach all"
+          icon="pi pi-times"
+          severity="danger"
+          outlined
+          @click="bulkAction = 'detach'"
+        />
         <Button label="Add country" icon="pi pi-plus" @click="openCreate" />
       </div>
     </div>
@@ -343,6 +385,44 @@ onMounted(() => store.fetchCountries())
       <template #footer>
         <Button label="Cancel" text @click="deleting = null" />
         <Button label="Delete" severity="danger" :loading="deleteLoading" @click="confirmDelete" />
+      </template>
+    </Dialog>
+    <!-- Both operations touch every casino and every country, so the dialog
+         spells out what is about to happen rather than asking "are you sure?" -->
+    <Dialog
+      :visible="bulkAction !== null"
+      modal
+      :header="bulkAction === 'attach' ? 'Attach every casino to every country' : 'Remove every attachment'"
+      :style="{ width: '520px' }"
+      @update:visible="bulkAction = null"
+    >
+      <div v-if="bulkAction === 'attach'" class="space-y-3 text-sm text-gray-700">
+        <p>
+          Every <strong>active</strong> casino will be attached to every <strong>active</strong>
+          country ({{ total }} of them). Existing attachments are kept — this only adds.
+        </p>
+        <p class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800">
+          An attachment tells visitors the operator accepts players from that country. Attaching
+          everything to everything makes that claim for markets an operator may block.
+        </p>
+      </div>
+      <div v-else class="space-y-3 text-sm text-gray-700">
+        <p>
+          Every casino/country attachment will be deleted — including any market lists set by
+          hand on a casino's own form.
+        </p>
+        <p class="rounded-lg border border-red-200 bg-red-50 p-3 text-red-800">
+          There is no undo. Afterwards no casino appears on any country page.
+        </p>
+      </div>
+      <template #footer>
+        <Button label="Cancel" text @click="bulkAction = null" />
+        <Button
+          :label="bulkAction === 'attach' ? 'Attach all' : 'Remove all'"
+          :severity="bulkAction === 'attach' ? 'primary' : 'danger'"
+          :loading="bulkLoading"
+          @click="runBulk"
+        />
       </template>
     </Dialog>
   </div>

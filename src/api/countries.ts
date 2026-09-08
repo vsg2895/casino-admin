@@ -29,3 +29,37 @@ export function updateCountry(
 export function deleteCountry(id: number): Promise<void> {
   return client.delete(`/admin/countries/${id}`).then(() => undefined)
 }
+
+// ── Whole-list casino attachment ─────────────────────────────────────────────
+// The per-casino country picker on the casino form handles one operator. These
+// two act on the entire pivot at once.
+
+export interface BulkAttachResult {
+  ok: boolean
+  casinos?: number
+  countries?: number
+  attached?: number
+  removed?: number
+  total?: number
+  message: string
+}
+
+/** Attach every ACTIVE casino to every ACTIVE country. Idempotent. */
+export function attachAllCasinosToCountries(): Promise<BulkAttachResult> {
+  return client
+    .post<BulkAttachResult>('/admin/casino-countries/attach-all')
+    .then((r) => r.data)
+}
+
+/**
+ * Remove EVERY casino/country attachment.
+ *
+ * `confirm` is required by the API — it clears hand-curated market lists as
+ * readily as bulk-attached ones and there is no undo, so it must not be
+ * reachable by a stray request.
+ */
+export function detachAllCasinosFromCountries(): Promise<BulkAttachResult> {
+  return client
+    .post<BulkAttachResult>('/admin/casino-countries/detach-all', { confirm: true })
+    .then((r) => r.data)
+}
