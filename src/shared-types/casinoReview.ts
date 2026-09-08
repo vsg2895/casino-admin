@@ -1,3 +1,5 @@
+import type { ForumSettings } from './forum'
+
 // Visitor-written reviews of a casino, submitted on one site.
 //
 // Two shapes, matching the two backend resources. The admin one carries
@@ -55,6 +57,51 @@ export interface PublicCasinoReviewsResponse {
   summary: {
     total: number
     /** Null when there are no reviews — distinct from an average of 0. */
+    average: number | null
+  }
+  meta: {
+    current_page: number
+    last_page: number
+    per_page: number
+    total: number
+  }
+}
+
+/**
+ * One casino's thread in the site-wide review feed (the forum).
+ *
+ * `reviews` is a PREVIEW, not the whole thread — `summary.total` is the real
+ * count and `has_more` says whether the rest exist, so the UI never has to
+ * infer "there are more" from the length of an array it was handed.
+ */
+export interface ReviewThread {
+  casino: {
+    id: number
+    name: string
+    slug: string
+    image_path: string | null
+    banner_image: string | null
+  }
+  summary: {
+    total: number
+    /** Null when there are no reviews — distinct from an average of 0. */
+    average: number | null
+    /** ISO-8601. When this casino was last reviewed; drives the feed order. */
+    last_activity: string | null
+  }
+  reviews: PublicCasinoReview[]
+  has_more: boolean
+}
+
+/** GET /public/sites/{slug}/reviews — paginates CASINOS, not reviews. */
+export interface PublicReviewFeedResponse {
+  threads: ReviewThread[]
+  /** The page's admin-set rules — heading, intro, empty state, page sizes. */
+  settings: ForumSettings
+  summary: {
+    total: number
+    /** How many casinos have at least one published review. */
+    casinos: number
     average: number | null
   }
   meta: {

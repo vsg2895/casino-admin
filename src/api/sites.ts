@@ -18,6 +18,7 @@ export interface UpdateSitePayload {
   positioning?: string | null
   revalidation_url?: string | null
   active?: boolean
+  newsletter_emails_enabled?: boolean
 }
 
 export function listSites(): Promise<PaginatedResponse<Site>> {

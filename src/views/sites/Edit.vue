@@ -2,6 +2,7 @@
 import { ref, reactive, watch } from 'vue'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
+import ToggleSwitch from 'primevue/toggleswitch'
 import Button from 'primevue/button'
 import axios from 'axios'
 import * as sitesApi from '@/api/sites'
@@ -13,6 +14,7 @@ interface SiteEditForm {
   domain: string
   positioning: string
   revalidation_url: string
+  newsletter_emails_enabled: boolean
 }
 
 const props = defineProps<{
@@ -30,6 +32,7 @@ const form = reactive<SiteEditForm>({
   domain: '',
   positioning: '',
   revalidation_url: '',
+  newsletter_emails_enabled: true,
 })
 
 const loading = ref(false)
@@ -44,6 +47,7 @@ watch(
       form.domain = props.site.domain
       form.positioning = props.site.positioning ?? ''
       form.revalidation_url = props.site.revalidation_url ?? ''
+      form.newsletter_emails_enabled = props.site.newsletter_emails_enabled
       fieldErrors.value = {}
       globalError.value = null
     }
@@ -62,6 +66,7 @@ async function submit(): Promise<void> {
       domain: form.domain,
       positioning: form.positioning.trim() || null,
       revalidation_url: form.revalidation_url.trim() || null,
+      newsletter_emails_enabled: form.newsletter_emails_enabled,
     })
     emit('updated', response.data)
     emit('update:visible', false)
@@ -123,6 +128,18 @@ async function submit(): Promise<void> {
         <InputText v-model="form.domain" fluid required />
         <p v-if="fieldErrors.domain" class="mt-1 text-xs text-red-600">{{ fieldErrors.domain }}</p>
       </div>
+
+      <label class="flex items-start justify-between gap-4 rounded-lg border border-gray-200 p-3">
+        <span>
+          <span class="block text-sm font-medium text-gray-900">Send newsletter emails</span>
+          <span class="block text-xs text-gray-500">
+            Off, the signup form still works and subscribers are still recorded — only the
+            outbound email stops. Those subscribers stay unverified, because they never get
+            a link to click.
+          </span>
+        </span>
+        <ToggleSwitch v-model="form.newsletter_emails_enabled" />
+      </label>
 
       <div>
         <label class="mb-1 block text-sm font-medium text-gray-700">Positioning</label>

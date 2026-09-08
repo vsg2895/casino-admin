@@ -1,4 +1,6 @@
 import type { Category } from './category'
+import type { CasinoDetail } from './casinoDetail'
+import type { ResolvedSeo } from './seo'
 import type { Country } from './country'
 import type { SpecialOffer } from './specialOffer'
 
@@ -28,6 +30,14 @@ export interface Casino {
   rating: number
   sort_order: number
   featured_special_offer_id: number | null
+  /** Intro copy that publishes the operator's bonuses sub-page. */
+  bonuses_intro?: string | null
+  /**
+   * The date a PERSON re-checked this operator. Distinct from `updated_at`,
+   * which any field change bumps — null means nobody has recorded a review, and
+   * the site must not imply one happened.
+   */
+  reviewed_at?: string | null
   meta_title: string | null
   meta_description: string | null
   active: boolean
@@ -66,6 +76,24 @@ export interface CasinoWithAttachment {
   countries?: Country[]
   special_offers?: SpecialOffer[]
   featured_special_offer?: SpecialOffer | null
+  /**
+   * The factual profile. ABSENT (not an empty object) when nothing has been
+   * filled in, so `detail` being undefined is the "no profile" signal.
+   */
+  detail?: CasinoDetail
+  /**
+   * Intro copy for /casinos/{slug}/bonuses. Null means that page is not
+   * published — the sub-page requires real copy or it is a thin duplicate.
+   */
+  bonuses_intro?: string | null
+  /**
+   * The date a PERSON re-checked this operator. Distinct from `updated_at`,
+   * which any field change bumps. Null means no review was recorded, and the
+   * site must not imply one happened.
+   */
+  reviewed_at?: string | null
+  /** Server-resolved SEO. Additive — meta_title/meta_description are unchanged. */
+  seo?: ResolvedSeo
   updated_at: string
   attachment: CasinoSiteAttachment
 }
