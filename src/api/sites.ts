@@ -21,6 +21,7 @@ export interface UpdateSitePayload {
   newsletter_emails_enabled?: boolean
   countries_enabled?: boolean
   reviews_enabled?: boolean
+  review_auto_publish?: boolean
   // Whether this site renders each casino's factual operator profile. Default
   // false server-side, like the other two — a new surface never switches itself
   // on for a live domain.

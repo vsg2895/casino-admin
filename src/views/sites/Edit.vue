@@ -18,6 +18,7 @@ interface SiteEditForm {
   newsletter_emails_enabled: boolean
   countries_enabled: boolean
   reviews_enabled: boolean
+  review_auto_publish: boolean
   operator_profile_enabled: boolean
   byline_enabled: boolean
   guides_enabled: boolean
@@ -45,6 +46,7 @@ const form = reactive<SiteEditForm>({
   newsletter_emails_enabled: true,
   countries_enabled: false,
   reviews_enabled: false,
+  review_auto_publish: true,
   operator_profile_enabled: false,
   byline_enabled: false,
   guides_enabled: false,
@@ -69,6 +71,7 @@ watch(
       form.newsletter_emails_enabled = props.site.newsletter_emails_enabled
       form.countries_enabled = props.site.countries_enabled
       form.reviews_enabled = props.site.reviews_enabled
+      form.review_auto_publish = props.site.review_auto_publish
       form.operator_profile_enabled = props.site.operator_profile_enabled
       form.byline_enabled = props.site.byline_enabled
       form.guides_enabled = props.site.guides_enabled
@@ -97,6 +100,7 @@ async function submit(): Promise<void> {
       newsletter_emails_enabled: form.newsletter_emails_enabled,
       countries_enabled: form.countries_enabled,
       reviews_enabled: form.reviews_enabled,
+      review_auto_publish: form.review_auto_publish,
       operator_profile_enabled: form.operator_profile_enabled,
       byline_enabled: form.byline_enabled,
       guides_enabled: form.guides_enabled,
@@ -221,10 +225,29 @@ async function submit(): Promise<void> {
           <div>
             <label class="block text-sm font-medium text-gray-700">Visitor reviews</label>
             <p class="mt-0.5 text-xs text-gray-500">
-              Show reviews on this site and accept new ones. Submissions are held for moderation.
+              Show reviews on this site and accept new ones. How they are moderated is set below.
             </p>
           </div>
           <ToggleSwitch v-model="form.reviews_enabled" />
+        </div>
+
+        <!-- Only meaningful while "Visitor reviews" is on, so it is nested under
+             it and disabled rather than hidden — a control that vanishes reads
+             as a bug, one that greys out explains itself. -->
+        <div
+          class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3 pl-4"
+          :class="form.reviews_enabled ? '' : 'opacity-50'"
+        >
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Publish reviews immediately</label>
+            <p class="mt-0.5 text-xs text-gray-500">
+              On, a visitor's review goes live the moment they write it and you hide anything
+              unacceptable from Content &rarr; Reviews. Off, every review waits in the pending
+              queue until you approve it. Turning this on does not publish reviews already
+              waiting &mdash; approve those yourself.
+            </p>
+          </div>
+          <ToggleSwitch v-model="form.review_auto_publish" :disabled="!form.reviews_enabled" />
         </div>
 
         <div class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
