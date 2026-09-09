@@ -57,6 +57,9 @@ const PLACEHOLDERS = {
     'The forum fills up as players write about the casinos listed here. Open any casino and use the review form at the bottom of its page — every submission is read before it appears.',
   empty_cta_label: 'Browse casinos',
   empty_cta_url: '/casinos',
+  editorial_title: 'About these reviews',
+  editorial_body:
+    'Every review on this page was written by a visitor and checked before it went live. We publish criticism as readily as praise, and we do not edit a review\'s wording or remove one for being unflattering.',
 }
 
 /** Reviews must be on for the forum to exist at all — see the controller. */
@@ -89,6 +92,9 @@ async function reload(): Promise<void> {
       empty_cta_label: forumRes.empty_cta_label,
       empty_cta_url: forumRes.empty_cta_url,
       show_stats: forumRes.show_stats,
+      editorial_enabled: forumRes.editorial_enabled,
+      editorial_title: forumRes.editorial_title,
+      editorial_body: forumRes.editorial_body,
       threads_per_page: forumRes.threads_per_page,
       preview_reviews: forumRes.preview_reviews,
     }
@@ -275,6 +281,37 @@ onMounted(reload)
             <p class="mt-1 text-xs text-gray-500">A path on this site, starting with “/”.</p>
             <small v-if="fieldErrors.empty_cta_url" class="text-red-600">{{ fieldErrors.empty_cta_url }}</small>
           </div>
+        </div>
+      </section>
+
+      <!-- ── Editorial note ──────────────────────────────────────────── -->
+      <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Editorial note</h3>
+            <p class="mt-1 text-xs text-gray-500">
+              The site's own words on the forum page, shown above the reviews and attributed to
+              you — not to a visitor. Use it to explain how reviews are handled, never to post
+              opinions about an operator as though a player wrote them.
+            </p>
+          </div>
+          <ToggleSwitch v-model="form.editorial_enabled" />
+        </div>
+
+        <div>
+          <label class="mb-1 block text-sm font-medium text-gray-900">Heading</label>
+          <InputText v-model="form.editorial_title" :placeholder="PLACEHOLDERS.editorial_title" class="w-full" />
+          <small v-if="fieldErrors.editorial_title" class="text-red-600">{{ fieldErrors.editorial_title }}</small>
+        </div>
+
+        <div>
+          <label class="mb-1 block text-sm font-medium text-gray-900">Note</label>
+          <Textarea v-model="form.editorial_body" :placeholder="PLACEHOLDERS.editorial_body" rows="6" auto-resize class="w-full" />
+          <p class="mt-1 text-xs text-gray-500">
+            Blank lines become paragraphs. The byline comes from the site's editorial author
+            (Sites &rarr; Edit); with no author set it is credited to the site name.
+          </p>
+          <small v-if="fieldErrors.editorial_body" class="text-red-600">{{ fieldErrors.editorial_body }}</small>
         </div>
       </section>
 
