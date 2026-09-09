@@ -38,17 +38,12 @@ export function previewVerificationPromotion(
 
 // Send a test of the SAVED template through the SAVED transport — the same
 // provider + key the real promotion uses, so a success here proves that path.
-// `siteId` resolves the placeholders exactly as the preview does.
+// Same fixed branding as the automatic send, so the test is byte-identical.
 export function sendTestVerificationPromotion(
   to: string,
   name?: string,
-  siteId?: number | null,
 ): Promise<{ ok: boolean; message: string }> {
   return client
-    .post<{ ok: boolean; message: string }>('/admin/verification-promotion/test', {
-      to,
-      name,
-      site_id: siteId ?? null,
-    })
+    .post<{ ok: boolean; message: string }>('/admin/verification-promotion/test', { to, name })
     .then((r) => r.data)
 }

@@ -4,8 +4,11 @@
  *
  * Adapted from views/sites/PromotionEmail.vue, which edits the per-site
  * promotion. Two deliberate differences:
- *  - no site picker and no siteId anywhere: this template is global, and the
- *    preview renders it against a representative site so {{site_name}} resolves;
+ *  - no site picker and no siteId anywhere: this template is global AND
+ *    single-brand. Its {{site_name}} / {{site_url}} / {{site_domain}} come from
+ *    config('promotions.after_verification') on the server, fixed to Winpalack,
+ *    so there is nothing for a site selector to change and the preview is always
+ *    exactly what every subscriber receives;
  *  - it also owns the feature settings (enabled, delay, transport), because the
  *    delay and the sending key are meaningless without the template they drive.
  */
@@ -24,7 +27,6 @@ import axios from 'axios'
 import * as api from '@/api/verificationPromotion'
 import { listSendgridKeys } from '@/api/sendgridKeys'
 import { listMailgunKeys } from '@/api/mailgunKeys'
-import { useSitesStore } from '@/stores/sitesStore'
 import type {
   EmailProvider,
   UpdateVerificationPromotionEmailPayload,
@@ -33,17 +35,6 @@ import type {
 import type { ErrorResponse } from '@shared/types/api'
 
 const toast = useToast()
-const sitesStore = useSitesStore()
-
-// Which registered site the preview + test render against, so {{site_name}} /
-// {{site_url}} resolve to that site's values. Defaults to the first site once
-// loaded (matching the server's fallback); null only while sites are loading.
-const siteOptions = computed(() =>
-  sitesStore.sites.map((s) => ({ label: `${s.name} (${s.domain})`, value: s.id })),
-)
-const previewSiteName = computed(
-  () => sitesStore.sites.find((s) => s.id === form.preview_site_id)?.name ?? '',
-)
 
 const fromDomain = ref('example.com')
 const introMin = ref(12)
@@ -143,7 +134,6 @@ function emptyForm(): UpdateVerificationPromotionEmailPayload {
     secondary_text: '', cta_button_text: '', cta_button_url: '', button_text_font_size: null,
     disclaimer_text: '',
     unsubscribe_label: '',
-    preview_site_id: null,
     // New design components
     header_brand_text: '', confirmation_text: '', eyebrow_text: '',
     hidden_blocks: [],
@@ -165,18 +155,23 @@ function emptyForm(): UpdateVerificationPromotionEmailPayload {
 
 const form = reactive<UpdateVerificationPromotionEmailPayload>(emptyForm())
 
-// Placeholders that exist for EVERY site — a global template cannot rely on
-// anything site-specific — plus two derived offer variables ({{bonus_amount}} =
-// the ticket bonus, {{offer_brand}} = the brand) so the CTA can stay specific.
-const placeholders = '{{site_name}}, {{site_url}}, {{site_domain}}, {{email}}, {{year}}, {{unsubscribe_url}}, {{bonus_amount}}, {{offer_brand}}'
+// What an editor may type. The three site tokens are GONE from this list: they
+// no longer resolve per-site — the server pins them to Winpalack — so offering
+// them here would advertise a choice that does not exist. They still substitute
+// if typed, which is why existing saved copy keeps rendering.
+// {{bonus_amount}} = the ticket bonus, {{offer_brand}} = the brand, both derived
+// from this template's own fields so the CTA can stay specific.
+const placeholders = '{{email}}, {{year}}, {{unsubscribe_url}}, {{bonus_amount}}, {{offer_brand}}'
 
 // Literal placeholder tokens shown as documentation in the template. They live
 // here rather than inline because Vue's tokenizer would end an interpolation at
 // the first `}}` inside the string literal.
-const SITE_NAME_TOKEN = '{{site_name}}'
-const SITE_URL_TOKEN = '{{site_url}}'
-const SITE_DOMAIN_TOKEN = '{{site_domain}}'
 const YEAR_TOKEN = '{{year}}'
+// Still substituted server-side, now from the fixed config values rather than
+// the subscriber's site — so they stay valid to type, they just no longer offer
+// a per-site choice.
+const BRAND_TOKEN = '{{site_name}}'
+const CONTACT_TOKEN = '{{contact_email}}'
 const BONUS_AMOUNT_TOKEN = '{{bonus_amount}}'
 const OFFER_BRAND_TOKEN = '{{offer_brand}}'
 
@@ -233,19 +228,6 @@ onMounted(async () => {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load the promotion.', life: 5000 })
   }
 
-  // Sites for the preview picker. Default to the first site so the initial
-  // render matches the server's fallback; a failure just leaves it on the
-  // server default.
-  try {
-    await sitesStore.fetchSites()
-    // Only default when the saved template names no site — otherwise this would
-    // overwrite the admin's stored choice on every load, which is the bug that
-    // made the picker look like it never saved.
-    if (form.preview_site_id === null) {
-      form.preview_site_id = sitesStore.sites[0]?.id ?? null
-    }
-  } catch { /* preview falls back to a representative site server-side */ }
-
   // Key lists are loaded independently: one provider's endpoint failing must not
   // blank out the other's dropdown.
   try {
@@ -263,7 +245,6 @@ onMounted(async () => {
 
 function toPayload(t: VerificationPromotionEmail): UpdateVerificationPromotionEmailPayload {
   return {
-    preview_site_id: t.preview_site_id ?? null,
     from_name: t.from_name,
     from_email: t.from_email,
     subject: t.subject,
@@ -384,7 +365,7 @@ let previewTimer: ReturnType<typeof setTimeout> | undefined
 async function refreshPreview(): Promise<void> {
   previewLoading.value = true
   try {
-    const res = await api.previewVerificationPromotion(toPayloadForApi(), form.preview_site_id)
+    const res = await api.previewVerificationPromotion(toPayloadForApi())
     previewHtml.value = res.html
     previewError.value = ''
   } catch (e: unknown) {
@@ -405,14 +386,6 @@ watch(form, () => {
 
 // Re-render immediately when the preview site changes — no debounce, it is a
 // deliberate single action, not typing. The deep `form` watcher above has already
-// queued a debounced refresh for this same edit, so cancel it first: without the
-// clearTimeout, one site change would cost two preview requests.
-watch(() => form.preview_site_id, () => {
-  if (loading.value) return
-  clearTimeout(previewTimer)
-  refreshPreview()
-})
-
 async function save(): Promise<void> {
   fieldErrors.value = {}
   saving.value = true
@@ -445,7 +418,6 @@ async function sendTest(): Promise<void> {
     const res = await api.sendTestVerificationPromotion(
       testEmail.value.trim(),
       testName.value.trim() || undefined,
-      form.preview_site_id,
     )
     toast.add({ severity: 'success', summary: 'Sent', detail: res.message, life: 4000 })
     showTest.value = false
@@ -579,8 +551,8 @@ function err(field: string): string | undefined {
           Placeholders you can use anywhere: <code class="font-mono">{{ placeholders }}</code>.
           Body fields also support <code class="font-mono">**bold**</code>.
           <span class="mt-1 block">
-            These are the only placeholders available, because one template serves every site —
-            <code class="font-mono">{{ SITE_NAME_TOKEN }}</code> resolves to each subscriber's own site.
+            This email always goes out with <strong>Winpalack</strong> branding — the name, links and
+            contact address are fixed on the server — no matter which site the subscriber verified on.
           </span>
         </p>
 
@@ -648,8 +620,8 @@ function err(field: string): string | undefined {
               />
               <InputText v-model="form.hero_url" fluid />
               <p class="mt-1 text-xs text-gray-400">
-                Where the hero image and both buttons point. Use
-                <code class="font-mono">{{ SITE_URL_TOKEN }}</code> to send each subscriber to their own site.
+                Where the hero image and both buttons point. Leave empty and they fall back to
+                winpalack.com.
               </p>
             </div>
             <div>
@@ -686,8 +658,8 @@ function err(field: string): string | undefined {
               />
               <InputText v-model="form.header_brand_text" fluid />
               <p class="mt-1 text-xs text-gray-400">
-                Shown in the coloured header band and linked to the offer. Use
-                <code class="font-mono">{{ SITE_NAME_TOKEN }}</code> to show each subscriber's own site name.
+                Shown in the coloured header band and linked to the offer. Leave it as
+                <code class="font-mono">{{ BRAND_TOKEN }}</code> and it reads “Winpalack” for everyone.
               </p>
             </div>
             <div>
@@ -868,8 +840,7 @@ function err(field: string): string | undefined {
               </p>
               <p v-else class="mt-1 text-xs text-gray-400">
                 Where the button sends the reader. Leave empty to reuse the banner link, then
-                the site URL. Tracking macros and
-                <code class="font-mono">{{ SITE_URL_TOKEN }}</code> are allowed.
+                winpalack.com. Tracking macros are allowed.
               </p>
             </div>
             <div>
@@ -941,8 +912,8 @@ function err(field: string): string | undefined {
                 <Button label="Add link" icon="pi pi-plus" size="small" text @click="addFooterLink" />
               </div>
               <p v-if="form.footer_links.length === 0" class="text-xs text-gray-400">
-                No footer links. Add one, or leave empty to hide the row.
-                Use <code class="font-mono">{{ SITE_URL_TOKEN }}</code> in a URL to point at each subscriber's own site.
+                No footer links. Add one, or leave empty to hide the row. Point them at
+                winpalack.com — this email is Winpalack-branded for every recipient.
               </p>
               <div v-for="(link, i) in form.footer_links" :key="i" class="mb-2 flex items-center gap-2">
                 <InputText v-model="link.label" class="w-2/5" placeholder="Label" />
@@ -973,8 +944,7 @@ function err(field: string): string | undefined {
               />
               <InputText v-model="form.reason_text" fluid />
               <p class="mt-1 text-xs text-gray-400">
-                Reminds the reader they opted in, so they unsubscribe instead of reporting spam. Use
-                <code class="font-mono">{{ SITE_DOMAIN_TOKEN }}</code> for the bare domain.
+                Reminds the reader they opted in, so they unsubscribe instead of reporting spam.
               </p>
             </div>
 
@@ -1031,8 +1001,9 @@ function err(field: string): string | undefined {
               />
               <InputText v-model="form.contact_email" fluid placeholder="info@example.com" />
               <p class="mt-1 text-xs text-gray-400">
-                A <strong>monitored</strong> mailbox that accepts replies — never no-reply@ / promo@. Use
-                <code class="font-mono">{{ SITE_DOMAIN_TOKEN }}</code>, e.g. <code class="font-mono">info@{{ SITE_DOMAIN_TOKEN }}</code>.
+                A <strong>monitored</strong> mailbox that accepts replies — never no-reply@ / promo@.
+                Leave it as <code class="font-mono">{{ CONTACT_TOKEN }}</code> to use the address configured
+                on the server (currently info@winpalack.com), so it only ever has to change in one place.
               </p>
             </div>
 
@@ -1044,8 +1015,7 @@ function err(field: string): string | undefined {
               />
               <InputText v-model="form.copyright_text" fluid />
               <p class="mt-1 text-xs text-gray-400">
-                Use <code class="font-mono">{{ YEAR_TOKEN }}</code> and
-                <code class="font-mono">{{ SITE_NAME_TOKEN }}</code>.
+                Use <code class="font-mono">{{ YEAR_TOKEN }}</code> for the current year.
               </p>
             </div>
           </div>
@@ -1079,23 +1049,13 @@ function err(field: string): string | undefined {
               <h3 class="text-sm font-semibold text-gray-800">Preview</h3>
               <span v-if="previewLoading" class="text-xs text-gray-400">Rendering…</span>
             </div>
-            <div class="flex items-center gap-2">
-              <label class="text-xs font-medium text-gray-500">Preview as</label>
-              <Select
-                v-model="form.preview_site_id"
-                :options="siteOptions"
-                option-label="label"
-                option-value="value"
-                placeholder="Select a site"
-                class="w-56"
-                :disabled="siteOptions.length === 0"
-              />
-            </div>
           </div>
+          <!-- No "preview as" picker: the branding is fixed on the server, so
+               every site would render the same pixels and the control would only
+               suggest a choice that no longer exists. -->
           <p class="border-b border-gray-100 px-4 py-1.5 text-xs text-gray-400">
-            <code class="font-mono">{{ SITE_NAME_TOKEN }}</code> and
-            <code class="font-mono">{{ SITE_URL_TOKEN }}</code> resolve to the selected site. Each
-            subscriber still receives their own site's values when the promotion is sent.
+            Always sent with <strong>Winpalack</strong> branding, whichever site the subscriber
+            verified on — so this preview is exactly what every recipient gets.
           </p>
           <div class="p-3">
             <p v-if="previewError" class="rounded bg-red-50 px-3 py-2 text-xs text-red-700">{{ previewError }}</p>
@@ -1125,8 +1085,9 @@ function err(field: string): string | undefined {
         <Message severity="info" :closable="false" class="text-xs">
           Sends the <strong>saved</strong> template through the transport configured above, so this
           also proves that key works.
-          <span v-if="previewSiteName" class="mt-1 block">
-            Placeholders resolve to <strong>{{ previewSiteName }}</strong> (the site selected in the preview).
+          <span class="mt-1 block">
+            The test goes through the same code path as the automatic send, so its branding is
+            identical to what subscribers receive.
           </span>
         </Message>
       </div>
