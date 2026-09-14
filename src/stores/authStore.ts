@@ -1,7 +1,7 @@
 import { ref, computed, onScopeDispose } from 'vue'
 import { defineStore } from 'pinia'
 import * as authApi from '@/api/auth'
-import type { AuthUser, LoginCredentials } from '@/types/auth'
+import type { AuthUser, ChangePasswordPayload, LoginCredentials } from '@/types/auth'
 
 const TOKEN_KEY = 'auth_token'
 const EXPIRES_KEY = 'auth_expires_at'
@@ -78,21 +78,33 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem(EXPIRES_KEY)
   }
 
-  async function login(credentials: LoginCredentials): Promise<number> {
-    const response = await authApi.login(credentials)
+  /**
+   * Adopt a freshly issued token, in memory and in storage.
+   *
+   * Shared by sign-in and by the password change, which also mints a token. It
+   * exists so those two cannot drift: an update that set the ref but forgot
+   * localStorage would survive until the next page load and then sign the
+   * operator out for no visible reason.
+   */
+  function persistSession(newToken: string, newExpiresAt: string | null): void {
+    token.value = newToken
+    expiresAt.value = newExpiresAt
 
-    token.value = response.token
-    expiresAt.value = response.expires_at
-    user.value = response.user
-
-    localStorage.setItem(TOKEN_KEY, response.token)
-    if (response.expires_at) {
-      localStorage.setItem(EXPIRES_KEY, response.expires_at)
+    localStorage.setItem(TOKEN_KEY, newToken)
+    if (newExpiresAt) {
+      localStorage.setItem(EXPIRES_KEY, newExpiresAt)
     } else {
       localStorage.removeItem(EXPIRES_KEY)
     }
 
     scheduleExpiry()
+  }
+
+  async function login(credentials: LoginCredentials): Promise<number> {
+    const response = await authApi.login(credentials)
+
+    user.value = response.user
+    persistSession(response.token, response.expires_at)
 
     // Signing in is exclusive — the API revokes every other session. Returned so
     // the caller can say so; a silent sign-out elsewhere reads as a bug.
@@ -113,6 +125,22 @@ export const useAuthStore = defineStore('auth', () => {
     return revoked_sessions
   }
 
+  /**
+   * Change the password, keeping this session alive.
+   *
+   * The API revokes EVERY token on the account, this one included, and returns a
+   * replacement. Storing it is not optional: skip it and the next request after
+   * a successful change 401s, which the interceptor turns into a sign-out — the
+   * operator would see their password change as having logged them out.
+   */
+  async function changePassword(payload: ChangePasswordPayload): Promise<number> {
+    const response = await authApi.changePassword(payload)
+
+    persistSession(response.token, response.expires_at)
+
+    return response.revoked_sessions
+  }
+
   // A session restored from localStorage on a page load still needs its timer.
   scheduleExpiry()
 
@@ -126,5 +154,6 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     logout,
     logoutOtherDevices,
+    changePassword,
   }
 })

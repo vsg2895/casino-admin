@@ -27,6 +27,9 @@ const navItems: NavItem[] = [
   { label: 'Promotion Emails', to: '/promotion-emails', icon: 'pi-megaphone' },
   { label: 'Promotion After Verification', to: '/promotion-after-verification', icon: 'pi-verified' },
   { label: 'Schedule Setting', to: '/schedules',        icon: 'pi-clock' },
+  { label: 'Validate Email', to: '/validate-email', icon: 'pi-check-circle' },
+  { label: 'Email Validation Stats', to: '/email-validation-stats', icon: 'pi-chart-bar' },
+  { label: 'Email Validation Log', to: '/email-validation', icon: 'pi-list' },
   { label: 'SendGrid Keys', to: '/sendgrid-keys', icon: 'pi-key' },
   { label: 'Mailgun Credentials', to: '/mailgun-keys', icon: 'pi-key' },
   { label: 'Mailgun Receivers', to: '/mailgun-receivers', icon: 'pi-users' },
@@ -37,6 +40,7 @@ const navItems: NavItem[] = [
   { label: 'Social Links',   to: '/social-links',   icon: 'pi-share-alt' },
   { label: 'Pages',          to: '/pages',          icon: 'pi-file' },
   { label: 'Sites',          to: '/sites',          icon: 'pi-server' },
+  { label: 'Change Password', to: '/change-password', icon: 'pi-lock' },
 ]
 
 async function handleLogout(): Promise<void> {

@@ -17,6 +17,7 @@ Conventions: [../docs/CONVENTIONS.md](../docs/CONVENTIONS.md)
 | **Email templates** | per site: Email Template (welcome), Verify Email, Promotion Email; plus the **global** Promotion-after-verification |
 | **Audience** | Newsletter (email), Newsletter Phones (SMS), Unsubscribes |
 | **Delivery** | Schedules, Promotion History, SendGrid Keys, Mailgun Keys, Twilio Configs, SMS Templates, Warmup |
+| **Account** | Change Password |
 
 Routes live in `src/router/index.ts`; each area has a folder under `src/views/`.
 
@@ -131,6 +132,10 @@ cd admin && npm run build           # 3. verify
 2. Stored in `authStore` + localStorage.
 3. Axios interceptor adds `Authorization: Bearer {token}`.
 4. `401` → auto-logout → redirect to `/login`.
+5. Changing the password revokes **every** token, the current one included, and returns a
+   replacement. `authStore.changePassword()` stores it through the same `persistSession()`
+   helper `login()` uses — call the store, never `api/auth.changePassword` directly, or the
+   screen signs itself out on its next request.
 
 ---
 

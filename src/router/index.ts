@@ -186,6 +186,30 @@ const router = createRouter({
           meta: { requiresAuth: true, title: 'Newsletter' },
         },
         {
+          // Account-level, not content: it acts on the signed-in user rather
+          // than on anything site-scoped, so it sits at the end of the nav
+          // beside Sites rather than among the email screens it resembles.
+          path: 'change-password',
+          name: 'change-password',
+          component: () => import('@/views/account/ChangePassword.vue'),
+          meta: { requiresAuth: true, title: 'Change Password' },
+        },
+        {
+          path: 'validate-email',
+          name: 'validate-email',
+          component: () => import('@/views/emailValidation/Check.vue'),
+        },
+        {
+          path: 'email-validation-stats',
+          name: 'email-validation-stats',
+          component: () => import('@/views/emailValidation/Stats.vue'),
+        },
+        {
+          path: 'email-validation',
+          name: 'email-validation',
+          component: () => import('@/views/emailValidation/List.vue'),
+        },
+        {
           path: 'unsubscribes',
           name: 'unsubscribes',
           component: () => import('@/views/unsubscribes/List.vue'),

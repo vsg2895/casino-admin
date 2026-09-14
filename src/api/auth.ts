@@ -1,5 +1,11 @@
 import client from './client'
-import type { LoginCredentials, LoginResponse, ResetPasswordPayload } from '@/types/auth'
+import type {
+  ChangePasswordPayload,
+  ChangePasswordResponse,
+  LoginCredentials,
+  LoginResponse,
+  ResetPasswordPayload,
+} from '@/types/auth'
 
 export function login(credentials: LoginCredentials): Promise<LoginResponse> {
   return client
@@ -33,5 +39,18 @@ export function forgotPassword(email: string): Promise<{ message: string }> {
 export function resetPassword(payload: ResetPasswordPayload): Promise<{ message: string }> {
   return client
     .post<{ message: string }>('/admin/auth/reset-password', payload)
+    .then((r) => r.data)
+}
+
+/**
+ * Change the password of the signed-in account.
+ *
+ * Returns a replacement token: the change revokes every session including this
+ * one. Callers must hand the new token to the auth store — go through
+ * `authStore.changePassword()` rather than calling this directly.
+ */
+export function changePassword(payload: ChangePasswordPayload): Promise<ChangePasswordResponse> {
+  return client
+    .post<ChangePasswordResponse>('/admin/auth/change-password', payload)
     .then((r) => r.data)
 }

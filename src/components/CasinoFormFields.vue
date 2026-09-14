@@ -58,6 +58,48 @@ const ratingOptions = [0, 1, 2, 3, 4, 5].map((n) => ({ label: String(n), value: 
  * A row without a continent (possible only if the API stopped loading it) falls
  * into "Other" rather than disappearing from the picker.
  */
+/**
+ * Worldwide is EXCLUSIVE: it already means every country.
+ *
+ * Holding it alongside specific countries states the same fact twice, and the
+ * two copies drift — remove Austria and the casino still appears in Austria
+ * through the wildcard while this screen says it does not. The backend enforces
+ * this on save (Casino::syncCountries); the watcher below is what makes the
+ * screen agree with what will be stored, instead of the operator discovering it
+ * after saving.
+ *
+ * Mutual exclusion in both directions: ticking Worldwide clears the rest,
+ * and ticking any real country drops Worldwide — which reads as "no, I mean
+ * these specific ones".
+ */
+const WORLDWIDE_SLUG = 'worldwide'
+
+const worldwideId = computed<number | null>(
+  () => props.countries.find((c) => c.slug === WORLDWIDE_SLUG)?.id ?? null,
+)
+
+const worldwideSelected = computed(
+  () => worldwideId.value !== null && props.form.country_ids.includes(worldwideId.value),
+)
+
+watch(
+  () => [...props.form.country_ids],
+  (ids, previous) => {
+    const ww = worldwideId.value
+    if (ww === null) return
+
+    const hasWorldwide = ids.includes(ww)
+    const others = ids.filter((id) => id !== ww)
+
+    if (!hasWorldwide || others.length === 0) return
+
+    // Which one arrived in this change decides who wins.
+    const worldwideIsNew = !(previous ?? []).includes(ww)
+
+    props.form.country_ids = worldwideIsNew ? [ww] : others
+  },
+)
+
 const countryGroups = computed<{ label: string; items: Country[] }[]>(() => {
   const groups = new Map<string, { label: string; items: Country[] }>()
 
@@ -264,8 +306,13 @@ const slugDiffers = computed(
             filter
             fluid
           />
-          <p class="mt-1 text-xs text-gray-400">
+          <p v-if="worldwideSelected" class="mt-1 text-xs text-emerald-700">
+            <strong>Worldwide</strong> covers every country, so individual ones are
+            cleared. Pick a specific country to switch back to a per-country list.
+          </p>
+          <p v-else class="mt-1 text-xs text-gray-400">
             Countries this casino accepts players from. Global — not per site.
+            Choosing <strong>Worldwide</strong> replaces the whole list.
           </p>
         </div>
 

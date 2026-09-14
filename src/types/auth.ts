@@ -28,3 +28,22 @@ export interface ResetPasswordPayload {
   password: string
   password_confirmation: string
 }
+
+export interface ChangePasswordPayload {
+  current_password: string
+  password: string
+  password_confirmation: string
+}
+
+export interface ChangePasswordResponse {
+  message: string
+  /**
+   * A REPLACEMENT token. Changing the password revokes every token on the
+   * account including the one that made the request, so this must be stored or
+   * the very next call 401s.
+   */
+  token: string
+  expires_at: string | null
+  /** Sessions ended besides this one. */
+  revoked_sessions: number
+}
