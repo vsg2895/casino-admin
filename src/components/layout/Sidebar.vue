@@ -31,6 +31,9 @@ const navItems: NavItem[] = [
   { label: 'Email Validation Stats', to: '/email-validation-stats', icon: 'pi-chart-bar' },
   { label: 'Email Validation Log', to: '/email-validation', icon: 'pi-list' },
   { label: 'SendGrid Keys', to: '/sendgrid-keys', icon: 'pi-key' },
+  // ── UniOne: two ADDITIVE entries. No existing entry is changed. ──
+  { label: 'UniOne',         to: '/unione',         icon: 'pi-send' },
+  { label: 'UniOne Receivers', to: '/unione-receivers', icon: 'pi-address-book' },
   { label: 'Mailgun Credentials', to: '/mailgun-keys', icon: 'pi-key' },
   { label: 'Mailgun Receivers', to: '/mailgun-receivers', icon: 'pi-users' },
   { label: 'Email Configs', to: '/smtp-credentials', icon: 'pi-server' },

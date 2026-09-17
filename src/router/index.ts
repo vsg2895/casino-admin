@@ -247,6 +247,24 @@ const router = createRouter({
           component: () => import('@/views/promotionHistory/List.vue'),
           meta: { requiresAuth: true, title: 'Promotion History' },
         },
+        /*
+         * UniOne — two ADDITIVE route records.
+         *
+         * Nothing above or below is modified. The sections are independent of
+         * SendGrid Keys, Mailgun, Email Configs and Warmup.
+         */
+        {
+          path: 'unione',
+          name: 'unione',
+          component: () => import('@/views/unione/Keys.vue'),
+          meta: { requiresAuth: true, title: 'UniOne' },
+        },
+        {
+          path: 'unione-receivers',
+          name: 'unione-receivers',
+          component: () => import('@/views/unione/Receivers.vue'),
+          meta: { requiresAuth: true, title: 'UniOne Receivers' },
+        },
         {
           path: 'sendgrid-keys',
           name: 'sendgrid-keys',

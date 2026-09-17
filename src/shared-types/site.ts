@@ -39,6 +39,10 @@ export interface Site {
   byline_enabled: boolean
   /** Whether this site publishes editorial guides. */
   guides_enabled: boolean
+  /** Publish a /news section on this site. Off by default, like every flag. */
+  news_enabled: boolean
+  /** Publish the Bonus area (menu + home-page sections) on this site. */
+  bonus_enabled: boolean
   /**
    * Cache health, denormalised so the sites list needs no aggregate.
    *
