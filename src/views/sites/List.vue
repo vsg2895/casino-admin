@@ -257,6 +257,14 @@ async function toggleActive(site: Site): Promise<void> {
                 @click="router.push({ name: 'site-forum', params: { id: site.id } })"
               />
               <Button
+                icon="pi pi-megaphone"
+                size="small"
+                text
+                severity="secondary"
+                v-tooltip="'News'"
+                @click="router.push({ name: 'site-news', params: { id: site.id } })"
+              />
+              <Button
                 icon="pi pi-book"
                 size="small"
                 text
@@ -281,7 +289,7 @@ async function toggleActive(site: Site): Promise<void> {
                 @click="openEmailTemplate(site)"
               />
               <Button
-                icon="pi pi-refresh"
+                icon="pi pi-key"
                 size="small"
                 text
                 severity="warn"

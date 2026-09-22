@@ -1,8 +1,9 @@
 import client from './client'
 import type {
   UniOneApiKey,
+  UniOneImportSummary,
+  UniOneSendTemplate,
   UniOneDomain,
-  UniOneImportResult,
   UniOneReceiver,
   UniOneReceiverStats,
   UniOneReceiverStatus,
@@ -125,14 +126,20 @@ export function bulkReceivers(
   return client.post<{ data: { affected: number } }>(`${BASE}/receivers/bulk`, { ids, action, status }).then((r) => r.data.data)
 }
 
-/** `dry_run: true` returns the same report without writing anything. */
-export function importReceivers(payload: {
-  rows: Array<Record<string, string>>
-  mapping: { email: string; name?: string; consent_source?: string; consent_at?: string }
-  fallback?: { consent_source?: string; consent_at?: string }
-  dry_run: boolean
-}): Promise<UniOneImportResult> {
-  return client.post<{ data: UniOneImportResult }>(`${BASE}/receivers/import`, payload).then((r) => r.data.data)
+/**
+ * Spreadsheet import — the same shape as the Warmup receivers import.
+ *
+ * multipart/form-data with an .xlsx or .csv, and nothing else.
+ */
+export function importReceivers(file: File): Promise<UniOneImportSummary> {
+  const body = new FormData()
+  body.append('file', file)
+
+  return client
+    .post<UniOneImportSummary>(`${BASE}/receivers/import`, body, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    .then((r) => r.data)
 }
 
 export function receiversExportUrl(): string {
@@ -161,4 +168,15 @@ export function listSends(params?: Record<string, unknown>): Promise<Paginated<U
 
 export function getSend(id: number): Promise<UniOneSend> {
   return client.get<{ data: UniOneSend }>(`${BASE}/sends/${id}`).then((r) => r.data.data)
+}
+
+/** Templates a run may use — crogambline's promotion template. */
+export function listSendTemplates(): Promise<{
+  data: UniOneSendTemplate[]
+  site: string
+  suggested_subject: string
+}> {
+  return client
+    .get<{ data: UniOneSendTemplate[]; site: string; suggested_subject: string }>(`${BASE}/sends/templates`)
+    .then((r) => r.data)
 }

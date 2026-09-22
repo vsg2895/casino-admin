@@ -30,6 +30,8 @@ export interface UpdateSitePayload {
   // casino has a review date — see the site form.
   byline_enabled?: boolean
   guides_enabled?: boolean
+  news_enabled?: boolean
+  bonus_enabled?: boolean
   author_name?: string | null
   author_role?: string | null
   author_bio?: string | null

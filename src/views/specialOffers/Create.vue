@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import * as bonusApi from '@/api/bonusCategories'
+import type { BonusCategory } from '@shared/types/bonusCategory'
 import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
@@ -11,6 +13,8 @@ import { useSpecialOffersStore } from '@/stores/specialOffersStore'
 import { useCasinosStore } from '@/stores/casinosStore'
 import type { ErrorResponse } from '@shared/types/api'
 
+const bonusCategories = ref<BonusCategory[]>([])
+
 const router = useRouter()
 const toast = useToast()
 const store = useSpecialOffersStore()
@@ -18,6 +22,7 @@ const casinosStore = useCasinosStore()
 
 const form = reactive<SpecialOfferFormModel>({
   casino_id: null,
+  bonus_category_id: null,
   title: '',
   image_path: null,
   banner_image: null,
@@ -58,6 +63,10 @@ async function create(): Promise<void> {
     loading.value = false
   }
 }
+
+onMounted(async () => {
+  bonusCategories.value = await bonusApi.listBonusCategories().catch(() => [])
+})
 </script>
 
 <template>
@@ -71,7 +80,7 @@ async function create(): Promise<void> {
     <div v-if="formError" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ formError }}</div>
 
     <div class="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
-      <SpecialOfferFormFields :form="form" :casinos="casinosStore.casinos" :errors="errors" />
+      <SpecialOfferFormFields :form="form" :casinos="casinosStore.casinos" :bonus-categories="bonusCategories" :errors="errors" />
     </div>
   </div>
 </template>

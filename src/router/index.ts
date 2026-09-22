@@ -74,7 +74,23 @@ const router = createRouter({
           path: 'sites/:id/guides',
           name: 'site-guides',
           component: () => import('@/views/sites/Articles.vue'),
-          meta: { requiresAuth: true, title: 'Guides' },
+          meta: { requiresAuth: true, title: 'Guides', articleType: 'guide' },
+        },
+        {
+          path: 'sites/:id/news-categories',
+          name: 'site-news-categories',
+          component: () => import('@/views/newsCategories/List.vue'),
+          meta: { requiresAuth: true, title: 'News categories' },
+        },
+        {
+          // The SAME screen as guides. The two sections differ only in their
+          // labels, their feature flag and the minimum-count rule, so one
+          // component reads those from route meta rather than existing twice
+          // and drifting apart.
+          path: 'sites/:id/news',
+          name: 'site-news',
+          component: () => import('@/views/sites/Articles.vue'),
+          meta: { requiresAuth: true, title: 'News', articleType: 'news' },
         },
         {
           path: 'sites/:id/cache',
@@ -173,6 +189,47 @@ const router = createRouter({
           component: () => import('@/views/countries/List.vue'),
           meta: { requiresAuth: true, title: 'Countries' },
         },
+        /*
+         * The community forum — a different feature from the Reviews section
+         * above, which is the per-casino review feed that used to live at
+         * /forum on the public site.
+         *
+         * Registered as three ROOT routes under a /forum prefix rather than
+         * nested under sites/:id, because the moderation queue is cross-cutting
+         * (one backlog across the network) and the other two carry their own
+         * site picker. They appear in the sidebar's first collapsible group.
+         */
+        {
+          path: 'forum/moderation',
+          name: 'forum-moderation',
+          component: () => import('@/views/forum/Moderation.vue'),
+          meta: { requiresAuth: true, title: 'Forum Moderation' },
+        },
+        {
+          path: 'forum/articles',
+          name: 'forum-articles',
+          component: () => import('@/views/forum/Articles.vue'),
+          meta: { requiresAuth: true, title: 'Forum Discussions' },
+        },
+        {
+          path: 'forum/boards',
+          name: 'forum-boards',
+          component: () => import('@/views/forum/Boards.vue'),
+          meta: { requiresAuth: true, title: 'Forum Boards' },
+        },
+        /*
+         * Registered visitors.
+         *
+         * A TOP-LEVEL section rather than a child of Forum: accounts are not a
+         * forum setting, and an operator looking for "who signed up" should not
+         * have to know which feature created the account.
+         */
+        {
+          path: 'users',
+          name: 'users',
+          component: () => import('@/views/users/List.vue'),
+          meta: { requiresAuth: true, title: 'Users' },
+        },
         {
           path: 'reviews',
           name: 'reviews',
@@ -193,6 +250,12 @@ const router = createRouter({
           name: 'change-password',
           component: () => import('@/views/account/ChangePassword.vue'),
           meta: { requiresAuth: true, title: 'Change Password' },
+        },
+        {
+          path: 'bonus-categories',
+          name: 'bonus-categories',
+          component: () => import('@/views/bonusCategories/List.vue'),
+          meta: { requiresAuth: true, title: 'Bonus Categories' },
         },
         {
           path: 'validate-email',

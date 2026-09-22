@@ -57,7 +57,7 @@ export interface UniOneReceiver {
   email: string
   name: string | null
   status: UniOneReceiverStatus
-  consent_source: string
+  consent_source: string | null
   consent_at: string | null
   last_sent_at: string | null
   last_status: string | null
@@ -75,9 +75,12 @@ export interface UpsertUniOneReceiverPayload {
   email: string
   name?: string | null
   status?: UniOneReceiverStatus
-  /** Both mandatory — an address without recorded consent is not sendable. */
-  consent_source: string
-  consent_at: string
+  /**
+   * Optional metadata. No send path checks these — they are kept so an operator
+   * can record where an address came from, not to gate anything.
+   */
+  consent_source?: string | null
+  consent_at?: string | null
   notes?: string | null
 }
 
@@ -130,13 +133,26 @@ export interface UniOneSendPreview {
   chunk_size: number
 }
 
-export type UniOneImportVerdict =
-  | 'added' | 'duplicate' | 'invalid' | 'already_suppressed' | 'missing_consent'
+/**
+ * What a spreadsheet import reports — the same four figures the Warmup import
+ * returns, because an operator reads them the same way.
+ *
+ * `duplicates` covers both repeats inside the file and addresses already on the
+ * list: from the admin's point of view both mean nothing was added.
+ */
+export interface UniOneImportSummary {
+  ok: boolean
+  rows: number
+  imported: number
+  duplicates: number
+  invalid: number
+  message: string
+}
 
-export interface UniOneImportResult {
-  dry_run: boolean
-  summary: Record<UniOneImportVerdict, number>
-  rows: Array<{ line: number; email: string; result: UniOneImportVerdict; detail: string | null }>
+export interface UniOneSendTemplate {
+  value: string
+  label: string
+  description: string
 }
 
 /** A domain as /domain/list.json reports it. */

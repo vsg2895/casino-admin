@@ -22,9 +22,10 @@ import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
 import * as api from '@/api/unione'
 import client from '@/api/client'
+import FileUpload from 'primevue/fileupload'
 import type {
-  UniOneApiKey, UniOneImportResult, UniOneReceiver,
-  UniOneReceiverStats, UniOneReceiverStatus, UniOneSendPreview,
+  UniOneApiKey, UniOneImportSummary, UniOneReceiver,
+  UniOneReceiverStats, UniOneReceiverStatus, UniOneSendPreview, UniOneSendTemplate,
 } from '@shared/types/unione'
 
 const toast = useToast()
@@ -62,15 +63,12 @@ const dialog = ref(false)
 const editing = ref<UniOneReceiver | null>(null)
 const form = ref({ email: '', name: '', consent_source: '', consent_at: null as Date | null, notes: '' })
 
-// ── import ───────────────────────────────────────────────────────────────────
+// ── import ──────────────────────────────────────────────────────────────────
+// A FILE upload and nothing else, matching the Warmup receivers import:
+// .xlsx or .csv with an Email column.
 const importDialog = ref(false)
-const csvText = ref('')
-const csvHeaders = ref<string[]>([])
-const csvRows = ref<Array<Record<string, string>>>([])
-const mapping = ref({ email: '', name: '', consent_source: '', consent_at: '' })
-const fallbackSource = ref('')
-const fallbackDate = ref<Date | null>(null)
-const importResult = ref<UniOneImportResult | null>(null)
+const importFile = ref<File | null>(null)
+const importResult = ref<UniOneImportSummary | null>(null)
 const importing = ref(false)
 
 // ── send ─────────────────────────────────────────────────────────────────────
@@ -80,11 +78,18 @@ const sending = ref(false)
 const preview = ref<UniOneSendPreview | null>(null)
 const previewLoading = ref(false)
 const testEmail = ref('')
+const templates = ref<UniOneSendTemplate[]>([])
+const templateSite = ref('')
 const send = ref({
   key_id: null as number | null, count: 100, cooldown_hours: 24,
+  // Template mode by default, like Warmup — the operator picks a template
+  // rather than pasting markup. Raw HTML stays available for a one-off.
+  template: 'promotion' as string | null,
   subject: '', from_email: '', from_name: '', reply_to: '',
   html_body: '', plaintext_body: '',
 })
+
+const usingTemplate = computed(() => !!send.value.template)
 
 const activeKeys = computed(() => keys.value.filter((k) => k.is_active))
 const selectedKey = computed(() => keys.value.find((k) => k.id === send.value.key_id) ?? null)
@@ -119,8 +124,13 @@ function onPage(e: { page: number; rows: number }): void { page.value = e.page +
 function openEditor(r: UniOneReceiver | null): void {
   editing.value = r
   form.value = r
-    ? { email: r.email, name: r.name ?? '', consent_source: r.consent_source, consent_at: r.consent_at ? new Date(r.consent_at) : null, notes: r.notes ?? '' }
-    : { email: '', name: '', consent_source: '', consent_at: new Date(), notes: '' }
+    // `?? ''` because the form binds to an InputText: a null would render the
+    // string "null" in the box. The empty string is converted back to null on
+    // save, so an untouched field stays genuinely unset rather than blank.
+    ? { email: r.email, name: r.name ?? '', consent_source: r.consent_source ?? '', consent_at: r.consent_at ? new Date(r.consent_at) : null, notes: r.notes ?? '' }
+    // A new receiver starts with NO consent date. It used to default to today,
+    // which would have stamped a consent record nobody actually collected.
+    : { email: '', name: '', consent_source: '', consent_at: null, notes: '' }
   dialog.value = true
 }
 
@@ -129,8 +139,8 @@ async function saveReceiver(): Promise<void> {
     const payload = {
       email: form.value.email,
       name: form.value.name || null,
-      consent_source: form.value.consent_source,
-      consent_at: (form.value.consent_at ?? new Date()).toISOString(),
+      consent_source: form.value.consent_source || null,
+      consent_at: form.value.consent_at ? form.value.consent_at.toISOString() : null,
       notes: form.value.notes || null,
     }
     if (editing.value) await api.updateReceiver(editing.value.id, payload)
@@ -167,61 +177,20 @@ function exportCsv(): void {
   })
 }
 
-// ── CSV parsing (client side, so the dry run is instant) ─────────────────────
-
-function parseCsv(): void {
-  const lines = csvText.value.trim().split(/\r?\n/).filter((l) => l.trim() !== '')
-  if (lines.length < 2) {
-    toast.add({ severity: 'warn', summary: 'Need a header row and at least one data row', life: 4000 })
-    return
-  }
-  const split = (line: string): string[] =>
-    (line.match(/("([^"]|"")*"|[^,]*)(,|$)/g) ?? [])
-      .map((c) => c.replace(/,$/, '').trim().replace(/^"|"$/g, '').replace(/""/g, '"'))
-      .slice(0, -1)
-
-  csvHeaders.value = split(lines[0])
-  csvRows.value = lines.slice(1).map((line) => {
-    const cells = split(line)
-    return Object.fromEntries(csvHeaders.value.map((h, i) => [h, cells[i] ?? '']))
-  })
-
-  // Guess the mapping so the common case needs no clicks.
-  const guess = (...names: string[]): string =>
-    csvHeaders.value.find((h) => names.includes(h.toLowerCase().trim())) ?? ''
-  mapping.value = {
-    email: guess('email', 'e-mail', 'address'),
-    name: guess('name', 'full name'),
-    consent_source: guess('consent_source', 'source'),
-    consent_at: guess('consent_at', 'consent date', 'opt_in_at'),
-  }
+function onFilePick(event: { files: File[] }): void {
+  importFile.value = event.files[0] ?? null
   importResult.value = null
 }
 
-async function runImport(dryRun: boolean): Promise<void> {
-  if (!mapping.value.email) {
-    toast.add({ severity: 'warn', summary: 'Pick which column holds the email address', life: 4000 })
-    return
-  }
+async function runImport(): Promise<void> {
+  if (!importFile.value) return
   importing.value = true
   try {
-    importResult.value = await api.importReceivers({
-      rows: csvRows.value,
-      mapping: {
-        email: mapping.value.email,
-        name: mapping.value.name || undefined,
-        consent_source: mapping.value.consent_source || undefined,
-        consent_at: mapping.value.consent_at || undefined,
-      },
-      fallback: {
-        consent_source: fallbackSource.value || undefined,
-        consent_at: fallbackDate.value ? fallbackDate.value.toISOString() : undefined,
-      },
-      dry_run: dryRun,
-    })
-    if (!dryRun) { await load(); toast.add({ severity: 'success', summary: 'Import complete', life: 3000 }) }
+    importResult.value = await api.importReceivers(importFile.value)
+    await load()
+    toast.add({ severity: 'success', summary: importResult.value.message, life: 7000 })
   } catch (e: unknown) {
-    toast.add({ severity: 'error', summary: msg(e, 'Import failed'), life: 6000 })
+    toast.add({ severity: 'error', summary: msg(e, 'Import failed'), life: 7000 })
   } finally {
     importing.value = false
   }
@@ -235,6 +204,17 @@ async function openSend(): Promise<void> {
   send.value.key_id = def?.id ?? null
   send.value.from_email = def?.default_from_email ?? ''
   send.value.from_name = def?.default_from_name ?? ''
+  // The template list and its suggested subject, so the modal opens ready to
+  // send rather than ready to be filled in.
+  try {
+    const t = await api.listSendTemplates()
+    templates.value = t.data
+    templateSite.value = t.site
+    if (!send.value.subject) send.value.subject = t.suggested_subject
+  } catch {
+    templates.value = []
+  }
+
   sendStep.value = 'compose'
   sendDialog.value = true
   void refreshPreview()
@@ -256,9 +236,10 @@ async function sendTest(): Promise<void> {
   try {
     const res = await api.sendTest({
       unione_api_key_id: send.value.key_id, email: testEmail.value,
-      subject: send.value.subject, from_email: send.value.from_email,
+      template: send.value.template, subject: send.value.subject,
+      from_email: send.value.from_email,
       from_name: send.value.from_name || null, reply_to: send.value.reply_to || null,
-      html_body: send.value.html_body, plaintext_body: send.value.plaintext_body || null,
+      html_body: send.value.html_body || null, plaintext_body: send.value.plaintext_body || null,
     })
     toast.add({
       severity: res.ok ? 'success' : 'warn',
@@ -277,9 +258,10 @@ async function confirmSend(): Promise<void> {
     const run = await api.startSend({
       unione_api_key_id: send.value.key_id,
       count: send.value.count, cooldown_hours: send.value.cooldown_hours,
-      subject: send.value.subject, from_email: send.value.from_email,
+      template: send.value.template, subject: send.value.subject,
+      from_email: send.value.from_email,
       from_name: send.value.from_name || null, reply_to: send.value.reply_to || null,
-      html_body: send.value.html_body, plaintext_body: send.value.plaintext_body || null,
+      html_body: send.value.html_body || null, plaintext_body: send.value.plaintext_body || null,
     })
     sendDialog.value = false
     await load()
@@ -449,79 +431,53 @@ onMounted(() => void load())
       <InputText v-model="form.email" class="mb-3 w-full" />
       <label class="mb-1 block text-xs font-medium text-gray-700">Name</label>
       <InputText v-model="form.name" class="mb-3 w-full" />
-      <label class="mb-1 block text-xs font-medium text-gray-700">Consent source *</label>
+      <label class="mb-1 block text-xs font-medium text-gray-700">Consent source</label>
       <InputText v-model="form.consent_source" class="mb-1 w-full" placeholder="e.g. signup form, imported list 2026-01" />
       <p class="mb-3 text-xs text-gray-400">
-        Required. UniOne's terms need documented consent, and an address without it is never sendable.
+        Optional. Not checked before sending — kept so you can record where an address came from.
       </p>
-      <label class="mb-1 block text-xs font-medium text-gray-700">Consent date *</label>
+      <label class="mb-1 block text-xs font-medium text-gray-700">Consent date</label>
       <DatePicker v-model="form.consent_at" date-format="yy-mm-dd" show-icon class="mb-3 w-full" :max-date="new Date()" />
       <label class="mb-1 block text-xs font-medium text-gray-700">Notes</label>
       <Textarea v-model="form.notes" rows="2" class="w-full" />
       <template #footer>
         <Button label="Cancel" text @click="dialog = false" />
-        <Button label="Save" :disabled="!form.email || !form.consent_source || !form.consent_at" @click="saveReceiver" />
+        <Button label="Save" :disabled="!form.email" @click="saveReceiver" />
       </template>
     </Dialog>
 
     <!-- ── import ── -->
-    <Dialog v-model:visible="importDialog" modal header="Import receivers" :style="{ width: '52rem' }">
-      <label class="mb-1 block text-xs font-medium text-gray-700">Paste CSV (with a header row)</label>
-      <Textarea v-model="csvText" rows="6" class="w-full font-mono text-xs" placeholder="email,name,consent_source,consent_at" />
-      <Button class="mt-2" size="small" label="Parse" icon="pi pi-table" @click="parseCsv" />
+    <Dialog v-model:visible="importDialog" modal header="Import receivers" :style="{ width: '38rem' }">
+      <p class="mb-4 text-sm text-gray-600">
+        Upload an <strong>.xlsx</strong> or <strong>.csv</strong> with an <code>Email</code> column —
+        the same format the Warmup receivers import takes.
+      </p>
 
-      <div v-if="csvHeaders.length" class="mt-4">
-        <p class="mb-2 text-sm font-medium text-gray-900">Map columns ({{ csvRows.length }} rows)</p>
-        <div class="grid grid-cols-4 gap-3">
-          <div v-for="field in (['email','name','consent_source','consent_at'] as const)" :key="field">
-            <label class="mb-1 block text-xs font-medium text-gray-700">{{ field }}</label>
-            <Select
-              v-model="mapping[field]" :options="['', ...csvHeaders]" class="w-full"
-              :placeholder="field === 'email' ? 'required' : 'optional'"
-            />
-          </div>
-        </div>
+      <label class="mb-1 block text-xs font-medium text-gray-700">File</label>
+      <FileUpload
+        mode="basic" name="file" accept=".xlsx,.csv,text/csv" :max-file-size="20971520"
+        choose-label="Choose file" :auto="false" custom-upload class="mb-1 w-full"
+        @select="onFilePick"
+      />
+      <p class="mb-4 text-xs text-gray-400">Up to 20 MB. The first column matching “Email” is used.</p>
 
-        <p class="mt-4 mb-2 text-sm font-medium text-gray-900">Fallback consent (used where the columns are absent)</p>
-        <div class="grid grid-cols-2 gap-3">
-          <InputText v-model="fallbackSource" placeholder="consent source for the whole file" />
-          <DatePicker v-model="fallbackDate" date-format="yy-mm-dd" show-icon placeholder="consent date" :max-date="new Date()" />
-        </div>
-        <p class="mt-1 text-xs text-gray-400">
-          Rows with neither a mapped column nor a fallback are rejected as “missing consent” — they are never imported silently.
-        </p>
-
-        <div class="mt-4 flex gap-2">
-          <Button label="Dry run" icon="pi pi-eye" outlined :loading="importing" @click="runImport(true)" />
-          <Button label="Import for real" icon="pi pi-check" :loading="importing" :disabled="!importResult" @click="runImport(false)" />
-        </div>
-      </div>
-
-      <div v-if="importResult" class="mt-4 rounded-lg border border-gray-200 p-3">
-        <p class="mb-2 text-sm font-medium text-gray-900">
-          {{ importResult.dry_run ? 'Dry run — nothing was written' : 'Imported' }}
-        </p>
-        <div class="mb-3 flex flex-wrap gap-2">
-          <Tag v-for="(n, verdict) in importResult.summary" :key="verdict"
-               :value="`${verdict}: ${n}`"
-               :severity="verdict === 'added' ? 'success' : verdict === 'invalid' || verdict === 'missing_consent' ? 'danger' : 'warn'" />
-        </div>
-        <div class="max-h-52 overflow-y-auto">
-          <table class="w-full text-xs">
-            <tbody>
-              <tr v-for="row in importResult.rows.slice(0, 200)" :key="row.line" class="border-b border-gray-100">
-                <td class="py-1 pr-2 text-gray-400">{{ row.line }}</td>
-                <td class="py-1 pr-2">{{ row.email }}</td>
-                <td class="py-1 pr-2 font-medium">{{ row.result }}</td>
-                <td class="py-1 text-gray-500">{{ row.detail }}</td>
-              </tr>
-            </tbody>
-          </table>
+      <div v-if="importResult" class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+        <p class="mb-2 text-sm font-medium text-gray-900">{{ importResult.message }}</p>
+        <div class="flex flex-wrap gap-2">
+          <Tag :value="`rows: ${importResult.rows}`" severity="secondary" />
+          <Tag :value="`imported: ${importResult.imported}`" severity="success" />
+          <Tag :value="`duplicates: ${importResult.duplicates}`" severity="warn" />
+          <Tag :value="`invalid: ${importResult.invalid}`" :severity="importResult.invalid ? 'danger' : 'secondary'" />
         </div>
       </div>
 
       <template #footer>
         <Button label="Close" text @click="importDialog = false" />
+        <Button
+          label="Import" icon="pi pi-upload" :loading="importing"
+          :disabled="!importFile"
+          @click="runImport"
+        />
       </template>
     </Dialog>
 
@@ -570,13 +526,31 @@ onMounted(() => void load())
           </div>
 
           <div class="col-span-2">
-            <label class="mb-1 block text-xs font-medium text-gray-700">HTML body</label>
-            <Textarea v-model="send.html_body" rows="8" class="w-full font-mono text-xs" />
+            <label class="mb-1 block text-xs font-medium text-gray-700">Template</label>
+            <Select
+              v-model="send.template" class="w-full"
+              :options="[...templates, { value: null, label: 'Raw HTML (no template)', description: 'Paste your own markup below.' }]"
+              option-label="label" option-value="value"
+            />
+            <p v-if="usingTemplate" class="mt-1 text-xs text-gray-400">
+              Rendered per recipient from the
+              <strong>{{ templateSite || 'crogambline' }}</strong> site's promotion template —
+              edit the wording under Promotion Emails. The greeting is personalised from each
+              receiver's name.
+            </p>
           </div>
-          <div class="col-span-2">
-            <label class="mb-1 block text-xs font-medium text-gray-700">Plain text part</label>
-            <Textarea v-model="send.plaintext_body" rows="4" class="w-full font-mono text-xs" />
-          </div>
+
+          <!-- Only when there is no template: a template supplies its own markup. -->
+          <template v-if="!usingTemplate">
+            <div class="col-span-2">
+              <label class="mb-1 block text-xs font-medium text-gray-700">HTML body</label>
+              <Textarea v-model="send.html_body" rows="8" class="w-full font-mono text-xs" />
+            </div>
+            <div class="col-span-2">
+              <label class="mb-1 block text-xs font-medium text-gray-700">Plain text part</label>
+              <Textarea v-model="send.plaintext_body" rows="4" class="w-full font-mono text-xs" />
+            </div>
+          </template>
 
           <div class="col-span-2 rounded-lg bg-gray-50 p-3">
             <p class="text-sm text-gray-700">
@@ -600,7 +574,7 @@ onMounted(() => void load())
               <InputText v-model="testEmail" class="w-full" placeholder="you@example.com" />
             </div>
             <Button label="Send test" icon="pi pi-paper-plane" outlined
-                    :disabled="!testEmail || !send.subject || !send.html_body" @click="sendTest" />
+                    :disabled="!testEmail || !send.subject || (!usingTemplate && !send.html_body)" @click="sendTest" />
           </div>
         </div>
       </template>
@@ -612,6 +586,9 @@ onMounted(() => void load())
             <li>Key: <strong>{{ selectedKey?.name }}</strong> ({{ selectedKey?.region }})</li>
             <li>Recipients: <strong>{{ preview?.will_send?.toLocaleString() ?? '—' }}</strong> in {{ preview?.chunks ?? '—' }} request(s)</li>
             <li>Subject: <strong>{{ send.subject }}</strong></li>
+            <li v-if="usingTemplate">
+              Template: <strong>{{ templates.find(t => t.value === send.template)?.label ?? send.template }}</strong>
+            </li>
             <li>From: <strong>{{ send.from_email }}</strong></li>
           </ul>
           <p class="mt-3 text-xs text-amber-800">
@@ -624,7 +601,7 @@ onMounted(() => void load())
         <Button label="Cancel" text @click="sendDialog = false" />
         <Button
           v-if="sendStep === 'compose'" label="Review" icon="pi pi-arrow-right"
-          :disabled="!send.key_id || !send.subject || !send.from_email || !send.html_body || !preview?.will_send"
+          :disabled="!send.key_id || !send.subject || !send.from_email || (!usingTemplate && !send.html_body) || !preview?.will_send"
           @click="sendStep = 'confirm'"
         />
         <template v-else>

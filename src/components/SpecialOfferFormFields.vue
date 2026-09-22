@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { BonusCategory } from '@shared/types/bonusCategory'
 import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
 import Select from 'primevue/select'
@@ -9,6 +10,7 @@ import type { Casino } from '@shared/types/casino'
 
 export interface SpecialOfferFormModel {
   casino_id: number | null
+  bonus_category_id: number | null
   title: string
   image_path: string | null
   banner_image: string | null
@@ -32,6 +34,7 @@ defineProps<{
   form: SpecialOfferFormModel
   casinos: Casino[]
   errors?: Record<string, string>
+  bonusCategories?: BonusCategory[]
 }>()
 
 const ratingOptions = [0, 1, 2, 3, 4, 5].map((n) => ({ label: String(n), value: n }))
@@ -50,6 +53,23 @@ const ratingOptions = [0, 1, 2, 3, 4, 5].map((n) => ({ label: String(n), value: 
           <label class="mb-1 block text-sm font-medium text-gray-700">Casino <span class="text-red-500">*</span></label>
           <Select v-model="form.casino_id" :options="casinos" option-label="name" option-value="id" placeholder="Select a casino" filter fluid />
           <p v-if="errors?.casino_id" class="mt-1 text-xs text-red-600">{{ errors.casino_id }}</p>
+        </div>
+
+        <div>
+          <label class="mb-1 block text-sm font-medium text-gray-700">Bonus category</label>
+          <Select
+            v-model="form.bonus_category_id"
+            :options="bonusCategories"
+            option-label="name"
+            option-value="id"
+            placeholder="Uncategorised"
+            show-clear
+            fluid
+          />
+          <p class="mt-1 text-xs text-gray-400">
+            Which section of the Bonus area this offer appears in. Uncategorised offers still show
+            on the Special Offers page — they just have no section on the home page.
+          </p>
         </div>
         <div>
           <label class="mb-1 block text-sm font-medium text-gray-700">Title <span class="text-red-500">*</span></label>

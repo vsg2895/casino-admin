@@ -22,6 +22,8 @@ interface SiteEditForm {
   operator_profile_enabled: boolean
   byline_enabled: boolean
   guides_enabled: boolean
+  news_enabled: boolean
+  bonus_enabled: boolean
   author_name: string | null
   author_role: string | null
   author_bio: string | null
@@ -50,6 +52,8 @@ const form = reactive<SiteEditForm>({
   operator_profile_enabled: false,
   byline_enabled: false,
   guides_enabled: false,
+  news_enabled: false,
+  bonus_enabled: false,
   author_name: null,
   author_role: null,
   author_bio: null,
@@ -75,6 +79,8 @@ watch(
       form.operator_profile_enabled = props.site.operator_profile_enabled
       form.byline_enabled = props.site.byline_enabled
       form.guides_enabled = props.site.guides_enabled
+      form.news_enabled = props.site.news_enabled
+      form.bonus_enabled = props.site.bonus_enabled
       form.author_name = props.site.author_name
       form.author_role = props.site.author_role
       form.author_bio = props.site.author_bio
@@ -104,6 +110,8 @@ async function submit(): Promise<void> {
       operator_profile_enabled: form.operator_profile_enabled,
       byline_enabled: form.byline_enabled,
       guides_enabled: form.guides_enabled,
+      news_enabled: form.news_enabled,
+      bonus_enabled: form.bonus_enabled,
       author_name: form.author_name,
       author_role: form.author_role,
       author_bio: form.author_bio,
@@ -270,6 +278,29 @@ async function submit(): Promise<void> {
             </p>
           </div>
           <ToggleSwitch v-model="form.byline_enabled" />
+        </div>
+
+        <div class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Bonus area</label>
+            <p class="mt-0.5 text-xs text-gray-500">
+              Publish the Bonus menu and its home-page sections. The sub-items come from
+              Bonus Categories; a category with no visible offer on this site is skipped, so
+              the menu never points at an empty section.
+            </p>
+          </div>
+          <ToggleSwitch v-model="form.bonus_enabled" />
+        </div>
+
+        <div class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">News section</label>
+            <p class="mt-0.5 text-xs text-gray-500">
+              Publish a /news feed. Unlike guides there is no minimum — one post is a new feed,
+              not an abandoned one — so it goes live as soon as something is published.
+            </p>
+          </div>
+          <ToggleSwitch v-model="form.news_enabled" />
         </div>
 
         <div class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
