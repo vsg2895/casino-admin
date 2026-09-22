@@ -44,6 +44,23 @@ export interface Site {
   /** Publish the Bonus area (menu + home-page sections) on this site. */
   bonus_enabled: boolean
   /**
+   * Open the discussion board at /forum.
+   *
+   * Distinct from `reviews_enabled`, which is the /reviews feed that used to
+   * live at that path. Switching this on also deactivates the site's
+   * /forum -> /reviews redirect, which would otherwise shadow the board.
+   */
+  forum_enabled: boolean
+  /**
+   * Allow visitors to register and sign in — /login, /register and the
+   * header's account control.
+   *
+   * Separate from the board so a site can collect members before it opens
+   * discussions. The board implies accounts, so an open board with this off
+   * still permits sign-in.
+   */
+  accounts_enabled: boolean
+  /**
    * Cache health, denormalised so the sites list needs no aggregate.
    *
    * Null until the first attempt. A `failed` status with an error is the state

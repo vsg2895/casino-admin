@@ -32,6 +32,12 @@ export interface UpdateSitePayload {
   guides_enabled?: boolean
   news_enabled?: boolean
   bonus_enabled?: boolean
+  // The discussion board at /forum. Switching it on also deactivates this
+  // site's /forum -> /reviews redirect, which would otherwise shadow it.
+  forum_enabled?: boolean
+  // /login, /register and the header's account control. Independent of the
+  // board, which implies accounts regardless of this value.
+  accounts_enabled?: boolean
   author_name?: string | null
   author_role?: string | null
   author_bio?: string | null

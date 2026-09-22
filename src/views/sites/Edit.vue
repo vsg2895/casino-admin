@@ -24,6 +24,8 @@ interface SiteEditForm {
   guides_enabled: boolean
   news_enabled: boolean
   bonus_enabled: boolean
+  forum_enabled: boolean
+  accounts_enabled: boolean
   author_name: string | null
   author_role: string | null
   author_bio: string | null
@@ -54,6 +56,8 @@ const form = reactive<SiteEditForm>({
   guides_enabled: false,
   news_enabled: false,
   bonus_enabled: false,
+  forum_enabled: false,
+  accounts_enabled: false,
   author_name: null,
   author_role: null,
   author_bio: null,
@@ -81,6 +85,8 @@ watch(
       form.guides_enabled = props.site.guides_enabled
       form.news_enabled = props.site.news_enabled
       form.bonus_enabled = props.site.bonus_enabled
+      form.forum_enabled = props.site.forum_enabled
+      form.accounts_enabled = props.site.accounts_enabled
       form.author_name = props.site.author_name
       form.author_role = props.site.author_role
       form.author_bio = props.site.author_bio
@@ -112,6 +118,8 @@ async function submit(): Promise<void> {
       guides_enabled: form.guides_enabled,
       news_enabled: form.news_enabled,
       bonus_enabled: form.bonus_enabled,
+      forum_enabled: form.forum_enabled,
+      accounts_enabled: form.accounts_enabled,
       author_name: form.author_name,
       author_role: form.author_role,
       author_bio: form.author_bio,
@@ -290,6 +298,32 @@ async function submit(): Promise<void> {
             </p>
           </div>
           <ToggleSwitch v-model="form.bonus_enabled" />
+        </div>
+
+        <div class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Community forum</label>
+            <p class="mt-0.5 text-xs text-gray-500">
+              Open the discussion board at /forum. Not the same as Reviews, which is the
+              /reviews feed that used to live at that path. Switching this on also turns off
+              this site's /forum &rarr; /reviews redirect, which would otherwise shadow the
+              board, and turns member accounts on because the board needs them.
+            </p>
+          </div>
+          <ToggleSwitch v-model="form.forum_enabled" />
+        </div>
+
+        <div class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Member accounts</label>
+            <p class="mt-0.5 text-xs text-gray-500">
+              Publish /login and /register and show the account control in the header.
+              Independent of the board, so a site can collect members before discussions
+              open. Leaving this off while the forum is on changes nothing — the board
+              needs accounts, so it keeps them.
+            </p>
+          </div>
+          <ToggleSwitch v-model="form.accounts_enabled" :disabled="form.forum_enabled" />
         </div>
 
         <div class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
