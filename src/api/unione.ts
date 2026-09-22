@@ -2,7 +2,7 @@ import client from './client'
 import type {
   UniOneApiKey,
   UniOneImportSummary,
-  UniOneSendTemplate,
+  UniOneTemplatePreview,
   UniOneDomain,
   UniOneReceiver,
   UniOneReceiverStats,
@@ -148,9 +148,9 @@ export function receiversExportUrl(): string {
 
 // ── sending ──────────────────────────────────────────────────────────────────
 
-export function previewSend(count: number, cooldownHours: number | null): Promise<UniOneSendPreview> {
+export function previewSend(count: number, cooldownDays: number | null): Promise<UniOneSendPreview> {
   return client
-    .post<{ data: UniOneSendPreview }>(`${BASE}/sends/preview`, { count, cooldown_hours: cooldownHours })
+    .post<{ data: UniOneSendPreview }>(`${BASE}/sends/preview`, { count, cooldown_days: cooldownDays })
     .then((r) => r.data.data)
 }
 
@@ -170,13 +170,7 @@ export function getSend(id: number): Promise<UniOneSend> {
   return client.get<{ data: UniOneSend }>(`${BASE}/sends/${id}`).then((r) => r.data.data)
 }
 
-/** Templates a run may use — crogambline's promotion template. */
-export function listSendTemplates(): Promise<{
-  data: UniOneSendTemplate[]
-  site: string
-  suggested_subject: string
-}> {
-  return client
-    .get<{ data: UniOneSendTemplate[]; site: string; suggested_subject: string }>(`${BASE}/sends/templates`)
-    .then((r) => r.data)
+/** The template every run sends — viglinksi's promotion email — rendered so the operator can look before sending. */
+export function getTemplatePreview(): Promise<UniOneTemplatePreview> {
+  return client.get<{ data: UniOneTemplatePreview }>(`${BASE}/sends/template-preview`).then((r) => r.data.data)
 }

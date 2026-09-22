@@ -65,8 +65,6 @@ export interface UniOneReceiver {
   send_count: number
   bounce_count: number
   complaint_count: number
-  /** What the send path would decide, so the list explains itself. */
-  is_sendable: boolean
   notes: string | null
   created_at: string | null
 }
@@ -87,7 +85,6 @@ export interface UpsertUniOneReceiverPayload {
 export interface UniOneReceiverStats {
   total: number
   by_status: Record<string, number>
-  sendable: number
 }
 
 export interface UniOneSendChunk {
@@ -117,7 +114,8 @@ export interface UniOneSend {
   accepted_count: number
   failed_count: number
   chunk_count: number
-  cooldown_hours: number
+  /** Days, like Warmup: "2" skips anyone contacted in the last two days. */
+  cooldown_days: number
   error: string | null
   completed_at: string | null
   created_at: string | null
@@ -149,10 +147,11 @@ export interface UniOneImportSummary {
   message: string
 }
 
-export interface UniOneSendTemplate {
-  value: string
-  label: string
-  description: string
+/** The one template a run sends — viglinksi's promotion email — rendered for a look before sending. */
+export interface UniOneTemplatePreview {
+  site: string
+  subject: string
+  html: string
 }
 
 /** A domain as /domain/list.json reports it. */

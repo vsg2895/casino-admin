@@ -25,7 +25,7 @@ import client from '@/api/client'
 import FileUpload from 'primevue/fileupload'
 import type {
   UniOneApiKey, UniOneImportSummary, UniOneReceiver,
-  UniOneReceiverStats, UniOneReceiverStatus, UniOneSendPreview, UniOneSendTemplate,
+  UniOneReceiverStats, UniOneReceiverStatus, UniOneSendPreview, UniOneTemplatePreview,
 } from '@shared/types/unione'
 
 const toast = useToast()
@@ -44,7 +44,6 @@ const first = computed(() => (page.value - 1) * perPage.value)
 
 // ── filters ──────────────────────────────────────────────────────────────────
 const fStatus = ref<UniOneReceiverStatus | null>(null)
-const fConsent = ref('')
 const fFrom = ref<Date | null>(null)
 const fTo = ref<Date | null>(null)
 const fSearch = ref('')
@@ -78,18 +77,18 @@ const sending = ref(false)
 const preview = ref<UniOneSendPreview | null>(null)
 const previewLoading = ref(false)
 const testEmail = ref('')
-const templates = ref<UniOneSendTemplate[]>([])
-const templateSite = ref('')
+// The one template every run sends (viglinksi's promotion email), fetched
+// rendered so the operator can look at it before sending. No picker: a test
+// send and a real run go through the same renderer, so what the preview shows
+// is what a receiver gets.
+const templatePreview = ref<UniOneTemplatePreview | null>(null)
+const templatePreviewOpen = ref(false)
+const templatePreviewLoading = ref(false)
 const send = ref({
-  key_id: null as number | null, count: 100, cooldown_hours: 24,
-  // Template mode by default, like Warmup — the operator picks a template
-  // rather than pasting markup. Raw HTML stays available for a one-off.
-  template: 'promotion' as string | null,
+  // Cooldown in DAYS, like Warmup: "2" skips anyone contacted in the last two days.
+  key_id: null as number | null, count: 100, cooldown_days: 1,
   subject: '', from_email: '', from_name: '', reply_to: '',
-  html_body: '', plaintext_body: '',
 })
-
-const usingTemplate = computed(() => !!send.value.template)
 
 const activeKeys = computed(() => keys.value.filter((k) => k.is_active))
 const selectedKey = computed(() => keys.value.find((k) => k.id === send.value.key_id) ?? null)
@@ -100,7 +99,7 @@ async function load(): Promise<void> {
     const [list, s] = await Promise.all([
       api.listReceivers({
         page: page.value, per_page: perPage.value,
-        status: fStatus.value, consent_source: fConsent.value || null,
+        status: fStatus.value,
         from: fFrom.value ? fFrom.value.toISOString().slice(0, 10) : null,
         to: fTo.value ? fTo.value.toISOString().slice(0, 10) : null,
         search: fSearch.value || null,
@@ -204,26 +203,33 @@ async function openSend(): Promise<void> {
   send.value.key_id = def?.id ?? null
   send.value.from_email = def?.default_from_email ?? ''
   send.value.from_name = def?.default_from_name ?? ''
-  // The template list and its suggested subject, so the modal opens ready to
-  // send rather than ready to be filled in.
-  try {
-    const t = await api.listSendTemplates()
-    templates.value = t.data
-    templateSite.value = t.site
-    if (!send.value.subject) send.value.subject = t.suggested_subject
-  } catch {
-    templates.value = []
-  }
+  // The rendered template and its subject, so the modal opens ready to send
+  // rather than ready to be filled in — and the preview button has something
+  // to show without a second round-trip.
+  void loadTemplatePreview()
 
   sendStep.value = 'compose'
   sendDialog.value = true
   void refreshPreview()
 }
 
+async function loadTemplatePreview(): Promise<void> {
+  templatePreviewLoading.value = true
+  try {
+    templatePreview.value = await api.getTemplatePreview()
+    if (!send.value.subject) send.value.subject = templatePreview.value.subject
+  } catch (e: unknown) {
+    templatePreview.value = null
+    toast.add({ severity: 'warn', summary: msg(e, 'The template could not be rendered'), life: 7000 })
+  } finally {
+    templatePreviewLoading.value = false
+  }
+}
+
 async function refreshPreview(): Promise<void> {
   previewLoading.value = true
   try {
-    preview.value = await api.previewSend(send.value.count, send.value.cooldown_hours)
+    preview.value = await api.previewSend(send.value.count, send.value.cooldown_days)
   } catch {
     preview.value = null
   } finally {
@@ -236,10 +242,9 @@ async function sendTest(): Promise<void> {
   try {
     const res = await api.sendTest({
       unione_api_key_id: send.value.key_id, email: testEmail.value,
-      template: send.value.template, subject: send.value.subject,
+      subject: send.value.subject || null,
       from_email: send.value.from_email,
       from_name: send.value.from_name || null, reply_to: send.value.reply_to || null,
-      html_body: send.value.html_body || null, plaintext_body: send.value.plaintext_body || null,
     })
     toast.add({
       severity: res.ok ? 'success' : 'warn',
@@ -257,11 +262,10 @@ async function confirmSend(): Promise<void> {
   try {
     const run = await api.startSend({
       unione_api_key_id: send.value.key_id,
-      count: send.value.count, cooldown_hours: send.value.cooldown_hours,
-      template: send.value.template, subject: send.value.subject,
+      count: send.value.count, cooldown_days: send.value.cooldown_days,
+      subject: send.value.subject || null,
       from_email: send.value.from_email,
       from_name: send.value.from_name || null, reply_to: send.value.reply_to || null,
-      html_body: send.value.html_body || null, plaintext_body: send.value.plaintext_body || null,
     })
     sendDialog.value = false
     await load()
@@ -328,7 +332,7 @@ onMounted(() => void load())
         <p class="mt-1 text-sm text-gray-500">
           <template v-if="stats">
             {{ stats.total.toLocaleString() }} on the list ·
-            <span class="font-medium text-gray-700">{{ stats.sendable.toLocaleString() }}</span> sendable right now
+            <span class="font-medium text-gray-700">{{ (stats.by_status.active ?? 0).toLocaleString() }}</span> active
           </template>
           <template v-else>A separate list from the newsletter subscribers.</template>
         </p>
@@ -341,28 +345,16 @@ onMounted(() => void load())
       </div>
     </div>
 
-    <div class="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-4">
-      <div>
-        <label class="mb-1 block text-xs font-medium text-gray-700">Status</label>
-        <Select v-model="fStatus" :options="statusOptions" option-label="label" option-value="value" class="w-40" />
-      </div>
-      <div>
-        <label class="mb-1 block text-xs font-medium text-gray-700">Consent source</label>
-        <InputText v-model="fConsent" class="w-44" />
-      </div>
-      <div>
-        <label class="mb-1 block text-xs font-medium text-gray-700">From</label>
-        <DatePicker v-model="fFrom" date-format="yy-mm-dd" show-icon class="w-40" />
-      </div>
-      <div>
-        <label class="mb-1 block text-xs font-medium text-gray-700">To</label>
-        <DatePicker v-model="fTo" date-format="yy-mm-dd" show-icon class="w-40" />
-      </div>
-      <div>
-        <label class="mb-1 block text-xs font-medium text-gray-700">Search</label>
-        <InputText v-model="fSearch" class="w-52" placeholder="email or name" @keyup.enter="apply" />
-      </div>
-      <Button label="Apply" icon="pi pi-filter" @click="apply" />
+    <!-- One row, one control height. Compact fixed widths so the four
+         controls and the button fit a single line on a laptop; the search
+         box takes whatever is left. Labels are placeholders, like the
+         Mailgun receivers filter, so the row stays one line tall. -->
+    <div class="filters mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-3">
+      <Select v-model="fStatus" :options="statusOptions" option-label="label" option-value="value" placeholder="Status" class="w-32" size="small" />
+      <DatePicker v-model="fFrom" date-format="yy-mm-dd" show-icon placeholder="From" class="w-36" size="small" />
+      <DatePicker v-model="fTo" date-format="yy-mm-dd" show-icon placeholder="To" class="w-36" size="small" />
+      <InputText v-model="fSearch" class="w-64" placeholder="Search email or name" size="small" @keyup.enter="apply" />
+      <Button label="Apply" icon="pi pi-filter" size="small" class="filters-apply" @click="apply" />
     </div>
 
     <div v-if="selected.length" class="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-indigo-50 p-3">
@@ -394,15 +386,11 @@ onMounted(() => void load())
           </div>
           <p v-if="data.name" class="text-xs text-gray-500">{{ data.name }}</p>
           <p class="text-xs text-gray-400">consent: {{ data.consent_source }} · {{ formatDate(data.consent_at) }}</p>
+          <!-- A temporary-failure hold is the one thing that keeps an active address out of a run. -->
+          <p v-if="data.retry_after" class="text-xs text-amber-600">held to {{ formatDate(data.retry_after) }}</p>
         </template>
       </Column>
 
-      <Column header="Sendable" style="width:8rem">
-        <template #body="{ data }: { data: UniOneReceiver }">
-          <Tag :value="data.is_sendable ? 'yes' : 'no'" :severity="data.is_sendable ? 'success' : 'secondary'" />
-          <p v-if="data.retry_after" class="mt-1 text-xs text-gray-400">held to {{ formatDate(data.retry_after) }}</p>
-        </template>
-      </Column>
 
       <Column header="Last sent" style="width:10rem">
         <template #body="{ data }: { data: UniOneReceiver }">
@@ -503,8 +491,8 @@ onMounted(() => void load())
               <InputNumber v-model="send.count" :min="1" :max="100000" class="w-full" @update:model-value="refreshPreview" />
             </div>
             <div>
-              <label class="mb-1 block text-xs font-medium text-gray-700">Cooldown (hours)</label>
-              <InputNumber v-model="send.cooldown_hours" :min="0" :max="8760" class="w-full" @update:model-value="refreshPreview" />
+              <label class="mb-1 block text-xs font-medium text-gray-700">Cooldown (days)</label>
+              <InputNumber v-model="send.cooldown_days" :min="0" :max="365" class="w-full" @update:model-value="refreshPreview" />
             </div>
           </div>
 
@@ -525,32 +513,21 @@ onMounted(() => void load())
             <InputText v-model="send.subject" class="w-full" />
           </div>
 
-          <div class="col-span-2">
-            <label class="mb-1 block text-xs font-medium text-gray-700">Template</label>
-            <Select
-              v-model="send.template" class="w-full"
-              :options="[...templates, { value: null, label: 'Raw HTML (no template)', description: 'Paste your own markup below.' }]"
-              option-label="label" option-value="value"
+          <div class="col-span-2 flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3">
+            <div class="text-sm">
+              <p class="font-medium text-gray-800">Template: Promotion offer — Viglinksi</p>
+              <p class="mt-0.5 text-xs text-gray-400">
+                Rendered per recipient from the <strong>viglinksi</strong> site's promotion template —
+                edit the wording under Promotion Emails. The greeting is personalised from each
+                receiver's name. A test send uses exactly this rendering.
+              </p>
+            </div>
+            <Button
+              label="Preview template" icon="pi pi-eye" outlined size="small"
+              :loading="templatePreviewLoading" :disabled="!templatePreview && !templatePreviewLoading"
+              @click="templatePreviewOpen = true"
             />
-            <p v-if="usingTemplate" class="mt-1 text-xs text-gray-400">
-              Rendered per recipient from the
-              <strong>{{ templateSite || 'crogambline' }}</strong> site's promotion template —
-              edit the wording under Promotion Emails. The greeting is personalised from each
-              receiver's name.
-            </p>
           </div>
-
-          <!-- Only when there is no template: a template supplies its own markup. -->
-          <template v-if="!usingTemplate">
-            <div class="col-span-2">
-              <label class="mb-1 block text-xs font-medium text-gray-700">HTML body</label>
-              <Textarea v-model="send.html_body" rows="8" class="w-full font-mono text-xs" />
-            </div>
-            <div class="col-span-2">
-              <label class="mb-1 block text-xs font-medium text-gray-700">Plain text part</label>
-              <Textarea v-model="send.plaintext_body" rows="4" class="w-full font-mono text-xs" />
-            </div>
-          </template>
 
           <div class="col-span-2 rounded-lg bg-gray-50 p-3">
             <p class="text-sm text-gray-700">
@@ -563,8 +540,9 @@ onMounted(() => void load())
               <span v-else class="text-gray-400">Preview unavailable.</span>
             </p>
             <p class="mt-1 text-xs text-gray-400">
-              Never-contacted addresses go first, then the least recently contacted.
-              UniOne appends its own unsubscribe footer to every message.
+              Never-contacted addresses go first, then the least recently contacted; anyone
+              contacted within the cooldown is skipped. UniOne appends its own unsubscribe
+              footer to every message.
             </p>
           </div>
 
@@ -574,7 +552,7 @@ onMounted(() => void load())
               <InputText v-model="testEmail" class="w-full" placeholder="you@example.com" />
             </div>
             <Button label="Send test" icon="pi pi-paper-plane" outlined
-                    :disabled="!testEmail || !send.subject || (!usingTemplate && !send.html_body)" @click="sendTest" />
+                    :disabled="!testEmail || !send.key_id || !send.from_email" @click="sendTest" />
           </div>
         </div>
       </template>
@@ -586,9 +564,8 @@ onMounted(() => void load())
             <li>Key: <strong>{{ selectedKey?.name }}</strong> ({{ selectedKey?.region }})</li>
             <li>Recipients: <strong>{{ preview?.will_send?.toLocaleString() ?? '—' }}</strong> in {{ preview?.chunks ?? '—' }} request(s)</li>
             <li>Subject: <strong>{{ send.subject }}</strong></li>
-            <li v-if="usingTemplate">
-              Template: <strong>{{ templates.find(t => t.value === send.template)?.label ?? send.template }}</strong>
-            </li>
+            <li>Template: <strong>Promotion offer — Viglinksi</strong></li>
+            <li>Cooldown: <strong>{{ send.cooldown_days }}</strong> day(s)</li>
             <li>From: <strong>{{ send.from_email }}</strong></li>
           </ul>
           <p class="mt-3 text-xs text-amber-800">
@@ -601,7 +578,7 @@ onMounted(() => void load())
         <Button label="Cancel" text @click="sendDialog = false" />
         <Button
           v-if="sendStep === 'compose'" label="Review" icon="pi pi-arrow-right"
-          :disabled="!send.key_id || !send.subject || !send.from_email || (!usingTemplate && !send.html_body) || !preview?.will_send"
+          :disabled="!send.key_id || !send.from_email || !preview?.will_send"
           @click="sendStep = 'confirm'"
         />
         <template v-else>
@@ -610,5 +587,44 @@ onMounted(() => void load())
         </template>
       </template>
     </Dialog>
+
+    <!-- The rendered template, in a sandboxed frame so its CSS cannot leak
+         into the admin and the admin's cannot leak into it. -->
+    <Dialog v-model:visible="templatePreviewOpen" modal header="Template preview" :style="{ width: '52rem' }">
+      <template v-if="templatePreview">
+        <p class="mb-3 text-sm text-gray-600">
+          Subject: <strong class="text-gray-900">{{ templatePreview.subject }}</strong>
+          <span class="ml-2 text-xs text-gray-400">· from the {{ templatePreview.site }} promotion template</span>
+        </p>
+        <iframe
+          :srcdoc="templatePreview.html" sandbox="" title="Template preview"
+          class="h-[32rem] w-full rounded-lg border border-gray-200 bg-white"
+        />
+        <p class="mt-2 text-xs text-gray-400">
+          Shown for a stand-in recipient; each receiver gets the same email with their own name in
+          the greeting. UniOne adds its unsubscribe footer below this.
+        </p>
+      </template>
+      <p v-else class="text-sm text-gray-500">The template could not be rendered.</p>
+      <template #footer>
+        <Button label="Close" text @click="templatePreviewOpen = false" />
+      </template>
+    </Dialog>
   </div>
 </template>
+
+<style scoped>
+/* Same (small) height for every control in the filter bar, whatever component
+   draws it: PrimeVue's DatePicker input-group and its Select come out a few
+   pixels apart from a plain InputText, which would break the single baseline. */
+.filters :deep(.p-inputtext),
+.filters :deep(.p-select),
+.filters :deep(.p-datepicker-input),
+.filters :deep(.p-datepicker-dropdown),
+.filters-apply {
+  height: 2.25rem;
+}
+.filters :deep(.p-select) {
+  align-items: center;
+}
+</style>
