@@ -364,6 +364,22 @@ onMounted(async () => {
           </template>
         </Column>
 
+        <!-- Where the FACTS came from. Blank for anything written here, which
+             is how an editor tells the two apart at a glance. The copy is
+             always original either way — only the facts are borrowed. -->
+        <Column v-if="articleType === 'news'" header="Source" :style="{ width: '170px' }">
+          <template #body="{ data }">
+            <a
+              v-if="data.source_url"
+              :href="data.source_url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-sm text-emerald-700 hover:underline"
+            >{{ data.source_name || 'source' }}</a>
+            <span v-else class="text-sm text-gray-400">Written here</span>
+          </template>
+        </Column>
+
         <!-- Shown, and editable right here. Hiding a post is the one action an
              editor needs in a hurry, and making them open a dialog for it is how
              things end up DELETED instead. -->

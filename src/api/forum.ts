@@ -8,6 +8,7 @@ import type {
   ForumMemberRole,
   ForumMemberRow,
   ForumModerationPost,
+  ForumPost,
   ForumPostStatus,
   ForumMemberStatus,
   UpsertForumArticlePayload,
@@ -92,6 +93,38 @@ export function deleteArticle(siteId: number, id: number): Promise<{ posts_remov
   return client
     .delete<{ posts_removed: number; message: string }>(`/admin/sites/${siteId}/forum-articles/${id}`)
     .then((r) => r.data)
+}
+
+// ── editorial replies ────────────────────────────────────────────────────────
+//
+// A reply written by the team, stored against the signed-in admin's real user
+// row and published under the site's team name. Members post through the public
+// site as they always have; this is only the staff path.
+
+export function createArticlePost(
+  siteId: number,
+  articleId: number,
+  body: string,
+  parentId?: number | null,
+): Promise<ForumPost> {
+  return client
+    .post<{ data: ForumPost }>(`/admin/sites/${siteId}/forum-articles/${articleId}/posts`, {
+      body,
+      parent_id: parentId ?? null,
+    })
+    .then((r) => r.data.data)
+}
+
+/** Only the team's own replies are editable — a member's words stay theirs. */
+export function updateArticlePost(
+  siteId: number,
+  articleId: number,
+  postId: number,
+  body: string,
+): Promise<ForumPost> {
+  return client
+    .put<{ data: ForumPost }>(`/admin/sites/${siteId}/forum-articles/${articleId}/posts/${postId}`, { body })
+    .then((r) => r.data.data)
 }
 
 // ── moderation ───────────────────────────────────────────────────────────────

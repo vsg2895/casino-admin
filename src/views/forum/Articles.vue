@@ -30,6 +30,45 @@ const toast = useToast()
 const sitesStore = useSitesStore()
 
 const siteId = ref<number | null>(null)
+
+// ── replying as the editorial team ───────────────────────────────────────────
+//
+// The backend takes the author from the token, so nothing about who wrote it is
+// sent from here. The team NAME is derived from the site for the same reason it
+// is on the server: one admin writes for several domains.
+const replyDialog = ref(false)
+const replyTo = ref<ForumArticle | null>(null)
+const replyBody = ref('')
+const replySaving = ref(false)
+
+const teamName = computed(() => {
+  const name = sitesStore.sites.find((s) => s.id === siteId.value)?.name
+  return name ? `${name} Team` : 'the editorial team'
+})
+
+function openReply(article: ForumArticle): void {
+  replyTo.value = article
+  replyBody.value = ''
+  replyDialog.value = true
+}
+
+async function saveReply(): Promise<void> {
+  if (siteId.value === null || replyTo.value === null) return
+
+  replySaving.value = true
+  try {
+    await api.createArticlePost(siteId.value, replyTo.value.id, replyBody.value.trim())
+    toast.add({ severity: 'success', summary: 'Posted', detail: `Published as ${teamName.value}.`, life: 3000 })
+    replyDialog.value = false
+    // The reply moves the discussion's own counters, so the row is refetched
+    // rather than patched locally.
+    await load()
+  } catch {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Could not post the reply.', life: 4000 })
+  } finally {
+    replySaving.value = false
+  }
+}
 const items = ref<ForumArticle[]>([])
 const sections = ref<ForumAdminSection[]>([])
 const loading = ref(false)
@@ -362,12 +401,31 @@ onMounted(async () => {
       <Column header="" style="width:7rem">
         <template #body="{ data }: { data: ForumArticle }">
           <div class="flex gap-1">
+            <Button size="small" text icon="pi pi-comment" v-tooltip.top="'Reply as the team'" @click="openReply(data)" />
             <Button size="small" text icon="pi pi-pencil" @click="open(data)" />
             <Button size="small" text severity="danger" icon="pi pi-trash" @click="remove(data)" />
           </div>
         </template>
       </Column>
     </DataTable>
+
+    <!-- Replying as the team. The post is stored against the signed-in admin's
+         real user account and published under the site's team name; nothing
+         writes that name to the database. Members post from the public site
+         and are unaffected. -->
+    <Dialog v-model:visible="replyDialog" modal header="Reply as the editorial team" :style="{ width: '42rem' }">
+      <p v-if="replyTo" class="mb-3 text-sm text-gray-500">
+        Replying to <span class="font-medium text-gray-800">{{ replyTo.title }}</span>
+      </p>
+      <Textarea v-model="replyBody" rows="8" fluid autoResize placeholder="Write the reply…" />
+      <p class="mt-2 text-xs text-gray-500">
+        Posted publicly as <span class="font-medium">{{ teamName }}</span>, approved immediately.
+      </p>
+      <template #footer>
+        <Button label="Cancel" text @click="replyDialog = false" />
+        <Button label="Post reply" icon="pi pi-check" :loading="replySaving" :disabled="!replyBody.trim()" @click="saveReply" />
+      </template>
+    </Dialog>
 
     <Dialog v-model:visible="dialog" modal :header="editing ? 'Edit discussion' : 'New discussion'" :style="{ width: '50rem' }">
       <div class="grid grid-cols-2 gap-4">
