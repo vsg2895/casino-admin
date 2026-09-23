@@ -149,11 +149,15 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
+  <!-- Wider than the PrimeVue default. This form carries long explanatory help
+       text under several fields — Positioning alone runs to six lines at 520px
+       — and a narrow column turned each one into a wall of grey. The viewport
+       cap keeps it usable on a laptop and in a part-width window. -->
   <Dialog
     :visible="visible"
     modal
     :header="site ? `Edit — ${site.name}` : 'Edit Site'"
-    :style="{ width: '520px' }"
+    :style="{ width: '820px', maxWidth: '95vw' }"
     @update:visible="emit('update:visible', $event)"
   >
     <form class="space-y-4" @submit.prevent="submit">
@@ -195,7 +199,7 @@ async function submit(): Promise<void> {
             a link to click.
           </span>
         </span>
-        <ToggleSwitch v-model="form.newsletter_emails_enabled" />
+        <ToggleSwitch class="shrink-0" v-model="form.newsletter_emails_enabled" />
       </label>
 
       <div>
@@ -228,23 +232,23 @@ async function submit(): Promise<void> {
            the public /countries endpoints 404 while it is off. -->
       <div class="rounded-lg border border-gray-200 p-3">
         <div class="flex items-center justify-between gap-3">
-          <div>
+          <div class="min-w-0">
             <label class="block text-sm font-medium text-gray-700">Countries filter</label>
             <p class="mt-0.5 text-xs text-gray-500">
               Publish the "browse casinos by country" pages on this site.
             </p>
           </div>
-          <ToggleSwitch v-model="form.countries_enabled" />
+          <ToggleSwitch class="shrink-0" v-model="form.countries_enabled" />
         </div>
 
         <div class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
-          <div>
+          <div class="min-w-0">
             <label class="block text-sm font-medium text-gray-700">Visitor reviews</label>
             <p class="mt-0.5 text-xs text-gray-500">
               Show reviews on this site and accept new ones. How they are moderated is set below.
             </p>
           </div>
-          <ToggleSwitch v-model="form.reviews_enabled" />
+          <ToggleSwitch class="shrink-0" v-model="form.reviews_enabled" />
         </div>
 
         <!-- Only meaningful while "Visitor reviews" is on, so it is nested under
@@ -254,7 +258,7 @@ async function submit(): Promise<void> {
           class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3 pl-4"
           :class="form.reviews_enabled ? '' : 'opacity-50'"
         >
-          <div>
+          <div class="min-w-0">
             <label class="block text-sm font-medium text-gray-700">Publish reviews immediately</label>
             <p class="mt-0.5 text-xs text-gray-500">
               On, a visitor's review goes live the moment they write it and you hide anything
@@ -263,33 +267,33 @@ async function submit(): Promise<void> {
               waiting &mdash; approve those yourself.
             </p>
           </div>
-          <ToggleSwitch v-model="form.review_auto_publish" :disabled="!form.reviews_enabled" />
+          <ToggleSwitch class="shrink-0" v-model="form.review_auto_publish" :disabled="!form.reviews_enabled" />
         </div>
 
         <div class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
-          <div>
+          <div class="min-w-0">
             <label class="block text-sm font-medium text-gray-700">Operator profile</label>
             <p class="mt-0.5 text-xs text-gray-500">
               Show each casino's licence, payment, support and safer-play facts on its review
               page. Only the groups that have values are rendered.
             </p>
           </div>
-          <ToggleSwitch v-model="form.operator_profile_enabled" />
+          <ToggleSwitch class="shrink-0" v-model="form.operator_profile_enabled" />
         </div>
 
         <div class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
-          <div>
+          <div class="min-w-0">
             <label class="block text-sm font-medium text-gray-700">Reviewer byline</label>
             <p class="mt-0.5 text-xs text-gray-500">
               Name the person who checks the casinos. Only appears on a casino that also has a
               review date set — a byline without one would claim more than the record supports.
             </p>
           </div>
-          <ToggleSwitch v-model="form.byline_enabled" />
+          <ToggleSwitch class="shrink-0" v-model="form.byline_enabled" />
         </div>
 
         <div class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
-          <div>
+          <div class="min-w-0">
             <label class="block text-sm font-medium text-gray-700">Bonus area</label>
             <p class="mt-0.5 text-xs text-gray-500">
               Publish the Bonus menu and its home-page sections. The sub-items come from
@@ -297,11 +301,11 @@ async function submit(): Promise<void> {
               the menu never points at an empty section.
             </p>
           </div>
-          <ToggleSwitch v-model="form.bonus_enabled" />
+          <ToggleSwitch class="shrink-0" v-model="form.bonus_enabled" />
         </div>
 
         <div class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
-          <div>
+          <div class="min-w-0">
             <label class="block text-sm font-medium text-gray-700">Community forum</label>
             <p class="mt-0.5 text-xs text-gray-500">
               Open the discussion board at /forum. Not the same as Reviews, which is the
@@ -310,11 +314,11 @@ async function submit(): Promise<void> {
               board, and turns member accounts on because the board needs them.
             </p>
           </div>
-          <ToggleSwitch v-model="form.forum_enabled" />
+          <ToggleSwitch class="shrink-0" v-model="form.forum_enabled" />
         </div>
 
         <div class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
-          <div>
+          <div class="min-w-0">
             <label class="block text-sm font-medium text-gray-700">Member accounts</label>
             <p class="mt-0.5 text-xs text-gray-500">
               Publish /login and /register and show the account control in the header.
@@ -323,29 +327,29 @@ async function submit(): Promise<void> {
               needs accounts, so it keeps them.
             </p>
           </div>
-          <ToggleSwitch v-model="form.accounts_enabled" :disabled="form.forum_enabled" />
+          <ToggleSwitch class="shrink-0" v-model="form.accounts_enabled" :disabled="form.forum_enabled" />
         </div>
 
         <div class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
-          <div>
+          <div class="min-w-0">
             <label class="block text-sm font-medium text-gray-700">News section</label>
             <p class="mt-0.5 text-xs text-gray-500">
               Publish a /news feed. Unlike guides there is no minimum — one post is a new feed,
               not an abandoned one — so it goes live as soon as something is published.
             </p>
           </div>
-          <ToggleSwitch v-model="form.news_enabled" />
+          <ToggleSwitch class="shrink-0" v-model="form.news_enabled" />
         </div>
 
         <div class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
-          <div>
+          <div class="min-w-0">
             <label class="block text-sm font-medium text-gray-700">Editorial guides</label>
             <p class="mt-0.5 text-xs text-gray-500">
               Publish a /guides section. It stays hidden until three guides are published, and
               needs 1–2 new ones a week to stay credible.
             </p>
           </div>
-          <ToggleSwitch v-model="form.guides_enabled" />
+          <ToggleSwitch class="shrink-0" v-model="form.guides_enabled" />
         </div>
 
         <div class="mt-3 space-y-3 border-t border-gray-100 pt-3">

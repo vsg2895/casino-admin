@@ -16,10 +16,34 @@ const query = (type: ArticleType) => `?type=${encodeURIComponent(type)}`
 // The admin listing includes DRAFTS; the public one cannot. That asymmetry is
 // the entire point of having a draft state.
 
-export function listArticles(siteId: number, type: ArticleType = 'guide'): Promise<Article[]> {
+/**
+ * One PAGE of articles, plus the totals the screen needs.
+ *
+ * `published_count` comes from the server because the client now only ever
+ * holds one page: the banner above the table reports how many entries are
+ * live, and the guides section's three-article threshold reads the same
+ * number. Counting the rows in hand would understate both as soon as there
+ * is a second page.
+ */
+export interface ArticlePage {
+  data: Article[]
+  meta: {
+    current_page: number
+    last_page: number
+    total: number
+    per_page: number
+    published_count: number
+  }
+}
+
+export function listArticles(
+  siteId: number,
+  type: ArticleType = 'guide',
+  page = 1,
+): Promise<ArticlePage> {
   return client
-    .get<ApiResponse<Article[]>>(`/admin/sites/${siteId}/articles${query(type)}`)
-    .then((r) => r.data.data)
+    .get<ArticlePage>(`/admin/sites/${siteId}/articles${query(type)}&page=${page}`)
+    .then((r) => r.data)
 }
 
 export function getArticle(siteId: number, id: number, type: ArticleType = 'guide'): Promise<Article> {

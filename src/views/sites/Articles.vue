@@ -82,11 +82,24 @@ const loading = ref(false)
  * switched off — a number an editor would reasonably check against the live
  * section and find wrong.
  */
-const publishedCount = computed(
-  () => items.value.filter(
-    (a) => a.active !== false && a.published_at && new Date(a.published_at) <= new Date(),
-  ).length,
-)
+const publishedCount = ref(0)
+
+// ── paging ───────────────────────────────────────────────────────────────────
+//
+// SERVER-SIDE, because this list grows without anybody editing it: news is
+// ingested from feeds on a schedule. One site was already 120 rows / 111 KB in
+// a single response, and at the collector's rate that becomes megabytes.
+const page = ref(1)
+const perPage = ref(15)
+const totalRecords = ref(0)
+// PrimeVue's paginator works in row offsets, not page numbers.
+const first = computed(() => (page.value - 1) * perPage.value)
+
+async function onPage(event: { page: number; rows: number }): Promise<void> {
+  page.value = event.page + 1
+  perPage.value = event.rows
+  await reload()
+}
 
 function status(a: Article): { label: string; severity: string } {
   // Checked first: a hidden post is hidden whatever its date says, and showing
@@ -106,7 +119,19 @@ function formatDate(iso: string | null): string {
 async function reload(): Promise<void> {
   loading.value = true
   try {
-    items.value = await articlesApi.listArticles(siteId, articleType)
+    const res = await articlesApi.listArticles(siteId, articleType, page.value)
+    items.value = res.data
+    totalRecords.value = res.meta.total
+    perPage.value = res.meta.per_page
+    // Counted server-side over the whole section, not over the page in hand.
+    publishedCount.value = res.meta.published_count
+
+    // A deletion can empty the last page. Stepping back beats showing an empty
+    // table under a paginator that says there are results.
+    if (res.data.length === 0 && page.value > 1) {
+      page.value = res.meta.last_page > 0 ? res.meta.last_page : 1
+      await reload()
+    }
   } catch {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Could not load this section.', life: 4000 })
   } finally {
@@ -352,7 +377,22 @@ onMounted(async () => {
     </div>
 
     <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-      <DataTable :value="items" :loading="loading" striped-rows data-key="id" :pt="{ root: { class: 'text-sm' } }">
+      <DataTable
+        :value="items"
+        :loading="loading"
+        striped-rows
+        data-key="id"
+        lazy
+        paginator
+        :rows="perPage"
+        :first="first"
+        :total-records="totalRecords"
+        :rows-per-page-options="[15, 30, 50, 100]"
+        current-page-report-template="{first}-{last} of {totalRecords}"
+        paginator-template="FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink RowsPerPageDropdown"
+        @page="onPage"
+        :pt="{ root: { class: 'text-sm' } }"
+      >
         <template #empty>
           <div class="py-10 text-center text-sm text-gray-400">No {{ section.plural.toLowerCase() }} yet.</div>
         </template>
