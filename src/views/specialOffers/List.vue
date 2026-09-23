@@ -56,7 +56,10 @@ function offerSites(offer: SpecialOffer): CasinoSiteRow[] {
 }
 
 function offerUrl(offer: SpecialOffer, site: CasinoSiteRow): string {
-  // site_url is the site's Next.js origin (local dev host while developing).
+  // `site_url` is the site's Next.js origin FOR THIS ENVIRONMENT — localhost
+  // while developing, the real domain in production. The backend derives it
+  // from the site's revalidation URL; see Site::adminLinkBaseUrl(). It is
+  // deliberately not the origin used in email, which is always the live domain.
   return `${site.site_url}/special-offers/${offer.slug}`
 }
 

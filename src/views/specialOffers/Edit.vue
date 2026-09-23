@@ -40,7 +40,13 @@ onMounted(async () => {
   await casinosStore.fetchCasinos({ per_page: 100 })
   const { data: offer } = await offersApi.getSpecialOffer(offerId)
   Object.assign(form, {
-    casino_id: offer.casino_id, title: offer.title, image_path: offer.image_path,
+    casino_id: offer.casino_id,
+    // Was missing, and it was not only a display bug: save() spreads the whole
+    // form, so a reload followed by editing ANY field posted
+    // bonus_category_id: null and silently detached the offer from its Bonus
+    // section. Every field in `form` must be hydrated here.
+    bonus_category_id: offer.bonus_category_id,
+    title: offer.title, image_path: offer.image_path,
     banner_image: offer.banner_image, bonuses: offer.bonuses, affiliate_url: offer.affiliate_url,
     wagering_requirement: offer.terms?.wagering_requirement ?? null,
     min_deposit: offer.terms?.min_deposit ?? null,
