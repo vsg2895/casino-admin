@@ -307,32 +307,32 @@ onMounted(async () => {
       </div>
     </div>
 
-    <div class="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-4">
-      <div>
+    <div class="mb-4 flex flex-wrap items-stretch gap-3 rounded-lg border border-gray-200 bg-white p-4">
+      <div class="filter-field">
         <label class="mb-1 block text-xs font-medium text-gray-700">Board</label>
         <Select v-model="fCategory" :options="categoryOptions" option-label="label" option-value="value" class="w-56" />
       </div>
-      <div>
+      <div class="filter-field">
         <label class="mb-1 block text-xs font-medium text-gray-700">Status</label>
         <Select v-model="fStatus" :options="statusOptions" option-label="label" option-value="value" class="w-40" />
       </div>
-      <div>
+      <div class="filter-field">
         <label class="mb-1 block text-xs font-medium text-gray-700">Pinned</label>
         <Select v-model="fPinned" :options="pinnedOptions" option-label="label" option-value="value" class="w-36" />
       </div>
-      <div>
+      <div class="filter-field">
         <label class="mb-1 block text-xs font-medium text-gray-700">From</label>
         <DatePicker v-model="fFrom" date-format="yy-mm-dd" show-icon class="w-40" />
       </div>
-      <div>
+      <div class="filter-field">
         <label class="mb-1 block text-xs font-medium text-gray-700">To</label>
         <DatePicker v-model="fTo" date-format="yy-mm-dd" show-icon class="w-40" />
       </div>
-      <div>
+      <div class="filter-field">
         <label class="mb-1 block text-xs font-medium text-gray-700">Search title</label>
         <InputText v-model="fSearch" class="w-52" @keyup.enter="apply" />
       </div>
-      <Button label="Apply" icon="pi pi-filter" @click="apply" />
+      <Button label="Apply" icon="pi pi-filter" class="self-end" @click="apply" />
     </div>
 
     <DataTable
@@ -494,3 +494,55 @@ onMounted(async () => {
     </Dialog>
   </div>
 </template>
+
+<style scoped>
+/*
+ * Alignment WITHOUT resizing the controls.
+ *
+ * PrimeVue's Select renders shorter than InputText and DatePicker under Aura.
+ * With `items-end` the boxes bottom-aligned but their tops and labels did not,
+ * which is the stagger this bar had. Pinning a fixed height fixed the
+ * alignment but shrank every control, so instead the row lets the SHORTEST
+ * control grow to the tallest one's natural height:
+ *
+ *   - the row is `items-stretch`, so every field is as tall as the tallest
+ *   - each field is a column: label at its natural height, control takes the
+ *     rest with flex:1
+ *
+ * The tallest control therefore still sets the height — nothing is made
+ * smaller, and no magic number is hardcoded. It also survives a label wrapping
+ * to two lines at a narrow width.
+ */
+.filter-field {
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * Fixed line-height, so every label is EXACTLY one line tall.
+ * The controls below are aligned by absorbing "row height minus label
+ * height" — if one label rendered a fraction taller, its control would be a
+ * fraction shorter and the row would be subtly off again.
+ */
+.filter-field > label {
+  flex: 0 0 auto;
+  line-height: 1rem;
+}
+
+/* The control is the field's other child; grow it into the leftover space. */
+.filter-field > :deep(.p-select),
+.filter-field > :deep(.p-datepicker),
+.filter-field > :deep(.p-inputtext) {
+  flex: 1 1 auto;
+}
+
+/* DatePicker is a wrapper around its own input — the input has to follow. */
+.filter-field :deep(.p-datepicker-input) {
+  height: 100%;
+}
+
+/* Select's value is top-aligned once the box is taller than its content. */
+.filter-field :deep(.p-select) {
+  align-items: center;
+}
+</style>

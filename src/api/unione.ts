@@ -93,9 +93,24 @@ export interface UniOneReceiverFilters {
   per_page?: number
   status?: UniOneReceiverStatus | null
   consent_source?: string | null
+  /** `from`/`to` bound when the address was ADDED, not when it was last mailed. */
   from?: string | null
   to?: string | null
   search?: string | null
+
+  // ── "Last sent" column ─────────────────────────────────────────────────────
+  /** Coarse cut: never mailed, or mailed at least once. */
+  sent?: 'never' | 'ever' | null
+  /** Window on `last_sent_at`. Ignored by the server when `sent` is 'never'. */
+  sent_from?: string | null
+  sent_to?: string | null
+  last_status?: string | null
+
+  // ── "Counts" column ────────────────────────────────────────────────────────
+  min_sends?: number | null
+  max_sends?: number | null
+  /** Reads the bounce/complaint counters the Counts column shows. */
+  issues?: 'bounced' | 'complained' | 'clean' | null
 }
 
 export function listReceivers(params?: UniOneReceiverFilters): Promise<Paginated<UniOneReceiver>> {
@@ -142,8 +157,20 @@ export function importReceivers(file: File): Promise<UniOneImportSummary> {
     .then((r) => r.data)
 }
 
+/**
+ * The export endpoint accepts the SAME filter set as the listing.
+ *
+ * It always did server-side; the admin simply never sent them, so Export
+ * returned the whole list no matter what the filter bar said. Callers pass
+ * their current filters so the CSV matches what is on screen.
+ */
 export function receiversExportUrl(): string {
   return `${BASE}/receivers/export`
+}
+
+export function receiversExportParams(filters: UniOneReceiverFilters): UniOneReceiverFilters {
+  const { page: _page, per_page: _perPage, ...rest } = filters
+  return rest
 }
 
 // ── sending ──────────────────────────────────────────────────────────────────

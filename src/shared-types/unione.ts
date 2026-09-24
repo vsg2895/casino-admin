@@ -85,6 +85,16 @@ export interface UpsertUniOneReceiverPayload {
 export interface UniOneReceiverStats {
   total: number
   by_status: Record<string, number>
+  /** How many addresses have never been mailed — the "Never sent" filter's count. */
+  never_sent: number
+  /**
+   * Distinct `last_status` values actually present on the list.
+   *
+   * Read from the data, not from a constant: the server records an
+   * unrecognised UniOne status verbatim, so a fixed list would leave the
+   * newest one out of the filter while the table still displayed it.
+   */
+  last_statuses: string[]
 }
 
 export interface UniOneSendChunk {

@@ -48,6 +48,53 @@ const fFrom = ref<Date | null>(null)
 const fTo = ref<Date | null>(null)
 const fSearch = ref('')
 
+// ── "Last sent" ──────────────────────────────────────────────────────────────
+// fFrom/fTo above bound when the address was ADDED. These bound when it was
+// last MAILED — the column in the table. Two different questions, so two
+// different pairs rather than one overloaded range.
+const fSent = ref<'never' | 'ever' | null>(null)
+const fSentFrom = ref<Date | null>(null)
+const fSentTo = ref<Date | null>(null)
+const fLastStatus = ref<string | null>(null)
+
+// ── "Counts" ─────────────────────────────────────────────────────────────────
+const fMinSends = ref<number | null>(null)
+const fMaxSends = ref<number | null>(null)
+const fIssues = ref<'bounced' | 'complained' | 'clean' | null>(null)
+
+const sentOptions = [
+  { label: 'Any send state', value: null },
+  { label: 'Never sent', value: 'never' },
+  { label: 'Sent at least once', value: 'ever' },
+]
+
+const issuesOptions = [
+  { label: 'Any health', value: null },
+  { label: 'Has bounces', value: 'bounced' },
+  { label: 'Has complaints', value: 'complained' },
+  { label: 'No bounces or complaints', value: 'clean' },
+]
+
+// Built from what the list actually contains, so a status UniOne started
+// sending this week is filterable the day it first appears.
+const lastStatusOptions = computed(() => [
+  { label: 'Any last status', value: null },
+  ...(stats.value?.last_statuses ?? []).map((v) => ({ label: v, value: v })),
+])
+
+// A last-sent WINDOW cannot describe an address that was never sent. The
+// server drops the window in that case; the UI disables it so the
+// contradiction is visible before the request rather than after it.
+const sentWindowDisabled = computed(() => fSent.value === 'never')
+
+const filtersActive = computed(() =>
+  Boolean(
+    fStatus.value || fFrom.value || fTo.value || fSearch.value ||
+    fSent.value || fSentFrom.value || fSentTo.value || fLastStatus.value ||
+    fMinSends.value !== null || fMaxSends.value !== null || fIssues.value,
+  ),
+)
+
 const statusOptions = [
   { label: 'Any status', value: null },
   { label: 'Active', value: 'active' },
@@ -93,16 +140,40 @@ const send = ref({
 const activeKeys = computed(() => keys.value.filter((k) => k.is_active))
 const selectedKey = computed(() => keys.value.find((k) => k.id === send.value.key_id) ?? null)
 
+/** Local calendar date, not toISOString() — that shifts a date across UTC. */
+function asDate(d: Date | null): string | null {
+  if (!d) return null
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+/**
+ * THE filter set, built once and used by both the listing and the export, so
+ * the CSV can never disagree with what is on screen.
+ */
+function currentFilters(): api.UniOneReceiverFilters {
+  return {
+    status: fStatus.value,
+    from: asDate(fFrom.value),
+    to: asDate(fTo.value),
+    search: fSearch.value || null,
+    sent: fSent.value,
+    sent_from: sentWindowDisabled.value ? null : asDate(fSentFrom.value),
+    sent_to: sentWindowDisabled.value ? null : asDate(fSentTo.value),
+    last_status: fLastStatus.value,
+    min_sends: fMinSends.value,
+    max_sends: fMaxSends.value,
+    issues: fIssues.value,
+  }
+}
+
 async function load(): Promise<void> {
   loading.value = true
   try {
     const [list, s] = await Promise.all([
       api.listReceivers({
         page: page.value, per_page: perPage.value,
-        status: fStatus.value,
-        from: fFrom.value ? fFrom.value.toISOString().slice(0, 10) : null,
-        to: fTo.value ? fTo.value.toISOString().slice(0, 10) : null,
-        search: fSearch.value || null,
+        ...currentFilters(),
       }),
       // Never fatal — a failed stats call must not take the list down.
       api.receiverStats().catch(() => null),
@@ -118,6 +189,21 @@ async function load(): Promise<void> {
 }
 
 function apply(): void { page.value = 1; void load() }
+
+function resetFilters(): void {
+  fStatus.value = null
+  fFrom.value = null
+  fTo.value = null
+  fSearch.value = ''
+  fSent.value = null
+  fSentFrom.value = null
+  fSentTo.value = null
+  fLastStatus.value = null
+  fMinSends.value = null
+  fMaxSends.value = null
+  fIssues.value = null
+  apply()
+}
 function onPage(e: { page: number; rows: number }): void { page.value = e.page + 1; perPage.value = e.rows; void load() }
 
 function openEditor(r: UniOneReceiver | null): void {
@@ -166,7 +252,11 @@ async function bulk(action: 'suppress' | 'delete'): Promise<void> {
 }
 
 function exportCsv(): void {
-  client.get(api.receiversExportUrl(), { responseType: 'blob' }).then((r) => {
+  // Same filters as the table. Without these the button exported the whole
+  // list regardless of the filter bar, which is easy to miss when the CSV is
+  // opened later and nothing says it was unfiltered.
+  const params = api.receiversExportParams(currentFilters())
+  client.get(api.receiversExportUrl(), { params, responseType: 'blob' }).then((r) => {
     const url = URL.createObjectURL(new Blob([r.data]))
     const a = document.createElement('a')
     a.href = url
@@ -345,16 +435,60 @@ onMounted(() => void load())
       </div>
     </div>
 
-    <!-- One row, one control height. Compact fixed widths so the four
-         controls and the button fit a single line on a laptop; the search
-         box takes whatever is left. Labels are placeholders, like the
-         Mailgun receivers filter, so the row stays one line tall. -->
-    <div class="filters mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-3">
-      <Select v-model="fStatus" :options="statusOptions" option-label="label" option-value="value" placeholder="Status" class="w-32" size="small" />
-      <DatePicker v-model="fFrom" date-format="yy-mm-dd" show-icon placeholder="From" class="w-36" size="small" />
-      <DatePicker v-model="fTo" date-format="yy-mm-dd" show-icon placeholder="To" class="w-36" size="small" />
-      <InputText v-model="fSearch" class="w-64" placeholder="Search email or name" size="small" @keyup.enter="apply" />
-      <Button label="Apply" icon="pi pi-filter" size="small" class="filters-apply" @click="apply" />
+    <!-- Three labelled groups on one wrapping row. Labels are needed now that
+         there are two date ranges: without them "From/To" beside another
+         "From/To" is genuinely ambiguous — the first bounds when an address
+         was ADDED, the second when it was last MAILED. Controls keep the
+         placeholder-only style inside each group so the bar stays compact. -->
+    <div class="filters mb-4 rounded-lg border border-gray-200 bg-white p-3">
+      <div class="flex flex-wrap items-end gap-x-4 gap-y-3">
+        <div class="filter-group">
+          <label class="filter-label">Receiver</label>
+          <div class="flex flex-wrap items-center gap-2">
+            <Select v-model="fStatus" :options="statusOptions" option-label="label" option-value="value" placeholder="Status" class="w-32" size="small" />
+            <DatePicker v-model="fFrom" date-format="yy-mm-dd" show-icon placeholder="Added from" class="w-40" size="small" />
+            <DatePicker v-model="fTo" date-format="yy-mm-dd" show-icon placeholder="Added to" class="w-40" size="small" />
+            <InputText v-model="fSearch" class="w-56" placeholder="Search email or name" size="small" @keyup.enter="apply" />
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Last sent</label>
+          <div class="flex flex-wrap items-center gap-2">
+            <Select v-model="fSent" :options="sentOptions" option-label="label" option-value="value" placeholder="Any send state" class="w-44" size="small" />
+            <DatePicker
+              v-model="fSentFrom" date-format="yy-mm-dd" show-icon placeholder="Sent from"
+              class="w-40" size="small" :disabled="sentWindowDisabled"
+            />
+            <DatePicker
+              v-model="fSentTo" date-format="yy-mm-dd" show-icon placeholder="Sent to"
+              class="w-40" size="small" :disabled="sentWindowDisabled"
+            />
+            <Select v-model="fLastStatus" :options="lastStatusOptions" option-label="label" option-value="value" placeholder="Any last status" class="w-44" size="small" />
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Counts</label>
+          <div class="flex flex-wrap items-center gap-2">
+            <InputNumber v-model="fMinSends" :min="0" :max="1000000" placeholder="Min sends" class="w-32" size="small" />
+            <InputNumber v-model="fMaxSends" :min="0" :max="1000000" placeholder="Max sends" class="w-32" size="small" />
+            <Select v-model="fIssues" :options="issuesOptions" option-label="label" option-value="value" placeholder="Any health" class="w-52" size="small" />
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <Button label="Apply" icon="pi pi-filter" size="small" class="filters-apply" @click="apply" />
+          <Button
+            v-if="filtersActive" label="Reset" icon="pi pi-times" size="small"
+            text severity="secondary" @click="resetFilters"
+          />
+        </div>
+      </div>
+
+      <p v-if="sentWindowDisabled" class="mt-2 text-xs text-gray-500">
+        A sent-date range does not apply to addresses that were never sent.
+      </p>
     </div>
 
     <div v-if="selected.length" class="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-indigo-50 p-3">
@@ -617,6 +751,26 @@ onMounted(() => void load())
 /* Same (small) height for every control in the filter bar, whatever component
    draws it: PrimeVue's DatePicker input-group and its Select come out a few
    pixels apart from a plain InputText, which would break the single baseline. */
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+/* The group label. Small and quiet — it disambiguates the two date ranges
+   without turning the bar into a form. */
+.filter-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--p-text-muted-color, #6b7280);
+}
+
+.filters :deep(.p-inputnumber-input) {
+  width: 100%;
+}
+
 .filters :deep(.p-inputtext),
 .filters :deep(.p-select),
 .filters :deep(.p-datepicker-input),
