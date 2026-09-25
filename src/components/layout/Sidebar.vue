@@ -75,9 +75,12 @@ const navGroups: NavGroup[] = [
     icon: 'pi-comments',
     match: '/forum',
     children: [
-      { label: 'Moderation',  to: '/forum/moderation',  icon: 'pi-flag' },
-      { label: 'Discussions', to: '/forum/articles',    icon: 'pi-book' },
-      { label: 'Boards',      to: '/forum/boards',      icon: 'pi-sitemap' },
+      { label: 'Moderation',   to: '/forum/moderation',   icon: 'pi-flag' },
+      // Member-written posts, every status — the browse view that sits beside
+      // the triage queue above.
+      { label: 'Member Posts', to: '/forum/member-posts', icon: 'pi-user-edit' },
+      { label: 'Discussions',  to: '/forum/articles',     icon: 'pi-book' },
+      { label: 'Boards',       to: '/forum/boards',       icon: 'pi-sitemap' },
     ],
   },
 ]

@@ -8,6 +8,7 @@ import type {
   ForumMemberRole,
   ForumMemberRow,
   ForumModerationPost,
+  ForumMemberPost,
   ForumPost,
   ForumPostStatus,
   ForumMemberStatus,
@@ -157,6 +158,41 @@ export function moderate(
   return client
     .post<{ data: { affected: number; action: ForumModerationAction } }>('/admin/forum-posts/act', { ids, action, reason })
     .then((r) => r.data.data)
+}
+
+/**
+ * Member-authored posts, every status.
+ *
+ * A DIFFERENT endpoint from listModerationPosts: that one is the triage queue
+ * and defaults to pending, this one is the browse view and defaults to every
+ * status. Same `moderate()` acts on both — publishing a post is one operation
+ * wherever it is triggered from.
+ */
+export interface ForumMemberPostFilters {
+  page?: number
+  per_page?: number
+  site_id?: number | null
+  status?: ForumPostStatus | null
+  member_id?: number | null
+  search?: string | null
+}
+
+export interface ForumMemberPostPage {
+  data: ForumMemberPost[]
+  meta: {
+    current_page: number
+    last_page: number
+    total: number
+    per_page: number
+    /** Totals per status for the tabs — scoped by site, never by status. */
+    by_status: Record<string, number>
+  }
+}
+
+export function listForumMemberPosts(params?: ForumMemberPostFilters): Promise<ForumMemberPostPage> {
+  return client
+    .get<ForumMemberPostPage>('/admin/forum-member-posts', { params })
+    .then((r) => r.data)
 }
 
 export function setMemberStatus(

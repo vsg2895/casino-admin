@@ -206,6 +206,12 @@ const router = createRouter({
           meta: { requiresAuth: true, title: 'Forum Moderation' },
         },
         {
+          path: 'forum/member-posts',
+          name: 'forum-member-posts',
+          component: () => import('@/views/forum/MemberPosts.vue'),
+          meta: { requiresAuth: true, title: 'Member Posts' },
+        },
+        {
           path: 'forum/articles',
           name: 'forum-articles',
           component: () => import('@/views/forum/Articles.vue'),

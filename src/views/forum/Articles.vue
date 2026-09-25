@@ -328,9 +328,13 @@ onMounted(async () => {
         <label class="mb-1 block text-xs font-medium text-gray-700">To</label>
         <DatePicker v-model="fTo" date-format="yy-mm-dd" show-icon class="w-40" />
       </div>
-      <div class="filter-field">
+      <!-- The FLEXIBLE field. Five fixed-width controls plus the button came to
+           a few pixels more than the row, so Apply wrapped to a line of its
+           own; letting the search box give and take that slack keeps the whole
+           bar on one line without shrinking anything a user reads. -->
+      <div class="filter-field min-w-[12rem] flex-1">
         <label class="mb-1 block text-xs font-medium text-gray-700">Search title</label>
-        <InputText v-model="fSearch" class="w-52" @keyup.enter="apply" />
+        <InputText v-model="fSearch" class="w-full" @keyup.enter="apply" />
       </div>
       <Button label="Apply" icon="pi pi-filter" class="self-end" @click="apply" />
     </div>
