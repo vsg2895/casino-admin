@@ -19,6 +19,7 @@ import Textarea from 'primevue/textarea'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Select from 'primevue/select'
 import Button from 'primevue/button'
+import SiteOverrides from '@/components/verificationPromotion/SiteOverrides.vue'
 import Dialog from 'primevue/dialog'
 import Message from 'primevue/message'
 import { useToast } from 'primevue/usetoast'
@@ -1039,6 +1040,11 @@ function err(field: string): string | undefined {
             </div>
           </div>
         </section>
+
+        <!-- Per-site overrides. Saved on its own endpoint, not through this
+             form's payload: the template above is global, and mixing the two
+             would make "Save" ambiguous about what it was saving. -->
+        <SiteOverrides />
       </div>
 
       <!-- ── Live preview ── -->

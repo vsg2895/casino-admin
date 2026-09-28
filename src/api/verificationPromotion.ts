@@ -47,3 +47,54 @@ export function sendTestVerificationPromotion(
     .post<{ ok: boolean; message: string }>('/admin/verification-promotion/test', { to, name })
     .then((r) => r.data)
 }
+
+// ── per-site image + link overrides ─────────────────────────────────────────
+//
+// The promotion stays ONE global template. These change only the hero image
+// and where the links point, for one site, and can carry no text at all — the
+// email's copy is identical on every site by design.
+
+export interface VerificationPromotionOverride {
+  site_id: number
+  site_name: string
+  site_slug: string
+  domain: string
+  /** Whether this site currently changes anything. */
+  active: boolean
+  hero_image_url: string | null
+  hero_url: string | null
+  top_button_url: string | null
+  cta_button_url: string | null
+  email_preferences_url: string | null
+  /** Positional targets for the template's own footer links. URLs only. */
+  footer_link_urls: (string | null)[]
+}
+
+export interface VerificationPromotionOverridePage {
+  /** The template's footer link LABELS, so each URL input can be captioned. */
+  footer_link_labels: string[]
+  data: VerificationPromotionOverride[]
+}
+
+export function listVerificationPromotionOverrides(): Promise<VerificationPromotionOverridePage> {
+  return client
+    .get<VerificationPromotionOverridePage>('/admin/verification-promotion/overrides')
+    .then((r) => r.data)
+}
+
+export type UpdateVerificationPromotionOverridePayload = Pick<
+  VerificationPromotionOverride,
+  'hero_image_url' | 'hero_url' | 'top_button_url' | 'cta_button_url' | 'email_preferences_url' | 'footer_link_urls'
+>
+
+export function updateVerificationPromotionOverride(
+  siteId: number,
+  payload: UpdateVerificationPromotionOverridePayload,
+): Promise<{ data: { site_id: number; active: boolean } }> {
+  return client
+    .put<{ data: { site_id: number; active: boolean } }>(
+      `/admin/verification-promotion/overrides/${siteId}`,
+      payload,
+    )
+    .then((r) => r.data)
+}
