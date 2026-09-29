@@ -1,6 +1,6 @@
 import client from './client'
 import type { Site, SiteRegistrationResponse } from '@shared/types/site'
-import type { ApiResponse, PaginatedResponse } from '@shared/types/api'
+import type { ApiResponse } from '@shared/types/api'
 
 export interface CreateSitePayload {
   name: string
@@ -45,8 +45,15 @@ export interface UpdateSitePayload {
   methodology_page_slug?: string | null
 }
 
-export function listSites(): Promise<PaginatedResponse<Site>> {
-  return client.get<PaginatedResponse<Site>>('/admin/sites').then((r) => r.data)
+/**
+ * Every site, in one response.
+ *
+ * Not paginated: this is the site picker behind most admin controls, so a page
+ * boundary here would quietly remove a site from all of them. See
+ * SiteController::index.
+ */
+export function listSites(): Promise<ApiResponse<Site[]>> {
+  return client.get<ApiResponse<Site[]>>('/admin/sites').then((r) => r.data)
 }
 
 export function getSite(id: number): Promise<ApiResponse<Site>> {

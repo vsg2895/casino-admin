@@ -15,7 +15,7 @@ export interface CreateCmsPagePayload {
 // site_id cannot change once a page is created.
 export type UpdateCmsPagePayload = Partial<Omit<CreateCmsPagePayload, 'site_id'>>
 
-export function listCmsPages(params?: { page?: number; site_id?: number }): Promise<PaginatedResponse<CmsPageAdmin>> {
+export function listCmsPages(params?: { page?: number; per_page?: number; site_id?: number }): Promise<PaginatedResponse<CmsPageAdmin>> {
   return client.get<PaginatedResponse<CmsPageAdmin>>('/admin/pages', { params }).then((r) => r.data)
 }
 

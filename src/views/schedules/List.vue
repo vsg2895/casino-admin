@@ -98,11 +98,28 @@ function formatDate(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '—'
 }
 
-// ── Data ──────────────────────────────────────────────────────────────────────
+// ── Data, server-side paginated ───────────────────────────────────────────────
+//
+// The API paginates schedules and this table offered no paginator, so it showed
+// page one and nothing else — a 51st schedule would have existed, run on its
+// cadence, and been invisible and un-editable in the admin.
+const page = ref(1)
+const perPage = ref(50)
+const totalRecords = ref(0)
+const first = computed(() => (page.value - 1) * perPage.value)
+
+async function onPage(event: { page: number; rows: number }): Promise<void> {
+  page.value = event.page + 1 // PrimeVue counts from 0, Laravel from 1
+  perPage.value = event.rows
+  await reload()
+}
+
 async function reload(): Promise<void> {
   loading.value = true
   try {
-    items.value = (await api.listSchedules()).data
+    const response = await api.listSchedules(page.value, perPage.value)
+    items.value = response.data
+    totalRecords.value = response.meta?.total ?? response.data.length
   } catch {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load schedules.', life: 4000 })
   } finally {
@@ -328,7 +345,22 @@ onMounted(async () => {
 
     <!-- Table -->
     <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-      <DataTable :value="items" :loading="loading" striped-rows data-key="id" :pt="{ root: { class: 'text-sm' } }">
+      <DataTable
+        :value="items"
+        :loading="loading"
+        striped-rows
+        data-key="id"
+        lazy
+        paginator
+        :rows="perPage"
+        :first="first"
+        :total-records="totalRecords"
+        :rows-per-page-options="[50, 100]"
+        current-page-report-template="{first}–{last} of {totalRecords}"
+        paginator-template="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown CurrentPageReport"
+        :pt="{ root: { class: 'text-sm' } }"
+        @page="onPage"
+      >
         <template #empty>
           <div class="py-10 text-center text-sm text-gray-400">No schedules yet. Create one to start sending.</div>
         </template>

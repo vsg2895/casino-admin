@@ -9,7 +9,7 @@ export const useCmsPagesStore = defineStore('cmsPages', () => {
   const loading = ref(false)
   const meta = ref<PaginatedResponse<CmsPageAdmin>['meta'] | null>(null)
 
-  async function fetchPages(params?: { page?: number; site_id?: number }): Promise<void> {
+  async function fetchPages(params?: { page?: number; per_page?: number; site_id?: number }): Promise<void> {
     loading.value = true
     try {
       const response = await cmsApi.listCmsPages(params)

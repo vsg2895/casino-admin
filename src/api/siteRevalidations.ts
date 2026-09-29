@@ -7,10 +7,11 @@ import type { SiteRevalidation } from '@shared/types/siteRevalidation'
 export function listRevalidations(
   siteId: number,
   perPage = 20,
+  page = 1,
 ): Promise<PaginatedResponse<SiteRevalidation>> {
   return client
     .get<PaginatedResponse<SiteRevalidation>>(`/admin/sites/${siteId}/revalidations`, {
-      params: { per_page: perPage },
+      params: { per_page: perPage, page },
     })
     .then((r) => r.data)
 }

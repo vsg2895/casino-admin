@@ -46,7 +46,9 @@ async function confirmDelete(): Promise<void> {
   try {
     await casinosApi.deleteCasino(deletingCasino.value.id)
     store.remove(deletingCasino.value.id)
-    void refreshCount()
+    // Re-fetch rather than only splicing: under server-side pagination the row
+    // that moves up from the next page exists only on the server.
+    void reload()
     selected.value = selected.value.filter((c) => c.id !== deletingCasino.value!.id)
     showDeleteConfirm.value = false
     toast.add({ severity: 'success', summary: 'Deleted', detail: `${deletingCasino.value.name} deleted.`, life: 3000 })
@@ -67,7 +69,7 @@ async function confirmBulkDelete(): Promise<void> {
   try {
     await Promise.all(ids.map((id) => casinosApi.deleteCasino(id)))
     ids.forEach((id) => store.remove(id))
-    void refreshCount()
+    void reload()
     selected.value = []
     showBulkDeleteConfirm.value = false
     toast.add({ severity: 'success', summary: 'Deleted', detail: `${ids.length} casino(s) deleted.`, life: 3000 })
@@ -142,6 +144,46 @@ function extractError(e: unknown, fallback: string): string {
   return 'An unexpected error occurred.'
 }
 
+// ── Server-side pagination ────────────────────────────────────────────────────
+//
+// The API paginates this list (15 a page), so the table must be `lazy`: it
+// renders exactly the rows the API returned and asks us for the next page.
+//
+// It was NOT lazy, and that is the bug this replaces. A plain `paginator` with
+// `:rows="20"` paginates the array it was handed — one API page — so with 16
+// casinos the browser held 15, decided 15 fits in one page of 20, and drew a
+// paginator with a single page. The 16th casino was unreachable from the admin
+// entirely, while the "Total Casinos" badge read 16 because it comes from the
+// separate COUNT endpoint and was telling the truth.
+const page = ref(1)
+const perPage = ref(15)
+const totalRecords = computed(() => store.meta?.total ?? 0)
+const first = computed(() => (page.value - 1) * perPage.value)
+
+function fetchPage(): Promise<void> {
+  return store.fetchCasinos({ page: page.value, per_page: perPage.value })
+}
+
+async function reload(): Promise<void> {
+  await Promise.all([fetchPage(), refreshCount()])
+
+  // Deleting the last row of the last page leaves us past the end of the list.
+  // Step back rather than showing an empty table with a paginator that offers
+  // no way out.
+  const lastPage = store.meta?.last_page ?? 1
+  if (page.value > lastPage) {
+    page.value = lastPage
+    await fetchPage()
+  }
+}
+
+async function onPage(event: { page: number; rows: number }): Promise<void> {
+  page.value = event.page + 1 // PrimeVue counts from 0, Laravel from 1
+  perPage.value = event.rows
+  selected.value = [] // selection is per page — never carry it across
+  await fetchPage()
+}
+
 // ── Record counter ────────────────────────────────────────────────────────────
 // Total from the dedicated COUNT endpoint — never from the listing response, so
 // the paginated query keeps its eager loads and ordering without also paying to
@@ -158,9 +200,8 @@ async function refreshCount(): Promise<void> {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 onMounted(() => {
-  store.fetchCasinos()
+  void reload()
   sitesStore.fetchSites()
-  refreshCount()
 })
 // ── Operator profile spreadsheet ────────────────────────────────────────────
 // Filling ~30 factual fields per casino one form at a time does not scale, so
@@ -285,10 +326,18 @@ async function onProfileFileChosen(event: Event): Promise<void> {
         v-model:selection="selected"
         :value="store.casinos"
         :loading="store.loading"
+        data-key="id"
         striped-rows
+        lazy
         paginator
-        :rows="20"
+        :rows="perPage"
+        :first="first"
+        :total-records="totalRecords"
+        :rows-per-page-options="[15, 25, 50, 100]"
+        current-page-report-template="{first}–{last} of {totalRecords}"
+        paginator-template="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown CurrentPageReport"
         :pt="{ root: { class: 'text-sm' } }"
+        @page="onPage"
       >
         <template #empty>
           <div class="py-12 text-center text-sm text-gray-400">

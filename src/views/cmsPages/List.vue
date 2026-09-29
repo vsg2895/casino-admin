@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -20,8 +20,51 @@ const toast = useToast()
 
 const siteFilter = ref<number | null>(null)
 
-function reload(): void {
-  store.fetchPages(siteFilter.value ? { site_id: siteFilter.value } : undefined)
+// ── Server-side pagination ────────────────────────────────────────────────────
+//
+// The API paginates this list, so the table is `lazy`: it renders exactly the
+// rows the API returned and asks us for the next page.
+//
+// Previously it was a plain client-side `paginator` over one API page, which
+// capped the list at whatever that page held while drawing a paginator that
+// looked complete. Eleven legal pages per site hid it — the ceiling is only
+// reached once the sites between them hold more pages than one response
+// carries.
+const page = ref(1)
+const perPage = ref(50)
+const totalRecords = computed(() => store.meta?.total ?? 0)
+const first = computed(() => (page.value - 1) * perPage.value)
+
+function fetchPage(): Promise<void> {
+  return store.fetchPages({
+    page: page.value,
+    per_page: perPage.value,
+    ...(siteFilter.value ? { site_id: siteFilter.value } : {}),
+  })
+}
+
+async function reload(): Promise<void> {
+  await fetchPage()
+
+  // Deleting the last row of the last page leaves us past the end of the list.
+  const lastPage = store.meta?.last_page ?? 1
+  if (page.value > lastPage) {
+    page.value = lastPage
+    await fetchPage()
+  }
+}
+
+async function onPage(event: { page: number; rows: number }): Promise<void> {
+  page.value = event.page + 1 // PrimeVue counts from 0, Laravel from 1
+  perPage.value = event.rows
+  await fetchPage()
+}
+
+// A filter change restarts at page one: staying on page 4 of a list that no
+// longer has four pages shows an empty table.
+function onFilterChange(): void {
+  page.value = 1
+  void reload()
 }
 
 const deleting = ref<CmsPageAdmin | null>(null)
@@ -39,6 +82,9 @@ async function confirmDelete(): Promise<void> {
     store.remove(deleting.value.id)
     toast.add({ severity: 'success', summary: 'Deleted', detail: 'Page deleted.', life: 2500 })
     deleting.value = null
+    // Re-fetch: under server-side pagination the row that moves up from the
+    // next page exists only on the server.
+    void reload()
   } catch {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to delete page.', life: 4000 })
   } finally {
@@ -68,14 +114,29 @@ onMounted(() => {
           placeholder="All sites"
           show-clear
           class="w-52"
-          @change="reload"
+          @change="onFilterChange"
         />
         <Button label="New Page" icon="pi pi-plus" @click="router.push({ name: 'pages-create' })" />
       </div>
     </div>
 
     <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-      <DataTable :value="store.pages" :loading="store.loading" striped-rows paginator :rows="20" :pt="{ root: { class: 'text-sm' } }">
+      <DataTable
+        :value="store.pages"
+        :loading="store.loading"
+        data-key="id"
+        striped-rows
+        lazy
+        paginator
+        :rows="perPage"
+        :first="first"
+        :total-records="totalRecords"
+        :rows-per-page-options="[20, 50, 100]"
+        current-page-report-template="{first}–{last} of {totalRecords}"
+        paginator-template="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown CurrentPageReport"
+        :pt="{ root: { class: 'text-sm' } }"
+        @page="onPage"
+      >
         <template #empty>
           <div class="py-12 text-center text-sm text-gray-400">No pages yet. Click "New Page" to add one.</div>
         </template>

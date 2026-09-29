@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -32,14 +32,33 @@ function formatWhen(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
 }
 
+// ── Server-side pagination ────────────────────────────────────────────────────
+//
+// This history grows by a row per revalidation, so it is genuinely long-lived.
+// The API paginated it and the table did not offer a paginator, which made the
+// most recent 20 entries look like the whole history — the screen exists to
+// answer "did my save reach the site", and silently hiding everything older
+// than the last twenty is the one thing it must not do.
+const page = ref(1)
+const perPage = ref(20)
+const totalRecords = ref(0)
+const first = computed(() => (page.value - 1) * perPage.value)
+
+async function onPage(event: { page: number; rows: number }): Promise<void> {
+  page.value = event.page + 1 // PrimeVue counts from 0, Laravel from 1
+  perPage.value = event.rows
+  await reload()
+}
+
 async function reload(): Promise<void> {
   loading.value = true
   try {
     const [history, siteRes] = await Promise.all([
-      revalidationsApi.listRevalidations(siteId),
+      revalidationsApi.listRevalidations(siteId, perPage.value, page.value),
       sitesApi.getSite(siteId),
     ])
     items.value = history.data
+    totalRecords.value = history.meta?.total ?? history.data.length
     site.value = siteRes.data
   } catch {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Could not load cache history.', life: 4000 })
@@ -130,7 +149,22 @@ onMounted(reload)
     </div>
 
     <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-      <DataTable :value="items" :loading="loading" striped-rows data-key="id" :pt="{ root: { class: 'text-sm' } }">
+      <DataTable
+        :value="items"
+        :loading="loading"
+        striped-rows
+        data-key="id"
+        lazy
+        paginator
+        :rows="perPage"
+        :first="first"
+        :total-records="totalRecords"
+        :rows-per-page-options="[20, 50, 100]"
+        current-page-report-template="{first}–{last} of {totalRecords}"
+        paginator-template="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown CurrentPageReport"
+        :pt="{ root: { class: 'text-sm' } }"
+        @page="onPage"
+      >
         <template #empty>
           <div class="py-10 text-center text-sm text-gray-400">No attempts recorded yet.</div>
         </template>

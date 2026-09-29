@@ -7,9 +7,11 @@ import type {
   UpsertEmailSchedulePayload,
 } from '@shared/types/emailSchedule'
 
-export function listSchedules(page = 1): Promise<PaginatedResponse<EmailSchedule>> {
+export function listSchedules(page = 1, perPage?: number): Promise<PaginatedResponse<EmailSchedule>> {
   return client
-    .get<PaginatedResponse<EmailSchedule>>('/admin/schedules', { params: { page } })
+    .get<PaginatedResponse<EmailSchedule>>('/admin/schedules', {
+      params: { page, ...(perPage ? { per_page: perPage } : {}) },
+    })
     .then((r) => r.data)
 }
 
