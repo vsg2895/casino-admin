@@ -146,8 +146,14 @@ onMounted(() => {
 
     <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       <div v-for="offer in filtered" :key="offer.id" class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <!-- NO object-fit on the banner, deliberately. `h-full w-full` already
+             stretches it to the 16:9 box, so the browser's default applies and
+             the whole banner is shown edge to edge. `object-cover` used to trim
+             whatever did not match that ratio, which hid the parts of an
+             uploaded banner an editor is here to check. Matches the public
+             site's offer cards. -->
         <div class="aspect-video bg-gray-100">
-          <img v-if="img(offer.banner_image) || img(offer.image_path)" :src="img(offer.banner_image) ?? img(offer.image_path) ?? ''" alt="" class="h-full w-full object-cover" />
+          <img v-if="img(offer.banner_image) || img(offer.image_path)" :src="img(offer.banner_image) ?? img(offer.image_path) ?? ''" alt="" class="h-full w-full" />
         </div>
         <div class="space-y-2 p-3">
           <p class="truncate font-semibold text-gray-900">{{ offer.title }}</p>
