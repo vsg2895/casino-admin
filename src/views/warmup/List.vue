@@ -270,6 +270,32 @@ const canSend = computed(
       (sendCount.value !== null && sendCount.value >= 1 && sendCount.value <= listTotal.value)),
 )
 
+// ── Batch preview: the addresses themselves ──────────────────────────────────
+//
+// The counts above answer "how many"; this answers "which ones" — the question
+// an operator actually has before pressing Send. It calls a read-only endpoint
+// that walks the SAME selection the send walks, so the list shown is the list
+// that gets mailed, in that order. Nothing is written by looking.
+//
+// Not loaded with the dialog: it is a deliberate check, and a whole-list run
+// would otherwise fetch hundreds of rows every time the dialog opens.
+const batch = ref<api.WarmupBatchPreview | null>(null)
+const batchLoading = ref(false)
+
+async function loadBatch(): Promise<void> {
+  batchLoading.value = true
+  try {
+    batch.value = await api.previewWarmupBatch({
+      count: sendAll.value ? null : sendCount.value,
+      cooldown_days: sendAll.value ? null : sendCooldownDays.value,
+    })
+  } catch {
+    batch.value = null
+  } finally {
+    batchLoading.value = false
+  }
+}
+
 async function loadPreview(): Promise<void> {
   previewLoading.value = true
   try {
@@ -285,6 +311,9 @@ async function loadPreview(): Promise<void> {
 }
 
 function schedulePreview(): void {
+  // A stale batch list beside changed settings is worse than no list: it would
+  // show the audience of the PREVIOUS settings under the current numbers.
+  batch.value = null
   clearTimeout(previewTimer)
   previewTimer = setTimeout(() => void loadPreview(), 300)
 }
@@ -660,6 +689,45 @@ onMounted(async () => {
                 {{ preview.total.toLocaleString() }} on the list
               </span>
             </template>
+          </div>
+
+          <!-- The addresses themselves. Same selection as the send, read-only:
+               looking changes nothing, so this can be pressed as often as the
+               settings are adjusted. -->
+          <div v-if="willReach > 0" class="mt-3">
+            <Button
+              label="Preview batch"
+              icon="pi pi-eye"
+              size="small"
+              outlined
+              :loading="batchLoading"
+              @click="loadBatch"
+            />
+            <div v-if="batch && batch.data.length" class="mt-2">
+              <div class="max-h-44 overflow-auto rounded-lg border border-gray-200">
+                <table class="w-full text-xs">
+                  <tbody>
+                    <tr
+                      v-for="row in batch.data"
+                      :key="row.id"
+                      class="border-b border-gray-100 last:border-0"
+                    >
+                      <td class="px-3 py-1.5 text-gray-800">{{ row.email }}</td>
+                      <td class="px-3 py-1.5 text-right text-gray-400">
+                        {{ row.last_sent_at ? `last sent ${formatDate(row.last_sent_at)}` : 'never sent' }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p v-if="batch.meta.truncated" class="mt-1 text-xs text-gray-400">
+                Showing the first {{ batch.meta.preview_count.toLocaleString() }} of
+                {{ batch.meta.would_reach.toLocaleString() }} — the run sends to all of them.
+              </p>
+            </div>
+            <p v-else-if="batch" class="mt-2 text-xs text-gray-400">
+              No addresses match these settings.
+            </p>
           </div>
         </div>
 

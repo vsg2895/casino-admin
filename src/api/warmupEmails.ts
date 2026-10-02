@@ -105,6 +105,37 @@ export function previewWarmupRecipients(params?: {
     .then((r) => r.data.data)
 }
 
+/**
+ * The ACTUAL addresses a run with these settings would take, in send order.
+ *
+ * `previewWarmupRecipients` above answers "how many"; this answers "which ones".
+ * It walks the same selection the send walks, writes nothing, and the server
+ * caps the rows it returns — `meta.truncated` says when the real audience is
+ * larger than the list on screen.
+ */
+export interface WarmupBatchPreview {
+  data: WarmupEmail[]
+  meta: {
+    total: number
+    eligible_count: number
+    would_reach: number
+    preview_count: number
+    preview_limit: number
+    truncated: boolean
+    cooldown_days: number | null
+    count: number | null
+  }
+}
+
+export function previewWarmupBatch(params?: {
+  count?: number | null
+  cooldown_days?: number | null
+}): Promise<WarmupBatchPreview> {
+  return client
+    .get<WarmupBatchPreview>('/admin/warmup-emails/recipients/preview', { params })
+    .then((r) => r.data)
+}
+
 // Stops the current run: queued batches will not send, and the run lock is freed
 // so a new run can start immediately. Safe when nothing is running.
 export interface WarmupCancelResult {
