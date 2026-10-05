@@ -36,13 +36,26 @@ export interface ArticlePage {
   }
 }
 
+/**
+ * `perPage` is passed through because the table offers a rows-per-page control.
+ *
+ * It used to be absent, and the screen could not hold a choice because of it:
+ * picking 50 asked for nothing, the server answered with its own default of 15,
+ * and the view then copied `meta.per_page` back into the control — so the
+ * dropdown snapped to 15 every time. The server has always accepted and
+ * validated the parameter (5–100); only the client never sent it.
+ */
 export function listArticles(
   siteId: number,
   type: ArticleType = 'guide',
   page = 1,
+  perPage?: number,
 ): Promise<ArticlePage> {
   return client
-    .get<ArticlePage>(`/admin/sites/${siteId}/articles${query(type)}&page=${page}`)
+    .get<ArticlePage>(
+      `/admin/sites/${siteId}/articles${query(type)}&page=${page}`
+      + (perPage ? `&per_page=${perPage}` : ''),
+    )
     .then((r) => r.data)
 }
 

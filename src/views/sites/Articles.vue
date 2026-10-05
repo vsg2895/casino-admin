@@ -119,7 +119,7 @@ function formatDate(iso: string | null): string {
 async function reload(): Promise<void> {
   loading.value = true
   try {
-    const res = await articlesApi.listArticles(siteId, articleType, page.value)
+    const res = await articlesApi.listArticles(siteId, articleType, page.value, perPage.value)
     items.value = res.data
     totalRecords.value = res.meta.total
     perPage.value = res.meta.per_page
@@ -156,6 +156,7 @@ const blank = (): ArticleForm => ({
   position: 0,
   active: true,
   featured: false,
+  to_be_most_popular: false,
   news_category_id: null as number | null,
   meta_title: null,
   meta_description: null,
@@ -177,6 +178,7 @@ type ArticleForm = UpsertArticlePayload & {
   position: number
   active: boolean
   featured: boolean
+  to_be_most_popular: boolean
   news_category_id: number | null
   meta_title: string | null
   meta_description: string | null
@@ -184,9 +186,25 @@ type ArticleForm = UpsertArticlePayload & {
 
 const form = ref<ArticleForm>(blank() as ArticleForm)
 
+/**
+ * The publish timestamp exactly as the server holds it, for the entry being
+ * edited.
+ *
+ * The form's date input can only carry a DAY, so opening an entry truncated
+ * `2026-09-28T14:32:00Z` to `2026-09-28` and saving wrote midnight back. The
+ * list is ordered `position, published_at DESC, id DESC`, so an edit that
+ * changed nothing an editor could see still moved the row below every entry
+ * published later that same day — which is the "it jumps after I save" report.
+ *
+ * Keeping the original here lets the save put the time back when the day has
+ * not changed, so editing a title leaves the row exactly where it was.
+ */
+const originalPublishedAt = ref<string | null>(null)
+
 function openCreate(): void {
   editingId.value = null
   editingPublished.value = false
+  originalPublishedAt.value = null
   form.value = blank()
   fieldErrors.value = {}
   showDialog.value = true
@@ -198,6 +216,7 @@ async function openEdit(a: Article): Promise<void> {
   fieldErrors.value = {}
   try {
     const full = await articlesApi.getArticle(siteId, a.id, articleType)
+    originalPublishedAt.value = full.published_at ?? null
     form.value = {
       title: full.title,
       slug: full.slug,
@@ -209,6 +228,7 @@ async function openEdit(a: Article): Promise<void> {
       position: full.position ?? 0,
       active: full.active ?? true,
       featured: full.featured ?? false,
+      to_be_most_popular: full.to_be_most_popular ?? false,
       news_category_id: full.news_category_id ?? null,
       meta_title: full.meta_title,
       meta_description: full.meta_description,
@@ -252,6 +272,7 @@ async function patchRow(row: Article, changes: Partial<Article>): Promise<void> 
         position: full.position ?? 0,
         active: full.active ?? true,
         featured: full.featured ?? false,
+        to_be_most_popular: full.to_be_most_popular ?? false,
         news_category_id: full.news_category_id ?? null,
         meta_title: full.meta_title,
         meta_description: full.meta_description,
@@ -280,19 +301,50 @@ function toggleFeatured(row: Article, value: boolean): void {
   void patchRow(row, { featured: value })
 }
 
+function toggleMostPopular(row: Article, value: boolean): void {
+  void patchRow(row, { to_be_most_popular: value })
+}
+
 function savePosition(row: Article, value: number): void {
   if (value === row.position) return
   void patchRow(row, { position: value })
+}
+
+/**
+ * The form's `YYYY-MM-DD` put back onto a full timestamp.
+ *
+ * Same day as before → the ORIGINAL instant, untouched, so the row keeps its
+ * place in a list ordered by `published_at`. A different day → that day at the
+ * original time, so an entry moved to another date keeps its position among
+ * whatever else was published then rather than landing at midnight behind all
+ * of it. Cleared, or set on an entry that never had one → passed through as
+ * the form holds it and the server applies its own meaning.
+ */
+function resolvePublishedAt(): string | null {
+  const picked = form.value.published_at
+
+  if (picked === null || picked === '' || originalPublishedAt.value === null) {
+    return picked
+  }
+
+  if (originalPublishedAt.value.slice(0, 10) === picked) {
+    return originalPublishedAt.value
+  }
+
+  // Keep the time of day, swap the date.
+  return picked + originalPublishedAt.value.slice(10)
 }
 
 async function save(): Promise<void> {
   saving.value = true
   fieldErrors.value = {}
   try {
+    const payload = { ...form.value, published_at: resolvePublishedAt() }
+
     if (editingId.value === null) {
-      await articlesApi.createArticle(siteId, form.value, articleType)
+      await articlesApi.createArticle(siteId, payload, articleType)
     } else {
-      await articlesApi.updateArticle(siteId, editingId.value, form.value, articleType)
+      await articlesApi.updateArticle(siteId, editingId.value, payload, articleType)
     }
     showDialog.value = false
     await reload()
@@ -450,16 +502,26 @@ onMounted(async () => {
           </template>
         </Column>
 
-        <!-- Most popular. Only news has a home-page strip to be promoted INTO, so
-             the column is hidden on the guides screen rather than shown and inert.
-             The column is the editor's PICK — the site has no view tracking, so
+        <!-- TWO picks, not one. Only news has either surface, so both columns
+             are hidden on the guides screen rather than shown and inert.
+             Both are the editor's CHOICE — the site has no view tracking, so
              "popular" here means chosen, not measured. -->
-        <Column v-if="articleType === 'news'" header="Most popular" :style="{ width: '110px' }">
+        <Column v-if="articleType === 'news'" header="Home strip" :style="{ width: '110px' }">
           <template #body="{ data }">
             <ToggleSwitch
               :model-value="data.featured"
               :disabled="busyId === data.id"
               @update:model-value="(v) => toggleFeatured(data, v)"
+            />
+          </template>
+        </Column>
+
+        <Column v-if="articleType === 'news'" header="Most popular" :style="{ width: '110px' }">
+          <template #body="{ data }">
+            <ToggleSwitch
+              :model-value="data.to_be_most_popular"
+              :disabled="busyId === data.id"
+              @update:model-value="(v) => toggleMostPopular(data, v)"
             />
           </template>
         </Column>
@@ -583,13 +645,24 @@ onMounted(async () => {
 
         <div v-if="articleType === 'news'" class="flex items-center justify-between gap-4 rounded-lg border border-gray-200 p-3">
           <div>
-            <label class="text-sm text-gray-700">Most popular</label>
+            <label class="text-sm text-gray-700">Home page strip</label>
             <p class="mt-0.5 text-xs text-gray-500">
-              Promotes this post to the Most Popular rail on the news page and the strip on the home page, under Bonus.
-              The strip shows at most three — extra picks wait their turn by position.
+              Promotes this post to the news strip on the home page, under Bonus.
+              Picks beyond the strip's size wait their turn by position.
             </p>
           </div>
           <ToggleSwitch v-model="form.featured" />
+        </div>
+
+        <div v-if="articleType === 'news'" class="flex items-center justify-between gap-4 rounded-lg border border-gray-200 p-3">
+          <div>
+            <label class="text-sm text-gray-700">Most popular</label>
+            <p class="mt-0.5 text-xs text-gray-500">
+              Puts this post in the Most Popular rail on the news page. Independent of the
+              home page strip — the rail holds the eight most recent picks, newest first.
+            </p>
+          </div>
+          <ToggleSwitch v-model="form.to_be_most_popular" />
         </div>
 
         <div>
