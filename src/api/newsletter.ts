@@ -11,6 +11,9 @@ export function listNewsletters(params?: {
   trashed?: boolean
   // Tri-state: true / false filter, or omit for "all".
   verified?: boolean
+  // Email search. A prefix match, except a term starting with `@`, which
+  // matches a domain anywhere in the address. See NewsletterController.
+  search?: string
 }): Promise<PaginatedResponse<Newsletter>> {
   return client.get<PaginatedResponse<Newsletter>>('/admin/newsletters', { params }).then((r) => r.data)
 }
@@ -21,6 +24,7 @@ export function countNewsletters(params?: {
   site_id?: number
   trashed?: boolean
   verified?: boolean
+  search?: string
 }): Promise<number> {
   return client.get<{ total: number }>('/admin/newsletters/count', { params }).then((r) => r.data.total)
 }

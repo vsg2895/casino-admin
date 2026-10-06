@@ -15,6 +15,7 @@ export const useNewsletterStore = defineStore('newsletter', () => {
     site_id?: number
     trashed?: boolean
     verified?: boolean
+    search?: string
   }): Promise<void> {
     loading.value = true
     try {

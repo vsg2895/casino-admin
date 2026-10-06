@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import InputText from 'primevue/inputtext'
@@ -41,6 +41,24 @@ const verifiedOptions: { label: string; value: VerifiedFilter }[] = [
   { label: 'Unverified', value: false },
 ]
 
+/*
+ * Email search.
+ *
+ * `search` is what the box holds; `appliedSearch` is what has actually been
+ * sent. They are separate because the request is debounced: typing "kate" must
+ * not fire five listings and five counts, and the two numbers on screen must
+ * always describe the same request.
+ *
+ * The server treats a plain term as a PREFIX and a term starting with `@` as a
+ * domain match anywhere in the address — see NewsletterController. The hint
+ * under the box says so, because a search that silently finds nothing is worse
+ * than one that explains its own shape.
+ */
+const search = ref('')
+const appliedSearch = ref('')
+const SEARCH_DEBOUNCE_MS = 350
+let searchTimer: ReturnType<typeof setTimeout> | undefined
+
 const email = ref('')
 const adding = ref(false)
 const exporting = ref(false)
@@ -76,12 +94,14 @@ const recordTotal = ref<number | null>(null)
 
 // One definition of "what is the admin looking at", shared by the listing and
 // the count so the badge can never disagree with the rows on screen.
-function activeFilters(): { site_id?: number; trashed: boolean; verified?: boolean } {
+function activeFilters(): { site_id?: number; trashed: boolean; verified?: boolean; search?: string } {
   return {
     site_id: siteId.value ?? undefined,
     trashed: isTrash.value,
     // Omitted entirely when null, so the server sees no ?verified at all.
     ...(verifiedFilter.value === null ? {} : { verified: verifiedFilter.value }),
+    // Same rule: an empty box sends no ?search, rather than an empty one.
+    ...(appliedSearch.value === '' ? {} : { search: appliedSearch.value }),
   }
 }
 
@@ -127,6 +147,30 @@ async function onPage(event: { page: number; rows: number }): Promise<void> {
 async function reloadFromFirstPage(): Promise<void> {
   page.value = 1
   await reload()
+}
+
+/** Apply what is in the box, from page one. Cancels any pending debounce. */
+async function applySearch(): Promise<void> {
+  clearTimeout(searchTimer)
+  const term = search.value.trim()
+
+  // Nothing to do if the applied term has not actually changed — pressing Enter
+  // on an unchanged box should not re-issue two requests.
+  if (term === appliedSearch.value) return
+
+  appliedSearch.value = term
+  selected.value = []
+  await reloadFromFirstPage()
+}
+
+function onSearchInput(): void {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => void applySearch(), SEARCH_DEBOUNCE_MS)
+}
+
+function clearSearch(): void {
+  search.value = ''
+  void applySearch()
 }
 
 async function add(): Promise<void> {
@@ -280,6 +324,13 @@ function confirmDeleteSelected(): Promise<void> {
   })
 }
 
+/*
+ * "Delete all" ignores the search — it always targets every subscriber on the
+ * site. Rather than quietly doing something wider than the screen suggests, the
+ * button is disabled while a search is active and says why.
+ */
+const searchBlocksDeleteAll = computed(() => appliedSearch.value !== '')
+
 function confirmDeleteAll(): Promise<void> {
   return run(async () => {
     const n = await store.removeAll(siteId.value ?? undefined)
@@ -330,6 +381,8 @@ watch([siteId, view, verifiedFilter], async () => {
   await reloadFromFirstPage()
 })
 
+onBeforeUnmount(() => clearTimeout(searchTimer))
+
 onMounted(async () => {
   await sitesStore.fetchSites()
   siteId.value = sitesStore.sites[0]?.id ?? null
@@ -361,8 +414,36 @@ onMounted(async () => {
             :allow-empty="false"
             aria-label="Filter by verification status"
           />
+          <!-- Email search. Debounced, and Enter applies it immediately.
+               `search` is typed into; `appliedSearch` is what the list and the
+               count were actually asked for. -->
+          <div class="flex flex-col">
+            <div class="flex items-center gap-2">
+              <InputText
+                v-model="search"
+                class="w-64"
+                placeholder="Search email…"
+                aria-label="Search subscribers by email"
+                @input="onSearchInput"
+                @keyup.enter="applySearch"
+              />
+              <Button
+                v-if="search"
+                icon="pi pi-times"
+                text
+                rounded
+                size="small"
+                aria-label="Clear search"
+                @click="clearSearch"
+              />
+            </div>
+            <p class="mt-1 text-xs text-gray-400">
+              Matches the start of an address. Begin with <strong>@</strong> to find a whole domain.
+            </p>
+          </div>
+
           <RecordCount
-            :label="isTrash ? 'Total in Trash' : 'Total Newsletters'"
+            :label="appliedSearch ? (isTrash ? 'Matching in Trash' : 'Matching') : (isTrash ? 'Total in Trash' : 'Total Newsletters')"
             :total="recordTotal"
             :loading="store.loading"
           />
@@ -379,7 +460,16 @@ onMounted(async () => {
               size="small"
               @click="showBulkDelete = true"
             />
-            <Button label="Delete all" icon="pi pi-trash" severity="danger" outlined size="small" :disabled="store.items.length === 0" @click="showAllDelete = true" />
+            <Button
+              label="Delete all"
+              icon="pi pi-trash"
+              severity="danger"
+              outlined
+              size="small"
+              :disabled="store.items.length === 0 || searchBlocksDeleteAll"
+              v-tooltip.top="searchBlocksDeleteAll ? 'Clear the search first — this deletes every subscriber on the site, not just the matches.' : undefined"
+              @click="showAllDelete = true"
+            />
             <Button label="Import Excel" icon="pi pi-upload" outlined size="small" :loading="importing" v-tooltip.top="'Upload an .xlsx or .csv with an Email column'" @click="triggerImport" />
             <Button label="Export CSV" icon="pi pi-download" outlined size="small" :loading="exporting" @click="doExport" />
             <input ref="fileInput" type="file" accept=".xlsx,.csv" class="hidden" @change="onFileSelected" />

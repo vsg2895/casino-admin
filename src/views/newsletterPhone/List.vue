@@ -198,6 +198,18 @@ watch(search, () => {
   searchTimer = setTimeout(reloadFromFirstPage, 400)
 })
 
+/** Enter applies the term at once, rather than waiting out the debounce. */
+function applySearch(): void {
+  clearTimeout(searchTimer)
+  void reloadFromFirstPage()
+}
+
+function clearSearch(): void {
+  // The watcher above reloads on the change; it only has to be immediate.
+  search.value = ''
+  applySearch()
+}
+
 watch([dateMode, dateFrom, dateTo, optedOut], () => {
   // A mode that needs a date does nothing until one is picked — reloading on
   // every keystroke of a half-typed date would just flicker the table.
@@ -670,7 +682,27 @@ onMounted(async () => {
     <div class="flex flex-wrap items-end gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
       <div>
         <label class="mb-1 block text-xs font-medium text-gray-600">Search</label>
-        <InputText v-model="search" placeholder="Any part of the number" class="w-56" />
+        <div class="flex items-center gap-2">
+          <InputText
+            v-model="search"
+            placeholder="Any part of the number"
+            class="w-56"
+            aria-label="Search subscribers by phone number"
+            @keyup.enter="applySearch"
+          />
+          <Button
+            v-if="search"
+            icon="pi pi-times"
+            text
+            rounded
+            size="small"
+            aria-label="Clear search"
+            @click="clearSearch"
+          />
+        </div>
+        <p class="mt-1 text-xs text-gray-400">
+          Punctuation is ignored. Start with <strong>+</strong> to match from the country code.
+        </p>
       </div>
 
       <div>
