@@ -9,7 +9,6 @@ import Textarea from 'primevue/textarea'
 import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
 import ToggleSwitch from 'primevue/toggleswitch'
-import InputNumber from 'primevue/inputnumber'
 import Select from 'primevue/select'
 import { useToast } from 'primevue/usetoast'
 import axios from 'axios'
@@ -153,7 +152,6 @@ const blank = (): ArticleForm => ({
   body: null,
   hero_image_path: null,
   published_at: null,
-  position: 0,
   active: true,
   featured: false,
   to_be_most_popular: false,
@@ -175,7 +173,6 @@ type ArticleForm = UpsertArticlePayload & {
   body: string | null
   hero_image_path: string | null
   published_at: string | null
-  position: number
   active: boolean
   featured: boolean
   to_be_most_popular: boolean
@@ -192,8 +189,8 @@ const form = ref<ArticleForm>(blank() as ArticleForm)
  *
  * The form's date input can only carry a DAY, so opening an entry truncated
  * `2026-09-28T14:32:00Z` to `2026-09-28` and saving wrote midnight back. The
- * list is ordered `position, published_at DESC, id DESC`, so an edit that
- * changed nothing an editor could see still moved the row below every entry
+ * list is ordered by `published_at DESC, id DESC`, so an edit that changed
+ * nothing an editor could see still moved the row below every entry
  * published later that same day — which is the "it jumps after I save" report.
  *
  * Keeping the original here lets the save put the time back when the day has
@@ -225,7 +222,6 @@ async function openEdit(a: Article): Promise<void> {
       hero_image_path: full.hero_image_path,
       // <input type="date"> wants YYYY-MM-DD; the API stores a full timestamp.
       published_at: full.published_at ? full.published_at.slice(0, 10) : null,
-      position: full.position ?? 0,
       active: full.active ?? true,
       featured: full.featured ?? false,
       to_be_most_popular: full.to_be_most_popular ?? false,
@@ -246,7 +242,7 @@ async function openEdit(a: Article): Promise<void> {
  * Both send a FULL update, because the endpoint is a PUT — a partial body would
  * blank every field it omitted. The row is patched locally on success rather
  * than refetching the list: a reload would reorder the table under the cursor
- * the instant a position changes, which is exactly when the editor is still
+ * the instant a date changes, which is exactly when the editor is still
  * looking at it.
  */
 const busyId = ref<number | null>(null)
@@ -269,7 +265,6 @@ async function patchRow(row: Article, changes: Partial<Article>): Promise<void> 
         body: full.body,
         hero_image_path: full.hero_image_path,
         published_at: full.published_at,
-        position: full.position ?? 0,
         active: full.active ?? true,
         featured: full.featured ?? false,
         to_be_most_popular: full.to_be_most_popular ?? false,
@@ -305,17 +300,12 @@ function toggleMostPopular(row: Article, value: boolean): void {
   void patchRow(row, { to_be_most_popular: value })
 }
 
-function savePosition(row: Article, value: number): void {
-  if (value === row.position) return
-  void patchRow(row, { position: value })
-}
-
 /**
  * The form's `YYYY-MM-DD` put back onto a full timestamp.
  *
  * Same day as before → the ORIGINAL instant, untouched, so the row keeps its
  * place in a list ordered by `published_at`. A different day → that day at the
- * original time, so an entry moved to another date keeps its position among
+ * original time, so an entry moved to another date keeps its place among
  * whatever else was published then rather than landing at midnight behind all
  * of it. Cleared, or set on an entry that never had one → passed through as
  * the form holds it and the server applies its own meaning.
@@ -532,22 +522,6 @@ onMounted(async () => {
           </template>
         </Column>
 
-        <!-- Position drives the public order, so it belongs in the list where that
-             order is visible — not buried in an edit dialog. -->
-        <Column header="Position" :style="{ width: '120px' }">
-          <template #body="{ data }">
-            <InputNumber
-              :model-value="data.position"
-              :min="0"
-              :max="9999"
-              :allow-empty="false"
-              :input-style="{ width: '3.5rem' }"
-              :disabled="busyId === data.id"
-              @update:model-value="(v) => savePosition(data, v)"
-            />
-          </template>
-        </Column>
-
         <Column header="Date" :style="{ width: '140px' }">
           <template #body="{ data }">
             <span class="text-gray-600">{{ formatDate(data.published_at) }}</span>
@@ -648,7 +622,7 @@ onMounted(async () => {
             <label class="text-sm text-gray-700">Home page strip</label>
             <p class="mt-0.5 text-xs text-gray-500">
               Promotes this post to the news strip on the home page, under Bonus.
-              Picks beyond the strip's size wait their turn by position.
+              Picks beyond the strip's size wait their turn, newest first.
             </p>
           </div>
           <ToggleSwitch v-model="form.featured" />
@@ -663,12 +637,6 @@ onMounted(async () => {
             </p>
           </div>
           <ToggleSwitch v-model="form.to_be_most_popular" />
-        </div>
-
-        <div>
-          <label class="mb-1 block text-xs font-medium text-gray-600">Position</label>
-          <InputNumber v-model="form.position" :min="0" :max="9999" fluid />
-          <p class="mt-1 text-xs text-gray-400">Lower shows first. Equal positions fall back to newest first.</p>
         </div>
 
         <div class="flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
