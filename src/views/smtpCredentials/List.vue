@@ -706,6 +706,19 @@ onMounted(reload)
             </div>
 
             <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600">Greeting</label>
+              <InputText v-model="settings.message_template.greeting" placeholder="Hi {{name}}," fluid />
+              <!-- v-pre: the braces are the placeholder syntax of the EMAIL
+                   template, not Vue's. Without it Vue tries to resolve `name`
+                   and `email` as component state. -->
+              <p v-pre class="mt-1 text-xs text-gray-400">
+                Sits between the heading and the body, as it does in a site's promotion email.
+                <code>{{name}}</code> and <code>{{email}}</code> are filled in per recipient.
+              </p>
+              <p v-if="sErr('message_template.greeting')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.greeting') }}</p>
+            </div>
+
+            <div>
               <label class="mb-1 block text-xs font-medium text-gray-600">Message text</label>
               <Textarea v-model="settings.message_template.intro_text" rows="4" fluid />
               <p class="mt-1 text-xs text-gray-400">
@@ -759,6 +772,33 @@ onMounted(reload)
                 link is added automatically and cannot be removed.
               </p>
               <p v-if="sErr('message_template.footer_text')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.footer_text') }}</p>
+            </div>
+
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label class="mb-1 block text-xs font-medium text-gray-600">Postal address</label>
+                <InputText v-model="settings.message_template.postal_address" fluid />
+                <p v-if="sErr('message_template.postal_address')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.postal_address') }}</p>
+              </div>
+              <div>
+                <label class="mb-1 block text-xs font-medium text-gray-600">Contact email</label>
+                <InputText v-model="settings.message_template.contact_email" placeholder="hello@example.com" fluid />
+                <p v-if="sErr('message_template.contact_email')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.contact_email') }}</p>
+              </div>
+            </div>
+
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label class="mb-1 block text-xs font-medium text-gray-600">Copyright line</label>
+                <InputText v-model="settings.message_template.copyright_text" placeholder="© 2026 Example Ltd" fluid />
+                <p v-if="sErr('message_template.copyright_text')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.copyright_text') }}</p>
+              </div>
+              <div>
+                <label class="mb-1 block text-xs font-medium text-gray-600">Unsubscribe wording</label>
+                <InputText v-model="settings.message_template.unsubscribe_label" placeholder="Unsubscribe" fluid />
+                <p class="mt-1 text-xs text-gray-400">Wording only — the link itself is always added and cannot be removed.</p>
+                <p v-if="sErr('message_template.unsubscribe_label')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.unsubscribe_label') }}</p>
+              </div>
             </div>
 
             <!-- Palette. Native colour inputs: they emit #rrggbb, which is the

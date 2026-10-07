@@ -57,6 +57,8 @@ export interface MailgunReceiverTemplate {
   /** Hidden preview line shown under the subject in the inbox list. */
   preheader: string
   heading: string
+  /** Greeting line under the heading. `{{name}}` is substituted per receiver. */
+  greeting: string
   /** Body copy. `**bold**` is converted; line breaks are kept. */
   intro_text: string
   secondary_text: string
@@ -65,8 +67,14 @@ export interface MailgunReceiverTemplate {
   hero_image_url: string
   hero_url: string
   disclaimer_text: string
-  /** Free-text footer identity — sender address, contact, copyright. */
+  /** Free-text footer block, above the identity lines below. */
   footer_text: string
+  /** Identity footer, rendered in the same shape as the site promotion email. */
+  postal_address: string
+  contact_email: string
+  copyright_text: string
+  /** Wording of the unsubscribe line. The link itself is always appended. */
+  unsubscribe_label: string
   button_text_font_size: number
   background_color: string
   heading_color: string
