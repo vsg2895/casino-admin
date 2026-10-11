@@ -29,7 +29,7 @@ const formError = ref<string | null>(null)
 
 const form = reactive<SpecialOfferFormModel>({
   casino_id: null,
-  bonus_category_id: null, title: '', image_path: null, banner_image: null, bonuses: null,
+  bonus_category_id: null, title: '', slug: null, image_path: null, banner_image: null, bonuses: null,
   wagering_requirement: null, min_deposit: null, max_cashout: null,
   bonus_code: null, expires_at: null, terms_url: null,
   affiliate_url: null, description: null, rating: 0, sort_order: 0, active: true,
@@ -46,7 +46,11 @@ onMounted(async () => {
     // bonus_category_id: null and silently detached the offer from its Bonus
     // section. Every field in `form` must be hydrated here.
     bonus_category_id: offer.bonus_category_id,
-    title: offer.title, image_path: offer.image_path,
+    title: offer.title,
+    // The public address. Hydrated like every other field — see the note above:
+    // save() spreads the whole form, so a field left out is posted as empty.
+    slug: offer.slug,
+    image_path: offer.image_path,
     banner_image: offer.banner_image, bonuses: offer.bonuses, affiliate_url: offer.affiliate_url,
     wagering_requirement: offer.terms?.wagering_requirement ?? null,
     min_deposit: offer.terms?.min_deposit ?? null,
@@ -92,7 +96,7 @@ async function save(): Promise<void> {
     <div v-if="formError" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ formError }}</div>
 
     <div class="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
-      <SpecialOfferFormFields :form="form" :casinos="casinosStore.casinos" :bonus-categories="bonusCategories" :errors="errors" />
+      <SpecialOfferFormFields :form="form" :casinos="casinosStore.casinos" :bonus-categories="bonusCategories" :errors="errors" show-slug />
     </div>
   </div>
 </template>

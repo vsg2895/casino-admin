@@ -76,6 +76,13 @@ export interface SmtpReceiverSettings {
   selection_order: MailgunSelectionOrder
   /** Null disables the cooldown filter entirely. */
   cooldown_days: number | null
+  /**
+   * Source labels this credential may mail.
+   *
+   * EMPTY MEANS EVERY SOURCE — what every credential meant before labels
+   * existed, so an untouched credential keeps its whole audience.
+   */
+  receiver_sources: string[]
   message_subject: string | null
   /** Always complete — seeded from `template_source` when never configured. */
   message_template: MailgunReceiverTemplate

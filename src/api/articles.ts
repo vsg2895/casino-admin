@@ -33,6 +33,14 @@ export interface ArticlePage {
     total: number
     per_page: number
     published_count: number
+    /**
+     * The two curated rails, counted VISIBLE-and-flagged rather than merely
+     * flagged — a draft with the box ticked is on no rail, and counting it
+     * would send an editor looking for a post the site is not showing.
+     */
+    most_popular_count: number
+    /** The home page's news strip: `featured` on the server. */
+    featured_count: number
   }
 }
 

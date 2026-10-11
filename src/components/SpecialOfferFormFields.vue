@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { BonusCategory } from '@shared/types/bonusCategory'
+import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
 import Select from 'primevue/select'
@@ -12,6 +13,14 @@ export interface SpecialOfferFormModel {
   casino_id: number | null
   bonus_category_id: number | null
   title: string
+  /**
+   * The public address, editable while EDITING only.
+   *
+   * Absent on create: there is no address yet, and one is generated from the
+   * title when the row is saved. See the field below for why it can be changed
+   * afterwards at all.
+   */
+  slug?: string | null
   image_path: string | null
   banner_image: string | null
   bonuses: string | null
@@ -30,12 +39,19 @@ export interface SpecialOfferFormModel {
   terms_url: string | null
 }
 
-defineProps<{
+const props = defineProps<{
   form: SpecialOfferFormModel
   casinos: Casino[]
   errors?: Record<string, string>
   bonusCategories?: BonusCategory[]
+  /** Edit screens only — a new offer has no address to change yet. */
+  showSlug?: boolean
 }>()
+
+/** Clearing the field is the "rebuild it from the title" gesture. */
+function clearSlug(): void {
+  props.form.slug = null
+}
 
 const ratingOptions = [0, 1, 2, 3, 4, 5].map((n) => ({ label: String(n), value: n }))
 </script>
@@ -75,6 +91,35 @@ const ratingOptions = [0, 1, 2, 3, 4, 5].map((n) => ({ label: String(n), value: 
           <label class="mb-1 block text-sm font-medium text-gray-700">Title <span class="text-red-500">*</span></label>
           <InputText v-model="form.title" fluid />
           <p v-if="errors?.title" class="mt-1 text-xs text-red-600">{{ errors.title }}</p>
+        </div>
+
+        <!-- The public address.
+             Generated from the title once, then left alone, so renaming an
+             offer cannot silently move a URL that is already linked or indexed.
+             That is also why a DUPLICATE kept "(Copy)" in its link forever —
+             hence this field: the address is an editorial decision, not a
+             developer one. -->
+        <div v-if="showSlug">
+          <label class="mb-1 block text-sm font-medium text-gray-700">Link</label>
+          <div class="flex items-center gap-2">
+            <InputText v-model="form.slug" fluid placeholder="rebuilt from the title on save" />
+            <Button
+              label="From title"
+              icon="pi pi-refresh"
+              size="small"
+              outlined
+              severity="secondary"
+              :disabled="!form.slug"
+              @click="clearSlug"
+            />
+          </div>
+          <p class="mt-1 text-xs text-gray-500">
+            Shown as <span class="font-mono">/special-offers/{{ form.slug || '…' }}</span>.
+            Clear it and save to rebuild it from the title.
+            Changing it <strong>moves the public URL</strong> — add a redirect from the old one
+            so existing links keep working.
+          </p>
+          <p v-if="errors?.slug" class="mt-1 text-xs text-red-600">{{ errors.slug }}</p>
         </div>
         <div>
           <label class="mb-1 block text-sm font-medium text-gray-700">Bonuses</label>

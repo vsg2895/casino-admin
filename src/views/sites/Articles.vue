@@ -83,6 +83,16 @@ const loading = ref(false)
  */
 const publishedCount = ref(0)
 
+/**
+ * The two curated rails, counted server-side like the one above.
+ *
+ * Both are VISIBLE-and-flagged rather than merely flagged: a draft with the box
+ * ticked is on no rail, and a number that counted it would send an editor
+ * looking for a post the site is not showing.
+ */
+const mostPopularCount = ref(0)
+const featuredCount = ref(0)
+
 // ── paging ───────────────────────────────────────────────────────────────────
 //
 // SERVER-SIDE, because this list grows without anybody editing it: news is
@@ -124,6 +134,8 @@ async function reload(): Promise<void> {
     perPage.value = res.meta.per_page
     // Counted server-side over the whole section, not over the page in hand.
     publishedCount.value = res.meta.published_count
+    mostPopularCount.value = res.meta.most_popular_count
+    featuredCount.value = res.meta.featured_count
 
     // A deletion can empty the last page. Stepping back beats showing an empty
     // table under a paginator that says there are results.
@@ -391,6 +403,36 @@ onMounted(async () => {
         <Button :label="section.newLabel" icon="pi pi-plus" @click="openCreate" />
       </div>
 
+    </div>
+
+    <!-- The section at a glance, before the table.
+         Four numbers an editor otherwise had to work out by paging through the
+         list and counting ticks: how much exists, how much a visitor can
+         actually reach, and how many of those sit on each of the two curated
+         rails. All four are counted server-side over the WHOLE section — the
+         screen only ever holds one page, so counting what is in hand would be
+         wrong the moment there is a second one. -->
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div class="rounded-lg border border-gray-200 bg-white px-3 py-2">
+        <p class="text-xs text-gray-500">All {{ section.plural.toLowerCase() }}</p>
+        <p class="text-xl font-semibold tabular-nums text-gray-900">{{ totalRecords }}</p>
+        <p class="text-[11px] text-gray-400">drafts included</p>
+      </div>
+      <div class="rounded-lg border border-gray-200 bg-white px-3 py-2">
+        <p class="text-xs text-gray-500">Published</p>
+        <p class="text-xl font-semibold tabular-nums text-emerald-700">{{ publishedCount }}</p>
+        <p class="text-[11px] text-gray-400">live on the site</p>
+      </div>
+      <div class="rounded-lg border border-gray-200 bg-white px-3 py-2">
+        <p class="text-xs text-gray-500">Most popular</p>
+        <p class="text-xl font-semibold tabular-nums text-gray-900">{{ mostPopularCount }}</p>
+        <p class="text-[11px] text-gray-400">published &amp; on the rail</p>
+      </div>
+      <div class="rounded-lg border border-gray-200 bg-white px-3 py-2">
+        <p class="text-xs text-gray-500">Home strip</p>
+        <p class="text-xl font-semibold tabular-nums text-gray-900">{{ featuredCount }}</p>
+        <p class="text-[11px] text-gray-400">published &amp; featured</p>
+      </div>
     </div>
 
     <!-- Stated here rather than left as a surprise: an editor who publishes one

@@ -52,6 +52,37 @@ const sent = ref<api.MailgunSentFilter | null>(null)
 const sentFrom = ref<Date | null>(null)
 const sentTo = ref<Date | null>(null)
 
+/**
+ * Which list an address came from. Null is "any source".
+ *
+ * The options come from the server rather than a constant: the labels are
+ * whatever an operator typed on an import, and a hardcoded list would go stale
+ * the first time someone imports a new file.
+ */
+const sourceLabel = ref<string | null>(null)
+const sources = ref<api.MailgunReceiverSources | null>(null)
+
+const sourceOptions = computed(() => {
+  const list: { label: string; value: string | null }[] = [{ label: 'Any source', value: null }]
+
+  for (const row of sources.value?.sources ?? []) {
+    list.push({ label: `${row.label} (${row.total})`, value: row.label })
+  }
+
+  // Offered only when such rows exist, so a freshly labelled list does not
+  // carry a filter that always returns nothing.
+  if ((sources.value?.unlabelled ?? 0) > 0) {
+    list.push({ label: `No source (${sources.value?.unlabelled})`, value: sources.value?.none_value ?? '__none__' })
+  }
+
+  return list
+})
+
+async function loadSources(): Promise<void> {
+  // Never fatal: the filter simply offers "Any source" if this fails.
+  sources.value = await api.listMailgunReceiverSources().catch(() => null)
+}
+
 const sentOptions = [
   { label: 'Sent and not sent', value: null },
   { label: 'Sent', value: 'yes' },
@@ -79,6 +110,7 @@ function activeFilters(): Filters {
   const term = search.value.trim()
   if (term !== '') f.search = term
   if (sent.value !== null) f.sent = sent.value
+  if (sourceLabel.value !== null) f.source_label = sourceLabel.value
 
   // Dropped when "Never sent" is selected: those rows have no last-sent date, so
   // sending a range would return nothing and read as a broken filter.
@@ -117,6 +149,7 @@ async function applyFilters(): Promise<void> {
 async function clearFilters(): Promise<void> {
   search.value = ''
   sent.value = null
+  sourceLabel.value = null
   sentFrom.value = null
   sentTo.value = null
   await applyFilters()
@@ -133,14 +166,14 @@ const showForm = ref(false)
 const editingId = ref<number | null>(null)
 const saving = ref(false)
 const fieldErrors = ref<Record<string, string>>({})
-const form = ref({ email: '', name: '' })
+const form = ref({ email: '', name: '', source_label: '' })
 
 function err(field: string): string {
   return fieldErrors.value[field] ?? ''
 }
 
 function openCreate(): void {
-  form.value = { email: '', name: '' }
+  form.value = { email: '', name: '', source_label: '' }
   editingId.value = null
   fieldErrors.value = {}
   showForm.value = true
@@ -150,6 +183,7 @@ function openEdit(r: MailgunReceiver): void {
   form.value = {
     email: r.email,
     name: r.name ?? '',
+    source_label: r.source_label ?? '',
   }
   editingId.value = r.id
   fieldErrors.value = {}
@@ -163,6 +197,9 @@ async function save(): Promise<void> {
     const payload = {
       email: form.value.email.trim(),
       name: form.value.name.trim() || null,
+      // Empty becomes null, never "": a source named "" would match no filter
+      // and no credential, leaving the address silently unreachable.
+      source_label: form.value.source_label.trim() || null,
     }
     if (editingId.value === null) await api.createMailgunReceiver(payload)
     else await api.updateMailgunReceiver(editingId.value, payload)
@@ -199,6 +236,16 @@ async function bulkDelete(): Promise<void> {
 // ── Import ───────────────────────────────────────────────────────────────────
 const showImport = ref(false)
 const importFile = ref<File | null>(null)
+/**
+ * One source label for the whole file — "Facebook ads", "Partner list 3".
+ *
+ * A file IS the list in practice, and the reader this import shares with the
+ * newsletter importer yields addresses rather than rows, so there is no
+ * per-address Source column to read. Optional: an unlabelled import is still a
+ * perfectly good import, and those rows stay targetable through the
+ * "No source" option on a credential.
+ */
+const importSource = ref('')
 const importing = ref(false)
 const importRow = ref<MailgunReceiverImport | null>(null)
 let pollTimer: ReturnType<typeof setInterval> | undefined
@@ -213,7 +260,7 @@ async function startImport(): Promise<void> {
   if (!canImport.value || importFile.value === null) return
   importing.value = true
   try {
-    const res = await api.importMailgunReceivers(importFile.value)
+    const res = await api.importMailgunReceivers(importFile.value, importSource.value)
     importRow.value = res.data
     poll(res.data.id)
   } catch {
@@ -233,6 +280,9 @@ function poll(id: number): void {
         clearInterval(pollTimer)
         importing.value = false
         await reload()
+        // A new label becomes selectable immediately rather than only
+        // after a page refresh.
+        await loadSources()
       }
     } catch {
       clearInterval(pollTimer)
@@ -248,7 +298,10 @@ function formatDate(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '—'
 }
 
-onMounted(reload)
+onMounted(async () => {
+  // In parallel: the filter's options do not gate the table.
+  await Promise.all([reload(), loadSources()])
+})
 </script>
 
 <template>
@@ -273,6 +326,17 @@ onMounted(reload)
     <div class="flex flex-wrap items-center gap-3">
       <InputText v-model="search" placeholder="Search email or name" class="w-64" @keyup.enter="applyFilters" />
       <Select v-model="sent" :options="sentOptions" option-label="label" option-value="value" class="w-52" />
+      <!-- Which list these addresses came from. The options are whatever
+           labels imports have used, each with its count, so the filter says
+           how much is behind it before it is applied. -->
+      <Select
+        v-model="sourceLabel"
+        :options="sourceOptions"
+        option-label="label"
+        option-value="value"
+        placeholder="Any source"
+        class="w-56"
+      />
       <DatePicker
         v-model="sentFrom"
         date-format="yy-mm-dd"
@@ -331,6 +395,16 @@ onMounted(reload)
           </template>
         </Column>
 
+        <!-- Which list this address came from. Shown rather than left to the
+             filter: an operator reading a row needs to know which credential
+             would reach it, and "—" is a real answer, not a gap. -->
+        <Column header="Source" :style="{ width: '170px' }">
+          <template #body="{ data }: { data: MailgunReceiver }">
+            <span v-if="data.source_label" class="text-sm text-gray-700">{{ data.source_label }}</span>
+            <span v-else class="text-sm text-gray-300">—</span>
+          </template>
+        </Column>
+
         <!-- Unsubscribed is the one state worth interrupting a scan for: those
              rows are excluded from every send and cannot be re-enabled here. -->
         <Column header="" :style="{ width: '140px' }">
@@ -380,6 +454,16 @@ onMounted(reload)
           <label class="mb-1 block text-xs font-medium text-gray-600">Name <span class="font-normal text-gray-400">(optional)</span></label>
           <InputText v-model="form.name" fluid />
         </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-gray-600">Source <span class="font-normal text-gray-400">(optional)</span></label>
+          <InputText v-model="form.source_label" fluid placeholder="e.g. Facebook ads" />
+          <p class="mt-1 text-xs text-gray-500">
+            Which list this address belongs to. A credential in Email Config can be pointed at
+            one or more sources; leave this empty and the address is reached by
+            <strong>No source</strong>.
+          </p>
+          <p v-if="err('source_label')" class="mt-1 text-xs text-red-600">{{ err('source_label') }}</p>
+        </div>
       </div>
       <template #footer>
         <Button label="Cancel" text @click="showForm = false" />
@@ -397,6 +481,16 @@ onMounted(reload)
         <div>
           <label class="mb-1 block text-xs font-medium text-gray-600">File</label>
           <input type="file" accept=".xlsx,.csv" class="text-sm" @change="onFile" />
+        </div>
+
+        <div>
+          <label class="mb-1 block text-xs font-medium text-gray-600">Source (optional)</label>
+          <InputText v-model="importSource" fluid placeholder="e.g. Facebook ads, Partner list 3" />
+          <p class="mt-1 text-xs text-gray-500">
+            Stamped on every address in this file. In Email Config you can then point a
+            credential at one or more sources, and it will only mail those. Leave it empty
+            and the addresses stay reachable through the <strong>No source</strong> option.
+          </p>
         </div>
 
         <div v-if="importRow" class="rounded-lg bg-gray-50 p-3 text-sm">

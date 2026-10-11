@@ -4,6 +4,7 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
+import MultiSelect from 'primevue/multiselect'
 import ToggleSwitch from 'primevue/toggleswitch'
 import InputNumber from 'primevue/inputnumber'
 import Textarea from 'primevue/textarea'
@@ -180,6 +181,37 @@ const settingsLoading = ref(false)
 const settingsSaving = ref(false)
 const settingsErrors = ref<Record<string, string>>({})
 const settings = ref<MailgunReceiverSettings | null>(null)
+
+/**
+ * The source lists this credential can be pointed at.
+ *
+ * Loaded from the receivers endpoint rather than hardcoded: the labels are
+ * whatever an operator typed on an import. "No source" is offered only when
+ * such addresses exist, and it is how a credential reaches everything that was
+ * imported before labelling started — usually most of an established list.
+ */
+const receiverSources = ref<receiversApi.MailgunReceiverSources | null>(null)
+
+const sourceOptions = computed(() => {
+  const list: { label: string; value: string }[] = (receiverSources.value?.sources ?? []).map(
+    (row) => ({ label: `${row.label} (${row.total})`, value: row.label }),
+  )
+
+  if ((receiverSources.value?.unlabelled ?? 0) > 0) {
+    list.push({
+      label: `No source (${receiverSources.value?.unlabelled})`,
+      value: receiverSources.value?.none_value ?? '__none__',
+    })
+  }
+
+  return list
+})
+
+async function loadReceiverSources(): Promise<void> {
+  // Never fatal: the control then offers nothing and the credential keeps
+  // mailing every source, which is the safe default anyway.
+  receiverSources.value = await receiversApi.listMailgunReceiverSources().catch(() => null)
+}
 const previewRows = ref<MailgunReceiverType[]>([])
 const previewLoading = ref(false)
 
@@ -265,7 +297,13 @@ async function openSettings(k: MailgunKey): Promise<void> {
   showSettings.value = true
   settingsLoading.value = true
   try {
-    settings.value = (await receiversApi.getReceiverSettings(k.id)).data
+    // Both in parallel: the modal needs the saved settings and the list of
+    // sources it can be pointed at, and neither waits on the other.
+    const [loaded] = await Promise.all([
+      (await receiversApi.getReceiverSettings(k.id)).data,
+      loadReceiverSources(),
+    ])
+    settings.value = loaded
   } catch {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Could not load settings.', life: 4000 })
   } finally {
@@ -782,6 +820,30 @@ onMounted(async () => {
                shared suppression list, neither of which is a setting. -->
         </div>
 
+
+        <!-- WHICH LISTS this credential may mail.
+             Empty means every source, which is what a credential meant before
+             source labels existed — so an untouched credential keeps its whole
+             audience. Picking one or more narrows the send to exactly those
+             addresses, and "No source" reaches everything imported before
+             labelling started. -->
+        <div>
+          <label class="mb-1 block text-xs font-medium text-gray-600">Send to sources</label>
+          <MultiSelect
+            v-model="settings.receiver_sources"
+            :options="sourceOptions"
+            option-label="label"
+            option-value="value"
+            display="chip"
+            placeholder="Every source"
+            class="w-full"
+            :show-toggle-all="false"
+          />
+          <p class="mt-1 text-xs text-gray-400">
+            Leave empty to mail every source. The counts below update when you save.
+          </p>
+          <p v-if="sErr('receiver_sources')" class="mt-1 text-xs text-red-600">{{ sErr('receiver_sources') }}</p>
+        </div>
         <div>
           <label class="mb-1 block text-xs font-medium text-gray-600">Subject</label>
           <InputText v-model="settings.message_subject" fluid />

@@ -22,6 +22,27 @@ export interface MailgunReceiverFilters {
   last_sent_from?: string
   last_sent_to?: string
   source?: 'import' | 'manual'
+  /**
+   * The operator's own name for the list an address came from. Pass the
+   * `none_value` sentinel from `listMailgunReceiverSources()` to find the rows
+   * carrying no label at all.
+   */
+  source_label?: string
+}
+
+/** The source labels in use, for the Receivers filter and the credential picker. */
+export interface MailgunReceiverSources {
+  sources: { label: string; total: number }[]
+  /** How many addresses carry no label — everything imported before labelling. */
+  unlabelled: number
+  /** The value that stands for "no source" in a filter or a credential's list. */
+  none_value: string
+}
+
+export function listMailgunReceiverSources(): Promise<MailgunReceiverSources> {
+  return client
+    .get<ApiResponse<MailgunReceiverSources>>('/admin/mailgun-receivers/sources')
+    .then((r) => r.data.data)
 }
 
 export function listMailgunReceivers(
@@ -90,9 +111,14 @@ export function resetMailgunReceiverSends(clearErrors = false): Promise<number> 
  */
 export function importMailgunReceivers(
   file: File,
+  /** Stamped on every address in this file, so a send can target it later. */
+  sourceLabel?: string,
 ): Promise<ApiResponse<MailgunReceiverImport>> {
   const form = new FormData()
   form.append('file', file)
+  // Omitted entirely when blank: an empty string would be stored as a source
+  // named "", which no filter could ever match.
+  if (sourceLabel && sourceLabel.trim() !== '') form.append('source_label', sourceLabel.trim())
 
   return client
     .post<ApiResponse<MailgunReceiverImport>>('/admin/mailgun-receivers/import', form)

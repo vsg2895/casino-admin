@@ -12,7 +12,18 @@ export interface MailgunReceiver {
   id: number
   email: string
   name: string | null
+  /** HOW the row was created — not where the person came from. See below. */
   source: MailgunReceiverSource
+  /**
+   * The operator's own name for the list this address came from: "Facebook
+   * ads", "Partner list 3". Set per file on import, editable on a receiver, and
+   * what a credential targets when it is told which sources to mail.
+   *
+   * Null for everything added before labelling existed, and for rows nobody
+   * filed. A credential can target those explicitly — see `SOURCE_LABEL_NONE`
+   * on the server, surfaced as `none_value` by the sources endpoint.
+   */
+  source_label: string | null
   /** When the row was added. Set on every creation path. */
   consent_recorded_at: string | null
   is_active: boolean
@@ -27,6 +38,7 @@ export interface MailgunReceiver {
 export interface UpsertMailgunReceiverPayload {
   email: string
   name?: string | null
+  source_label?: string | null
 }
 
 /** Progress row for a queued spreadsheet import, polled until finished_at. */
@@ -102,6 +114,13 @@ export interface MailgunReceiverSettings {
   selection_order: MailgunSelectionOrder
   /** Null disables the cooldown filter entirely. */
   cooldown_days: number | null
+  /**
+   * Source labels this credential may mail.
+   *
+   * EMPTY MEANS EVERY SOURCE — the behaviour every credential had before
+   * labels existed, so an untouched credential keeps its whole audience.
+   */
+  receiver_sources: string[]
   message_subject: string | null
   /**
    * Always complete. A credential that has never been configured comes back
