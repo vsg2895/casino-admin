@@ -6,6 +6,15 @@
 // never returned by the API — it exists only inside the emailed link.
 
 export type MailgunReceiverSource = 'import' | 'manual'
+
+/**
+ * WHOSE list an address came from — the server's `ReceiverSource` enum.
+ *
+ * A closed set on a NOT NULL column: the field is a send-time filter, and free
+ * text would split an audience on a typo. Everything that predates the field is
+ * `our_clients`.
+ */
+export type ReceiverSourceLabel = 'our_clients' | 'external_clients'
 export type MailgunSelectionOrder = 'newest' | 'oldest'
 
 export interface MailgunReceiver {
@@ -15,15 +24,11 @@ export interface MailgunReceiver {
   /** HOW the row was created — not where the person came from. See below. */
   source: MailgunReceiverSource
   /**
-   * The operator's own name for the list this address came from: "Facebook
-   * ads", "Partner list 3". Set per file on import, editable on a receiver, and
-   * what a credential targets when it is told which sources to mail.
-   *
-   * Null for everything added before labelling existed, and for rows nobody
-   * filed. A credential can target those explicitly — see `SOURCE_LABEL_NONE`
-   * on the server, surfaced as `none_value` by the sources endpoint.
+   * Whose list this address came from. Set per file on import, editable on a
+   * receiver, and what a credential targets when it is told which sources to
+   * mail. Never null — the column has a database default.
    */
-  source_label: string | null
+  source_label: ReceiverSourceLabel
   /** When the row was added. Set on every creation path. */
   consent_recorded_at: string | null
   is_active: boolean
@@ -38,7 +43,7 @@ export interface MailgunReceiver {
 export interface UpsertMailgunReceiverPayload {
   email: string
   name?: string | null
-  source_label?: string | null
+  source_label?: ReceiverSourceLabel
 }
 
 /** Progress row for a queued spreadsheet import, polled until finished_at. */
@@ -115,12 +120,12 @@ export interface MailgunReceiverSettings {
   /** Null disables the cooldown filter entirely. */
   cooldown_days: number | null
   /**
-   * Source labels this credential may mail.
+   * Sources this credential may mail.
    *
-   * EMPTY MEANS EVERY SOURCE — the behaviour every credential had before
-   * labels existed, so an untouched credential keeps its whole audience.
+   * EMPTY MEANS BOTH — the audience every credential had before this existed,
+   * so an untouched credential keeps everyone.
    */
-  receiver_sources: string[]
+  receiver_sources: ReceiverSourceLabel[]
   message_subject: string | null
   /**
    * Always complete. A credential that has never been configured comes back

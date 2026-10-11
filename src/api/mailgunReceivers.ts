@@ -2,6 +2,7 @@ import client from './client'
 import type { ApiResponse, PaginatedResponse } from '@shared/types/api'
 import type {
   MailgunReceiver,
+  ReceiverSourceLabel,
   MailgunReceiverImport,
   MailgunReceiverSettings,
   MailgunReceiverTemplate,
@@ -22,21 +23,13 @@ export interface MailgunReceiverFilters {
   last_sent_from?: string
   last_sent_to?: string
   source?: 'import' | 'manual'
-  /**
-   * The operator's own name for the list an address came from. Pass the
-   * `none_value` sentinel from `listMailgunReceiverSources()` to find the rows
-   * carrying no label at all.
-   */
-  source_label?: string
+  /** Whose list an address came from. */
+  source_label?: ReceiverSourceLabel
 }
 
-/** The source labels in use, for the Receivers filter and the credential picker. */
+/** The two sources with their counts — what the pickers are built from. */
 export interface MailgunReceiverSources {
-  sources: { label: string; total: number }[]
-  /** How many addresses carry no label — everything imported before labelling. */
-  unlabelled: number
-  /** The value that stands for "no source" in a filter or a credential's list. */
-  none_value: string
+  sources: { value: ReceiverSourceLabel; label: string; total: number }[]
 }
 
 export function listMailgunReceiverSources(): Promise<MailgunReceiverSources> {
@@ -112,13 +105,12 @@ export function resetMailgunReceiverSends(clearErrors = false): Promise<number> 
 export function importMailgunReceivers(
   file: File,
   /** Stamped on every address in this file, so a send can target it later. */
-  sourceLabel?: string,
+  sourceLabel?: ReceiverSourceLabel,
 ): Promise<ApiResponse<MailgunReceiverImport>> {
   const form = new FormData()
   form.append('file', file)
-  // Omitted entirely when blank: an empty string would be stored as a source
-  // named "", which no filter could ever match.
-  if (sourceLabel && sourceLabel.trim() !== '') form.append('source_label', sourceLabel.trim())
+  // Omitted when absent, so the column's own default applies.
+  if (sourceLabel) form.append('source_label', sourceLabel)
 
   return client
     .post<ApiResponse<MailgunReceiverImport>>('/admin/mailgun-receivers/import', form)

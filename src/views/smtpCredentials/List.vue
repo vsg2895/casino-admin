@@ -245,29 +245,22 @@ const settingsErrors = ref<Record<string, string>>({})
 const settings = ref<SmtpReceiverSettings | null>(null)
 
 /**
- * The source lists this credential can be pointed at.
+ * The sources this credential can be pointed at.
  *
- * Loaded from the receivers endpoint rather than hardcoded: the labels are
- * whatever an operator typed on an import. "No source" is offered only when
- * such addresses exist, and it is how a credential reaches everything that was
- * imported before labelling started — usually most of an established list.
+ * Loaded from the receivers endpoint rather than hardcoded here: the values are
+ * the server's enum and the counts are live, so the control can say how much is
+ * behind each option before it is chosen.
  */
 const receiverSources = ref<receiversApi.MailgunReceiverSources | null>(null)
 
-const sourceOptions = computed(() => {
-  const list: { label: string; value: string }[] = (receiverSources.value?.sources ?? []).map(
-    (row) => ({ label: `${row.label} (${row.total})`, value: row.label }),
-  )
-
-  if ((receiverSources.value?.unlabelled ?? 0) > 0) {
-    list.push({
-      label: `No source (${receiverSources.value?.unlabelled})`,
-      value: receiverSources.value?.none_value ?? '__none__',
-    })
-  }
-
-  return list
-})
+const sourceOptions = computed(() =>
+  // Both options, each with its count. A closed set, so nothing is conditional:
+  // the control offers exactly what the column can hold.
+  (receiverSources.value?.sources ?? []).map((row) => ({
+    label: `${row.label} (${row.total})`,
+    value: row.value,
+  })),
+)
 
 async function loadReceiverSources(): Promise<void> {
   // Never fatal: the control then offers nothing and the credential keeps

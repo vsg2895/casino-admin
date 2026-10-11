@@ -15,7 +15,7 @@
 // There is no `send_enabled`: this channel has no scheduler and runs only from
 // the "Run now" button.
 
-import type { MailgunReceiverTemplate, MailgunSelectionOrder } from './mailgunReceiver'
+import type { MailgunReceiverTemplate, MailgunSelectionOrder, ReceiverSourceLabel } from './mailgunReceiver'
 
 export type SmtpCredentialStatus = 'active' | 'inactive'
 
@@ -77,12 +77,11 @@ export interface SmtpReceiverSettings {
   /** Null disables the cooldown filter entirely. */
   cooldown_days: number | null
   /**
-   * Source labels this credential may mail.
+   * Sources this credential may mail.
    *
-   * EMPTY MEANS EVERY SOURCE — what every credential meant before labels
-   * existed, so an untouched credential keeps its whole audience.
+   * EMPTY MEANS BOTH — the audience every credential had before this existed.
    */
-  receiver_sources: string[]
+  receiver_sources: ReceiverSourceLabel[]
   message_subject: string | null
   /** Always complete — seeded from `template_source` when never configured. */
   message_template: MailgunReceiverTemplate
