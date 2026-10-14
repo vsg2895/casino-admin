@@ -16,7 +16,7 @@ Conventions: [../docs/CONVENTIONS.md](../docs/CONVENTIONS.md)
 | **Content** | Casinos (+ Attach to Sites, + Countries), Special Offers, Categories, Countries, Reviews (moderation), CMS/Legal Pages, Social Links |
 | **Email templates** | per site: Email Template (welcome), Verify Email, Promotion Email; plus the **global** Promotion-after-verification |
 | **Audience** | Newsletter (email), Newsletter Phones (SMS), Unsubscribes |
-| **Delivery** | Schedules, Promotion History, SendGrid Keys, Mailgun Keys, Twilio Configs, SMS Templates, Warmup |
+| **Delivery** | Schedules, **Email History** (promotion · after-verification · warmup, one tabbed section), SendGrid Keys, Mailgun Keys, Twilio Configs, SMS Templates, Warmup |
 | **Account** | Change Password |
 
 Routes live in `src/router/index.ts`; each area has a folder under `src/views/`.

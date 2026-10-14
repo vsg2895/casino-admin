@@ -62,6 +62,24 @@ export function verifyKey(id: number): Promise<{ ok: boolean; status: string; in
   ).then((r) => r.data.data)
 }
 
+/**
+ * Tell UniOne where to post this key's delivery events.
+ *
+ * The step that used to be missing entirely: the webhook endpoint existed and
+ * verified payloads correctly, but nothing ever registered its URL, so bounces
+ * and complaints never reached the receiver list. Rejections come back as 422
+ * with UniOne's own message — which is the thing worth showing.
+ */
+export function registerKeyWebhook(
+  id: number,
+): Promise<{ ok: boolean; message: string; key: UniOneApiKey }> {
+  return client
+    .post<{ data: { ok: boolean; message: string; key: UniOneApiKey } }>(
+      `${BASE}/keys/${id}/webhook`,
+    )
+    .then((r) => r.data.data)
+}
+
 export function makeKeyDefault(id: number): Promise<UniOneApiKey> {
   return client.patch<{ data: UniOneApiKey }>(`${BASE}/keys/${id}/default`).then((r) => r.data.data)
 }

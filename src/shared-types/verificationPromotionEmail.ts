@@ -154,3 +154,26 @@ export type UpdateVerificationPromotionEmailPayload = Omit<
   | 'created_at'
   | 'updated_at'
 >
+
+/**
+ * One attempt to send the post-verification promotion to one subscriber.
+ *
+ * Fields match VerificationPromotionSendResource.php. The stream's OWN log,
+ * separate from `promotion_email_histories`: that table is what the 24-hour
+ * dedup reads and carries no stream column, so it cannot answer "what did this
+ * stream send".
+ */
+export type VerificationPromotionSendStatus = 'success' | 'failed'
+
+export interface VerificationPromotionHistoryEntry {
+  id: number
+  email: string
+  /** Null once the subscriber has been deleted — `email` keeps the row readable. */
+  newsletter_id: number | null
+  status: VerificationPromotionSendStatus
+  error: string | null
+  site: { id: number; name: string; domain: string } | null
+  site_id: number
+  sent_at: string
+  created_at: string | null
+}

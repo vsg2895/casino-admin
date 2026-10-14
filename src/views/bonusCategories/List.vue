@@ -10,8 +10,12 @@ import Textarea from 'primevue/textarea'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Message from 'primevue/message'
 import { useToast } from 'primevue/usetoast'
+import axios from 'axios'
 import * as api from '@/api/bonusCategories'
+import { uploadCategoryLogo } from '@/api/categories'
+import { STORAGE_BASE_URL } from '@/config/urls'
 import type { BonusCategory } from '@shared/types/bonusCategory'
+import type { ErrorResponse } from '@shared/types/api'
 
 /**
  * Bonus categories — the sub-items under the Bonus menu.
@@ -35,7 +39,59 @@ const editingId = ref<number | null>(null)
 const saving = ref(false)
 const deleting = ref<BonusCategory | null>(null)
 
-const form = ref({ name: '', description: '' as string | null, position: 0, active: true })
+const form = ref({
+  name: '',
+  description: '' as string | null,
+  icon_path: null as string | null,
+  position: 0,
+  active: true,
+})
+
+// ── Icon ─────────────────────────────────────────────────────────────────────
+//
+// The chip artwork: a bonus type is a button on the home page of every site that
+// publishes the area, and the icon is what makes a row of them scannable.
+//
+// The SAME endpoint the casino-category logo uses — it is an "upload one safe
+// SVG" route, not a categories-only one, and it sanitises the file server-side
+// before anything is written to disk. A second endpoint doing the identical job
+// would be a second place for that security step to drift.
+//
+// The file goes up on its own request and only its PATH is held here, so a
+// cancelled dialog never leaves a half-saved icon and a failed save never
+// discards one the editor already picked.
+const uploading = ref(false)
+
+/** A stored path resolved against the API origin's /storage mount. */
+function iconUrl(path: string | null | undefined): string | null {
+  if (!path) return null
+  return /^https?:\/\//.test(path) ? path : `${STORAGE_BASE_URL}/storage/${path}`
+}
+
+async function pickIcon(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  uploading.value = true
+  try {
+    form.value.icon_path = await uploadCategoryLogo(file)
+  } catch (e: unknown) {
+    const data = axios.isAxiosError(e) ? (e.response?.data as ErrorResponse | undefined) : undefined
+    toast.add({
+      severity: 'error',
+      summary: 'Upload failed',
+      // The server explains SVG-only and the size cap; passing it through beats
+      // a generic message the editor cannot act on.
+      detail: data?.errors?.file?.[0] ?? data?.message ?? 'Could not upload that file.',
+      life: 5000,
+    })
+  } finally {
+    uploading.value = false
+    // Cleared so picking the SAME file again still fires a change event.
+    input.value = ''
+  }
+}
 
 async function reload(): Promise<void> {
   loading.value = true
@@ -50,7 +106,13 @@ async function reload(): Promise<void> {
 
 function openCreate(): void {
   editingId.value = null
-  form.value = { name: '', description: null, position: (items.value.at(-1)?.position ?? 0) + 10, active: true }
+  form.value = {
+    name: '',
+    description: null,
+    icon_path: null,
+    position: (items.value.at(-1)?.position ?? 0) + 10,
+    active: true,
+  }
   showDialog.value = true
 }
 
@@ -59,6 +121,7 @@ function openEdit(row: BonusCategory): void {
   form.value = {
     name: row.name,
     description: row.description,
+    icon_path: row.icon_path,
     position: row.position,
     active: row.active,
   }
@@ -147,6 +210,21 @@ onMounted(reload)
           <div class="py-10 text-center text-sm text-gray-400">No bonus categories yet.</div>
         </template>
 
+        <Column header="Icon" :style="{ width: '72px' }">
+          <template #body="{ data }">
+            <img
+              v-if="iconUrl(data.icon_path)"
+              :src="iconUrl(data.icon_path)!"
+              :alt="`${data.name} icon`"
+              class="h-8 w-8 rounded-lg"
+            />
+            <!-- A placeholder, not an empty cell: a type with no icon still
+                 renders a chip on the sites, just without the mark, and the
+                 editor should be able to see which ones those are. -->
+            <span v-else class="inline-block h-8 w-8 rounded-lg border border-dashed border-gray-300" />
+          </template>
+        </Column>
+
         <Column header="Name">
           <template #body="{ data }">
             <span class="font-medium text-gray-900">{{ data.name }}</span>
@@ -210,6 +288,43 @@ onMounted(reload)
         <div>
           <label class="mb-1 block text-xs font-medium text-gray-600">Description</label>
           <Textarea v-model="form.description" rows="2" fluid placeholder="Optional line under the section heading" />
+        </div>
+
+        <div>
+          <label class="mb-1 block text-xs font-medium text-gray-600">Icon</label>
+          <div class="flex items-center gap-3">
+            <img
+              v-if="iconUrl(form.icon_path)"
+              :src="iconUrl(form.icon_path)!"
+              alt=""
+              class="h-12 w-12 rounded-xl"
+            />
+            <span v-else class="grid h-12 w-12 place-items-center rounded-xl border border-dashed border-gray-300 text-gray-300">
+              <i class="pi pi-image" />
+            </span>
+
+            <label
+              class="cursor-pointer rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              :class="uploading ? 'pointer-events-none opacity-60' : ''"
+            >
+              {{ uploading ? 'Uploading…' : form.icon_path ? 'Change icon' : 'SVG icon' }}
+              <input type="file" accept=".svg,image/svg+xml" class="hidden" @change="pickIcon" />
+            </label>
+
+            <Button
+              v-if="form.icon_path"
+              icon="pi pi-times"
+              text
+              severity="secondary"
+              size="small"
+              aria-label="Remove icon"
+              @click="form.icon_path = null"
+            />
+          </div>
+          <p class="mt-1 text-xs text-gray-400">
+            SVG only, 256 KB max. Shown in the bonus strip at the top of each site's home page —
+            a square mark reads best, since it renders at 22px there.
+          </p>
         </div>
 
         <div>

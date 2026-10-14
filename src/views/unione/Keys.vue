@@ -230,6 +230,35 @@ async function recheck(domain: string, check: 'dkim' | 'verification'): Promise<
   })
 }
 
+/**
+ * Register this key's webhook with UniOne.
+ *
+ * Until this existed the URL below was decoration: the endpoint was built and
+ * verified payloads correctly, but nobody had told UniOne where to post, so
+ * bounces and complaints were counted in their dashboard and never reached the
+ * receiver list. The provider's own answer is surfaced in the toast — a refusal
+ * names what to fix.
+ */
+const registering = ref<number | null>(null)
+
+async function registerWebhook(key: UniOneApiKey): Promise<void> {
+  registering.value = key.id
+  try {
+    const res = await api.registerKeyWebhook(key.id)
+    await load()
+    toast.add({ severity: 'success', summary: 'Webhook registered', detail: res.message, life: 6000 })
+  } catch (e: unknown) {
+    await load()
+    toast.add({ severity: 'error', summary: message(e, 'Could not register the webhook'), life: 8000 })
+  } finally {
+    registering.value = null
+  }
+}
+
+function formatWhen(iso: string | null): string {
+  return iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '—'
+}
+
 async function copy(text: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(text)
@@ -342,13 +371,43 @@ onMounted(() => void load())
               </template>
             </Column>
 
-            <Column header="Webhook URL" style="min-width:16rem">
+            <Column header="Webhook" style="min-width:22rem">
               <template #body="{ data }: { data: UniOneApiKey }">
                 <div class="flex items-center gap-2">
                   <code class="truncate rounded bg-gray-100 px-1 text-[11px]">{{ data.webhook_url }}</code>
                   <Button size="small" text icon="pi pi-copy" @click="copy(data.webhook_url)" />
                 </div>
-                <p class="mt-1 text-xs text-gray-400">Paste into UniOne → Webhooks.</p>
+
+                <!-- Registration state, stated rather than assumed. A key with no
+                     registration is the reason bounces never reach the list, and
+                     it used to be invisible. -->
+                <div class="mt-1 flex flex-wrap items-center gap-2">
+                  <Tag
+                    :value="data.webhook_registered_at ? 'Registered' : 'Not registered'"
+                    :severity="data.webhook_registered_at ? 'success' : 'warn'"
+                  />
+                  <Button
+                    :label="data.webhook_registered_at ? 'Re-register' : 'Register webhook'"
+                    icon="pi pi-link"
+                    size="small"
+                    outlined
+                    :loading="registering === data.id"
+                    @click="registerWebhook(data)"
+                  />
+                </div>
+
+                <!-- The only proof registration took effect: a registration can
+                     succeed and still deliver nothing. -->
+                <p class="mt-1 text-xs text-gray-500">
+                  Last event: <span class="tabular-nums">{{ formatWhen(data.last_webhook_event_at) }}</span>
+                </p>
+                <p
+                  v-if="data.webhook_status && !data.webhook_registered_at"
+                  class="mt-0.5 max-w-[22rem] truncate text-xs text-red-600"
+                  :title="data.webhook_status"
+                >
+                  {{ data.webhook_status }}
+                </p>
               </template>
             </Column>
 

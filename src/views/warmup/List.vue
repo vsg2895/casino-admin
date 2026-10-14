@@ -425,7 +425,7 @@ onMounted(async () => {
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <RecordCount label="Total Warmup Emails" :total="recordTotal" :loading="loading" />
-        <Button label="History" icon="pi pi-history" severity="secondary" outlined @click="router.push({ name: 'warmup-history' })" />
+        <Button label="History" icon="pi pi-history" severity="secondary" outlined @click="router.push({ name: 'email-history', query: { tab: 'warmup' } })" />
         <Button label="Import" icon="pi pi-upload" severity="secondary" outlined :loading="importing" @click="triggerImport" />
         <Button label="Send warmup" icon="pi pi-send" severity="secondary" outlined @click="openSend" />
         <Button label="Stop run" icon="pi pi-ban" severity="danger" outlined @click="showCancel = true" />

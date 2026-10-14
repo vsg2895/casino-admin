@@ -130,6 +130,14 @@ const router = createRouter({
           meta: { requiresAuth: true, title: 'Promotion After Verification' },
         },
         {
+          // Its send history — the stream mails with nobody pressing anything,
+          // so the log is the only place an outcome is visible. Same shape as
+          // Warmup History, and reached from the settings screen above.
+          path: 'promotion-after-verification/history',
+          name: 'promotion-after-verification-history',
+          redirect: { name: 'email-history', query: { tab: 'post-verification' } },
+        },
+        {
           path: 'promotion-emails',
           name: 'promotion-emails',
           component: () => import('@/views/sites/PromotionEmails.vue'),
@@ -311,10 +319,28 @@ const router = createRouter({
           meta: { requiresAuth: true, title: 'Schedule Setting' },
         },
         {
+          /*
+           * Email History — every email log behind one heading, a tab each.
+           *
+           * The three were separate sections in three parts of the sidebar,
+           * which made "did this address get anything from us" a three-screen
+           * question. The tab lives in `?tab=` so it can be linked and survives
+           * a refresh.
+           */
+          path: 'email-history',
+          name: 'email-history',
+          component: () => import('@/views/emailHistory/Index.vue'),
+          meta: { requiresAuth: true, title: 'Email History' },
+        },
+        {
+          /*
+           * The old per-history paths, kept as REDIRECTS rather than deleted.
+           * They are bookmarked, and they are what the History buttons on the
+           * Warmup and Promotion-after-verification screens point at.
+           */
           path: 'promotion-history',
           name: 'promotion-history',
-          component: () => import('@/views/promotionHistory/List.vue'),
-          meta: { requiresAuth: true, title: 'Promotion History' },
+          redirect: { name: 'email-history', query: { tab: 'promotion' } },
         },
         /*
          * UniOne — two ADDITIVE route records.
@@ -366,8 +392,7 @@ const router = createRouter({
         {
           path: 'warmup/history',
           name: 'warmup-history',
-          component: () => import('@/views/warmup/History.vue'),
-          meta: { requiresAuth: true, title: 'Warmup History' },
+          redirect: { name: 'email-history', query: { tab: 'warmup' } },
         },
         {
           path: 'social-links',

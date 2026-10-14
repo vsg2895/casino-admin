@@ -18,6 +18,16 @@ import RecordCount from '@/components/RecordCount.vue'
 import type { PromotionEmailHistory, PromotionEmailStatus } from '@shared/types/promotionEmailHistory'
 
 const sitesStore = useSitesStore()
+/**
+ * Rendered inside the combined Email History section rather than on its own
+ * route.
+ *
+ * Embedded, the tab already names this log, so the screen drops its own heading
+ * and count badge. Everything else — the filters, the paging, the export — is
+ * identical, because this is the SAME component rather than a copy of it.
+ */
+const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
+
 const toast = useToast()
 
 const items = ref<PromotionEmailHistory[]>([])
@@ -164,8 +174,8 @@ onMounted(async () => {
 
 <template>
   <div class="space-y-4">
-    <!-- Header -->
-    <div class="flex flex-wrap items-start justify-between gap-3">
+    <!-- Header. Hidden when embedded: the tab is the title. -->
+    <div v-if="!props.embedded" class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h2 class="text-lg font-semibold text-gray-900">Promotion History</h2>
         <p class="text-sm text-gray-500">

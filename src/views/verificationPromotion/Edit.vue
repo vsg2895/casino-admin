@@ -13,6 +13,7 @@
  *    delay and the sending key are meaningless without the template they drive.
  */
 import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
 import Textarea from 'primevue/textarea'
@@ -36,6 +37,7 @@ import type {
 import type { ErrorResponse } from '@shared/types/api'
 
 const toast = useToast()
+const router = useRouter()
 
 const fromDomain = ref('example.com')
 const introMin = ref(12)
@@ -449,6 +451,15 @@ function err(field: string): string | undefined {
         </p>
       </div>
       <div class="flex items-center gap-2">
+        <!-- Where to see what this stream actually sent. It mails with nobody
+             pressing anything, so the history is the only feedback there is. -->
+        <Button
+          label="History"
+          icon="pi pi-history"
+          severity="secondary"
+          outlined
+          @click="router.push({ name: 'email-history', query: { tab: 'post-verification' } })"
+        />
         <Button label="Send test" icon="pi pi-send" severity="secondary" outlined @click="showTest = true" />
         <Button label="Save Changes" icon="pi pi-check" :loading="saving" @click="save" />
       </div>

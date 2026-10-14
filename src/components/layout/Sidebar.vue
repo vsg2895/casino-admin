@@ -61,8 +61,10 @@ const navItems: NavItem[] = [
   { label: 'Mailgun Receivers', to: '/mailgun-receivers', icon: 'pi-users' },
   { label: 'Email Configs', to: '/smtp-credentials', icon: 'pi-server' },
   { label: 'Warmup', to: '/warmup', icon: 'pi-sun' },
-  { label: 'Warmup History', to: '/warmup/history', icon: 'pi-history' },
-  { label: 'Promotion History', to: '/promotion-history', icon: 'pi-history' },
+  // One entry for every email log — promotion, after-verification and warmup
+  // are tabs inside it. Two separate "… History" entries in different parts of
+  // this list were how an operator ended up checking an address three times.
+  { label: 'Email History', to: '/email-history', icon: 'pi-history' },
   { label: 'Social Links',   to: '/social-links',   icon: 'pi-share-alt' },
   { label: 'Pages',          to: '/pages',          icon: 'pi-file' },
   { label: 'Sites',          to: '/sites',          icon: 'pi-server' },

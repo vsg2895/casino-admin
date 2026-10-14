@@ -28,6 +28,17 @@ export interface UniOneApiKey {
   notes: string | null
   /** Contains the path token — an operator must paste this into UniOne. */
   webhook_url: string
+  /**
+   * Webhook state.
+   *
+   * `webhook_registered_at` is when UniOne was last successfully TOLD about the
+   * URL; `webhook_status` is what it answered, verbatim, including an error.
+   * `last_webhook_event_at` is when an event last ARRIVED — the only proof the
+   * registration took effect, since one can succeed and still deliver nothing.
+   */
+  webhook_registered_at: string | null
+  webhook_status: string | null
+  last_webhook_event_at: string | null
   created_at: string | null
   updated_at: string | null
 }

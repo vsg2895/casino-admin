@@ -1,7 +1,10 @@
 import client from './client'
+import type { PaginatedResponse } from '@shared/types/api'
 import type {
   UpdateVerificationPromotionEmailPayload,
   VerificationPromotionEmail,
+  VerificationPromotionHistoryEntry,
+  VerificationPromotionSendStatus,
 } from '@shared/types/verificationPromotionEmail'
 
 // The global post-verification promotion. Note the absence of a site id in every
@@ -96,5 +99,53 @@ export function updateVerificationPromotionOverride(
       `/admin/verification-promotion/overrides/${siteId}`,
       payload,
     )
+    .then((r) => r.data)
+}
+
+// ── Send history ─────────────────────────────────────────────────────────────
+//
+// The stream's own log, shaped exactly like the warmup history: a lazy listing
+// plus a dedicated COUNT, so the badge never rides on the paginated query.
+
+export interface VerificationPromotionHistoryFilters {
+  page?: number
+  per_page?: number
+  /** PREFIX match on the address, like the newsletter and warmup searches. */
+  search?: string
+  site_id?: number
+  status?: VerificationPromotionSendStatus
+  /**
+   * Inclusive `sent_at` bounds as `YYYY-MM-DD`. Both ends cover the whole day in
+   * the column's own zone, so a row sent near midnight can fall on the adjacent
+   * day from the one the table displays locally.
+   */
+  sent_from?: string
+  sent_to?: string
+}
+
+export function listVerificationPromotionHistory(
+  params?: VerificationPromotionHistoryFilters,
+): Promise<PaginatedResponse<VerificationPromotionHistoryEntry>> {
+  return client
+    .get<PaginatedResponse<VerificationPromotionHistoryEntry>>(
+      '/admin/verification-promotion/history',
+      { params },
+    )
+    .then((r) => r.data)
+}
+
+/**
+ * Totals for the current filters.
+ *
+ * Returns both numbers the header needs: how many attempts match, and how many
+ * of those failed — counted over the whole filtered set rather than the page.
+ */
+export function countVerificationPromotionHistory(
+  params?: Omit<VerificationPromotionHistoryFilters, 'page' | 'per_page'>,
+): Promise<{ total: number; failed: number }> {
+  return client
+    .get<{ total: number; failed: number }>('/admin/verification-promotion/history/count', {
+      params,
+    })
     .then((r) => r.data)
 }

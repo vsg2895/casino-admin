@@ -94,11 +94,10 @@ const ratingOptions = [0, 1, 2, 3, 4, 5].map((n) => ({ label: String(n), value: 
         </div>
 
         <!-- The public address.
-             Generated from the title once, then left alone, so renaming an
-             offer cannot silently move a URL that is already linked or indexed.
-             That is also why a DUPLICATE kept "(Copy)" in its link forever —
-             hence this field: the address is an editorial decision, not a
-             developer one. -->
+             It FOLLOWS THE TITLE: rename the offer and the link is rebuilt from
+             the new name, with a 301 written from the old path on every site
+             the offer appears on, so links already shared keep working. This
+             field is the override — type an address and it is kept as typed. -->
         <div v-if="showSlug">
           <label class="mb-1 block text-sm font-medium text-gray-700">Link</label>
           <div class="flex items-center gap-2">
@@ -115,9 +114,9 @@ const ratingOptions = [0, 1, 2, 3, 4, 5].map((n) => ({ label: String(n), value: 
           </div>
           <p class="mt-1 text-xs text-gray-500">
             Shown as <span class="font-mono">/special-offers/{{ form.slug || '…' }}</span>.
-            Clear it and save to rebuild it from the title.
-            Changing it <strong>moves the public URL</strong> — add a redirect from the old one
-            so existing links keep working.
+            Renaming the offer rebuilds this automatically and leaves a redirect from the old
+            address, so shared links keep working. Type here only to override it;
+            <strong>From title</strong> hands it back.
           </p>
           <p v-if="errors?.slug" class="mt-1 text-xs text-red-600">{{ errors.slug }}</p>
         </div>

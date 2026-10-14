@@ -8,6 +8,14 @@ export interface BonusCategory {
   /** In the public URL and every cache key — never regenerated on rename. */
   slug: string
   description: string | null
+  /**
+   * Path to the type's SVG icon on the public disk, or null.
+   *
+   * Resolved against the API origin's /storage mount, exactly like
+   * `Category.logo_path` — one resolver serves both. It is the chip artwork in
+   * the bonus strip on a site's home page.
+   */
+  icon_path: string | null
   position: number
   /** Shown on the site. Off removes the menu entry AND the section. */
   active: boolean
@@ -20,6 +28,8 @@ export interface BonusCategory {
 export interface UpsertBonusCategoryPayload {
   name?: string
   description?: string | null
+  /** Stored path from the SVG upload. Explicit null clears the icon. */
+  icon_path?: string | null
   position?: number
   active?: boolean
 }

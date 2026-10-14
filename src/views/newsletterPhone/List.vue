@@ -10,7 +10,7 @@
  * server-side resolver, so the number in the send dialog is the number that
  * actually gets messaged rather than a separate estimate.
  */
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, useTemplateRef, watch } from 'vue'
 import DataTable from 'primevue/datatable'
 import type { DataTableSortEvent } from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -29,13 +29,13 @@ import { listTwilioConfigs } from '@/api/twilioConfigs'
 import { listSmsTemplates } from '@/api/smsTemplates'
 import { segmentCount, segmentSummary } from '@/utils/smsSegments'
 import RecordCount from '@/components/RecordCount.vue'
+import SmsHistory from '@/views/smsHistory/List.vue'
 import type { SmsTemplate } from '@shared/types/smsTemplate'
 import type {
   NewsletterPhone,
   PhoneDateMode,
   PhoneImportProgress,
   PhoneRecipientPreview,
-  PhoneSmsHistory,
 } from '@shared/types/newsletterPhone'
 import type { TwilioConfig } from '@shared/types/twilioConfig'
 import type { ErrorResponse } from '@shared/types/api'
@@ -555,72 +555,19 @@ async function send(): Promise<void> {
 }
 
 // ── Send history ──────────────────────────────────────────────────────────────
+//
+// The table itself lives in views/smsHistory/List.vue — the same component the
+// Email History section renders in its SMS tab. All that is left here is opening
+// the dialog and telling it to refresh.
 const showHistory = ref(false)
-const history = ref<PhoneSmsHistory[]>([])
-const historyLoading = ref(false)
-const historyPage = ref(1)
-const historyPerPage = ref(50)
-const historyMeta = ref<{ total: number; last_page: number } | null>(null)
-const historyTotal = ref<number | null>(null)
-const historyStatus = ref<'' | 'sent' | 'failed'>('')
-const historySearch = ref('')
-
-const historyFirst = computed(() => (historyPage.value - 1) * historyPerPage.value)
-const historyRecords = computed(() => historyMeta.value?.total ?? 0)
-
-const historyStatusOptions = [
-  { label: 'All', value: '' },
-  { label: 'Sent', value: 'sent' },
-  { label: 'Failed', value: 'failed' },
-]
-
-function historyFilters(): { search?: string; status?: 'sent' | 'failed' } {
-  const params: { search?: string; status?: 'sent' | 'failed' } = {}
-  const term = historySearch.value.trim()
-  if (term !== '') params.search = term
-  if (historyStatus.value !== '') params.status = historyStatus.value
-  return params
-}
-
-async function loadHistory(): Promise<void> {
-  historyLoading.value = true
-  try {
-    const [list, count] = await Promise.all([
-      api.listSmsHistory({
-        page: historyPage.value,
-        per_page: historyPerPage.value,
-        ...historyFilters(),
-      }),
-      api.countSmsHistory(historyFilters()).catch(() => null),
-    ])
-    history.value = list.data
-    historyMeta.value = { total: list.meta.total, last_page: list.meta.last_page }
-    historyPerPage.value = list.meta.per_page
-    historyTotal.value = count
-  } catch {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load the send history.', life: 4000 })
-  } finally {
-    historyLoading.value = false
-  }
-}
+const smsHistory = useTemplateRef<{ refresh: () => Promise<void> } | null>('smsHistory')
 
 async function openHistory(): Promise<void> {
   showHistory.value = true
-  historyPage.value = 1
-  await loadHistory()
+  // The component is created on first open and then reused, so a second open
+  // asks it for a fresh first page rather than showing a stale one.
+  await smsHistory.value?.refresh()
 }
-
-async function onHistoryPage(event: { page: number; rows: number }): Promise<void> {
-  historyPage.value = event.page + 1
-  historyPerPage.value = event.rows
-  await loadHistory()
-}
-
-watch([historyStatus, historySearch], () => {
-  if (!showHistory.value) return
-  historyPage.value = 1
-  void loadHistory()
-})
 
 onMounted(async () => {
   await Promise.all([reload(), loadConfigs(), loadTemplates()])
@@ -1043,77 +990,11 @@ onMounted(async () => {
     </Dialog>
 
     <!-- Send history -->
+    <!-- The SAME component the Email History section's SMS tab renders. It was
+         inline here; two copies of one table drift the first time a column
+         changes. -->
     <Dialog v-model:visible="showHistory" modal header="SMS send history" :style="{ width: '900px' }">
-      <div class="space-y-3">
-        <div class="flex flex-wrap items-center gap-3">
-          <InputText v-model="historySearch" placeholder="Search by number" class="w-56" />
-          <Select
-            v-model="historyStatus"
-            :options="historyStatusOptions"
-            option-label="label"
-            option-value="value"
-            class="w-36"
-          />
-          <RecordCount label="Total Attempts" :total="historyTotal" :loading="historyLoading" class="ml-auto" />
-        </div>
-
-        <DataTable
-          :value="history"
-          :loading="historyLoading"
-          data-key="id"
-          striped-rows
-          lazy
-          paginator
-          :rows="historyPerPage"
-          :first="historyFirst"
-          :total-records="historyRecords"
-          :rows-per-page-options="[20, 50, 100]"
-          current-page-report-template="{first}–{last} of {totalRecords}"
-          :pt="{ root: { class: 'text-sm' } }"
-          @page="onHistoryPage"
-        >
-          <template #empty>
-            <div class="py-8 text-center text-sm text-gray-400">Nothing sent yet.</div>
-          </template>
-
-          <Column field="phone" header="Number" :style="{ width: '160px' }">
-            <template #body="{ data }: { data: PhoneSmsHistory }">
-              <span class="font-mono text-gray-900">{{ data.phone }}</span>
-            </template>
-          </Column>
-
-          <Column field="status" header="Result" :style="{ width: '110px' }">
-            <template #body="{ data }: { data: PhoneSmsHistory }">
-              <Tag
-                :severity="data.status === 'sent' ? 'success' : 'danger'"
-                :value="data.status === 'sent' ? 'Sent' : 'Failed'"
-              />
-            </template>
-          </Column>
-
-          <Column header="Detail">
-            <template #body="{ data }: { data: PhoneSmsHistory }">
-              <span v-if="data.status === 'failed'" class="text-red-700">
-                <span v-if="data.error_code" class="font-mono text-xs">{{ data.error_code }}</span>
-                {{ data.error }}
-              </span>
-              <span v-else class="font-mono text-xs text-gray-500">{{ data.message_sid ?? '—' }}</span>
-            </template>
-          </Column>
-
-          <Column header="Sent via" :style="{ width: '150px' }">
-            <template #body="{ data }: { data: PhoneSmsHistory }">
-              <span class="text-gray-600">{{ data.twilio_config?.name ?? '—' }}</span>
-            </template>
-          </Column>
-
-          <Column field="created_at" header="When" :style="{ width: '170px' }">
-            <template #body="{ data }: { data: PhoneSmsHistory }">
-              <span class="text-gray-600">{{ formatDate(data.created_at) }}</span>
-            </template>
-          </Column>
-        </DataTable>
-      </div>
+      <SmsHistory ref="smsHistory" />
       <template #footer>
         <Button label="Close" text @click="showHistory = false" />
       </template>
