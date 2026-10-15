@@ -24,6 +24,7 @@ import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
+import HistoryDeleteButton from '@/components/HistoryDeleteButton.vue'
 import * as api from '@/api/newsletterPhones'
 import RecordCount from '@/components/RecordCount.vue'
 import type { PhoneSmsHistory } from '@shared/types/newsletterPhone'
@@ -207,6 +208,17 @@ defineExpose({
           <span class="text-gray-600">{{ formatDate(data.created_at) }}</span>
         </template>
       </Column>
-    </DataTable>
+        <!-- One row at a time. Clearing a log is `histories:clear` on the server,
+         which reports what it is about to take. -->
+    <Column header="" :style="{ width: '56px' }">
+      <template #body="{ data }">
+        <HistoryDeleteButton
+          :label="data.phone"
+          :remove="() => api.deleteSmsHistory(data.id)"
+          @deleted="reload"
+        />
+      </template>
+    </Column>
+</DataTable>
   </div>
 </template>

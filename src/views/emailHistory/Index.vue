@@ -47,6 +47,8 @@ import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
 import PromotionHistory from '@/views/promotionHistory/List.vue'
 import SmsHistory from '@/views/smsHistory/List.vue'
+import UniOneSends from '@/views/unione/Sends.vue'
+import VerifyEmailHistory from '@/views/verifyEmailHistory/List.vue'
 import WarmupHistory from '@/views/warmup/History.vue'
 import VerificationPromotionHistory from '@/views/verificationPromotion/History.vue'
 
@@ -54,7 +56,7 @@ const route = useRoute()
 const router = useRouter()
 
 /** The tab keys, which are also the `?tab=` values. */
-const TABS = ['promotion', 'post-verification', 'warmup', 'sms'] as const
+const TABS = ['promotion', 'verify', 'post-verification', 'warmup', 'sms', 'unione'] as const
 type TabKey = (typeof TABS)[number]
 
 function tabFromRoute(): TabKey {
@@ -91,21 +93,31 @@ watch(
     <div>
       <h2 class="text-lg font-semibold text-gray-900">Email History</h2>
       <p class="text-sm text-gray-500">
-        Every message the platform has sent, by stream. Each tab has its own filters.
+        Every message the platform has sent, by stream — and the UniOne runs that carried
+        them. Each tab has its own filters.
       </p>
     </div>
 
     <Tabs v-model:value="activeTab" lazy>
       <TabList>
         <Tab value="promotion">Promotion</Tab>
+        <!-- Before "After verification", because it comes first in a
+             subscriber's life: confirm the address, then the promotion. -->
+        <Tab value="verify">Verify email</Tab>
         <Tab value="post-verification">After verification</Tab>
         <Tab value="warmup">Warmup</Tab>
         <Tab value="sms">SMS</Tab>
+        <!-- The odd one out, and labelled so: every other tab lists MESSAGES,
+             this one lists RUNS. -->
+        <Tab value="unione">UniOne runs</Tab>
       </TabList>
 
       <TabPanels class="!px-0 !pt-4">
         <TabPanel value="promotion">
           <PromotionHistory embedded />
+        </TabPanel>
+        <TabPanel value="verify">
+          <VerifyEmailHistory embedded />
         </TabPanel>
         <TabPanel value="post-verification">
           <VerificationPromotionHistory embedded />
@@ -115,6 +127,9 @@ watch(
         </TabPanel>
         <TabPanel value="sms">
           <SmsHistory embedded />
+        </TabPanel>
+        <TabPanel value="unione">
+          <UniOneSends embedded />
         </TabPanel>
       </TabPanels>
     </Tabs>

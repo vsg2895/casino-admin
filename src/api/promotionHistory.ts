@@ -21,6 +21,11 @@ export function listPromotionHistory(
 
 // Total matching the current filters. A dedicated COUNT on the server, issued
 // separately from the listing so the paginated query never carries its weight.
+/** Remove ONE row. The table is partitioned, so the server deletes by (id, sent_date). */
+export function deletePromotionHistory(id: number): Promise<void> {
+  return client.delete(`/admin/promotion-history/${id}`).then(() => undefined)
+}
+
 export function countPromotionHistory(
   params?: Omit<PromotionHistoryFilters, 'page'>,
 ): Promise<number> {

@@ -167,6 +167,17 @@ function currentFilters(): api.UniOneReceiverFilters {
   }
 }
 
+/**
+ * Is anything actually narrowing the list?
+ *
+ * Read from the SAME object the requests are built from, so the wording in the
+ * header cannot disagree with what was sent. `per_page` and `page` are not
+ * filters and never appear there.
+ */
+const hasFilters = computed(() =>
+  Object.values(currentFilters()).some((v) => v !== null && v !== undefined && v !== ''),
+)
+
 async function load(): Promise<void> {
   loading.value = true
   try {
@@ -176,7 +187,9 @@ async function load(): Promise<void> {
         ...currentFilters(),
       }),
       // Never fatal — a failed stats call must not take the list down.
-      api.receiverStats().catch(() => null),
+      // Same filters as the listing: the header describes what the table is
+      // showing, not the whole list.
+      api.receiverStats(currentFilters()).catch(() => null),
     ])
     items.value = list.data
     meta.value = { total: list.meta.total, last_page: list.meta.last_page }
@@ -420,9 +433,14 @@ onMounted(() => void load())
       <div>
         <h1 class="text-xl font-semibold text-gray-900">UniOne Receivers</h1>
         <p class="mt-1 text-sm text-gray-500">
+          <!-- The wording changes with the filters, because the NUMBER does:
+               unfiltered it describes the list, filtered it describes the
+               match. A count whose meaning is ambiguous is worse than none. -->
           <template v-if="stats">
-            {{ stats.total.toLocaleString() }} on the list ·
+            {{ stats.total.toLocaleString() }}
+            {{ hasFilters ? 'matching the filters' : 'on the list' }} ·
             <span class="font-medium text-gray-700">{{ (stats.by_status.active ?? 0).toLocaleString() }}</span> active
+            <template v-if="stats.never_sent"> · {{ stats.never_sent.toLocaleString() }} never sent</template>
           </template>
           <template v-else>A separate list from the newsletter subscribers.</template>
         </p>

@@ -140,6 +140,11 @@ export function listVerificationPromotionHistory(
  * Returns both numbers the header needs: how many attempts match, and how many
  * of those failed — counted over the whole filtered set rather than the page.
  */
+/** Remove ONE row of this stream's history. */
+export function deleteVerificationPromotionHistory(id: number): Promise<void> {
+  return client.delete(`/admin/verification-promotion/history/${id}`).then(() => undefined)
+}
+
 export function countVerificationPromotionHistory(
   params?: Omit<VerificationPromotionHistoryFilters, 'page' | 'per_page'>,
 ): Promise<{ total: number; failed: number }> {

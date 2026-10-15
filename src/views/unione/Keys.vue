@@ -401,10 +401,16 @@ onMounted(() => void load())
                 <p class="mt-1 text-xs text-gray-500">
                   Last event: <span class="tabular-nums">{{ formatWhen(data.last_webhook_event_at) }}</span>
                 </p>
+                <!-- The provider's own words, IN FULL.
+                     This was `truncate`, which cut the message at the width of
+                     the column — and UniOne's errors start with an incident id,
+                     so the part that was hidden was the only part that said
+                     what went wrong. It wraps now; the id is still there for
+                     their support, and the reason is readable without
+                     hovering. -->
                 <p
                   v-if="data.webhook_status && !data.webhook_registered_at"
-                  class="mt-0.5 max-w-[22rem] truncate text-xs text-red-600"
-                  :title="data.webhook_status"
+                  class="mt-0.5 max-w-[22rem] break-words text-xs text-red-600"
                 >
                   {{ data.webhook_status }}
                 </p>

@@ -135,6 +135,11 @@ export function listSmsHistory(
     .then((r) => r.data)
 }
 
+/** Remove ONE SMS history row. The number stays on the list it was sent from. */
+export function deleteSmsHistory(id: number): Promise<void> {
+  return client.delete(`/admin/newsletter-phones/history/${id}`).then(() => undefined)
+}
+
 export function countSmsHistory(
   params?: Omit<SmsHistoryFilters, 'page' | 'per_page'>,
 ): Promise<number> {

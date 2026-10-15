@@ -168,6 +168,11 @@ export function listWarmupHistory(
 
 // Dedicated COUNT for the history, issued separately from the listing so the
 // paginated query never carries its weight.
+/** Remove ONE delivery-history row. The address stays on the warmup list. */
+export function deleteWarmupHistory(id: number): Promise<void> {
+  return client.delete(`/admin/warmup-emails/history/${id}`).then(() => undefined)
+}
+
 export function countWarmupHistory(
   params?: Omit<WarmupHistoryFilters, 'page' | 'per_page'>,
 ): Promise<number> {

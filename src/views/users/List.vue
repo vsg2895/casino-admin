@@ -25,6 +25,7 @@ import Tag from 'primevue/tag'
 import Dialog from 'primevue/dialog'
 import { useToast } from 'primevue/usetoast'
 import * as api from '@/api/forum'
+import RecordCount from '@/components/RecordCount.vue'
 import type {
   ForumMemberRole,
   ForumMemberRow,
@@ -71,6 +72,11 @@ const postsDialog = ref(false)
 const postsFor = ref<ForumMemberRow | null>(null)
 const memberPosts = ref<ForumModerationPost[]>([])
 const postsLoading = ref(false)
+
+/** Is anything narrowing the list? Drives the wording of the count. */
+const hasFilters = computed(
+  () => status.value !== null || role.value !== null || verified.value !== null || search.value.trim() !== '',
+)
 
 async function load(): Promise<void> {
   loading.value = true
@@ -153,6 +159,10 @@ onMounted(() => void load())
     <div class="mb-4">
       <h1 class="text-xl font-semibold text-gray-900">Users</h1>
       <p class="mt-1 text-sm text-gray-500">
+        <template v-if="meta">
+          <span class="font-medium text-gray-700">{{ meta.total.toLocaleString() }}</span>
+          {{ hasFilters ? 'matching the filters' : 'registered' }} ·
+        </template>
         Visitor accounts registered on winpalack.com. Separate from the admin
         accounts that sign in to this panel.
       </p>
@@ -176,6 +186,17 @@ onMounted(() => void load())
         <Select v-model="verified" :options="verifiedOptions" option-label="label" option-value="value" class="w-40" />
       </div>
       <Button label="Apply" icon="pi pi-filter" @click="apply" />
+
+      <!-- The count of what the FILTERS match, not of the table.
+           `meta.total` is the server's count of the filtered set — the same
+           number the paginator is built from — so it already moves with every
+           filter and never has to be requested separately. -->
+      <RecordCount
+        label="Users"
+        :total="meta ? meta.total : null"
+        :loading="loading"
+        class="ml-auto"
+      />
     </div>
 
     <DataTable

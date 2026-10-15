@@ -138,6 +138,14 @@ export interface UniOneSend {
   /** Days, like Warmup: "2" skips anyone contacted in the last two days. */
   cooldown_days: number
   error: string | null
+  /**
+   * A "Send test" — a run of one through the real send path, not a campaign.
+   *
+   * It belongs in the log (an operator testing wants to see it land) and is
+   * flagged so one row with requested=1 is not read as a failed run of
+   * thousands.
+   */
+  is_test: boolean
   completed_at: string | null
   created_at: string | null
   key?: { id: number; name: string; key_type: UniOneKeyType; region: UniOneRegion }

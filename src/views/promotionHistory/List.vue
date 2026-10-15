@@ -8,11 +8,13 @@ import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import Paginator, { type PageState } from 'primevue/paginator'
 import { useToast } from 'primevue/usetoast'
+import HistoryDeleteButton from '@/components/HistoryDeleteButton.vue'
 import { useSitesStore } from '@/stores/sitesStore'
 import {
   listPromotionHistory,
   countPromotionHistory,
   type PromotionHistoryFilters,
+  deletePromotionHistory,
 } from '@/api/promotionHistory'
 import RecordCount from '@/components/RecordCount.vue'
 import type { PromotionEmailHistory, PromotionEmailStatus } from '@shared/types/promotionEmailHistory'
@@ -282,7 +284,18 @@ onMounted(async () => {
             <span class="text-gray-400">{{ formatDateTime(data.created_at) }}</span>
           </template>
         </Column>
-      </DataTable>
+            <!-- One row at a time. Clearing a log is `histories:clear` on the server,
+           which reports what it is about to take. -->
+      <Column header="" :style="{ width: '56px' }">
+        <template #body="{ data }">
+          <HistoryDeleteButton
+            :label="data.email"
+            :remove="() => deletePromotionHistory(data.id)"
+            @deleted="reload"
+          />
+        </template>
+      </Column>
+</DataTable>
 
       <Paginator
         v-if="total > perPage"

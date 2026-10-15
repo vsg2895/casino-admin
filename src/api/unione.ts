@@ -135,8 +135,20 @@ export function listReceivers(params?: UniOneReceiverFilters): Promise<Paginated
   return client.get<Paginated<UniOneReceiver>>(`${BASE}/receivers`, { params }).then((r) => r.data)
 }
 
-export function receiverStats(): Promise<UniOneReceiverStats> {
-  return client.get<{ data: UniOneReceiverStats }>(`${BASE}/receivers/stats`).then((r) => r.data.data)
+/**
+ * The summary above the receivers table.
+ *
+ * Takes the SAME filters as the listing, because it describes the same set:
+ * without them the header kept reporting the whole list while the table showed
+ * a filtered slice of it, which reads as a wrong number rather than a different
+ * question. `last_statuses` is the one field the server keeps unfiltered — it
+ * is the option list for a filter, and narrowing it would remove the options
+ * you are trying to switch between.
+ */
+export function receiverStats(params?: UniOneReceiverFilters): Promise<UniOneReceiverStats> {
+  return client
+    .get<{ data: UniOneReceiverStats }>(`${BASE}/receivers/stats`, { params })
+    .then((r) => r.data.data)
 }
 
 export function createReceiver(payload: UpsertUniOneReceiverPayload): Promise<UniOneReceiver> {
@@ -209,6 +221,11 @@ export function startSend(payload: Record<string, unknown>): Promise<UniOneSend>
 
 export function listSends(params?: Record<string, unknown>): Promise<Paginated<UniOneSend>> {
   return client.get<Paginated<UniOneSend>>(`${BASE}/sends`, { params }).then((r) => r.data)
+}
+
+/** Remove ONE run. Its chunks and recipient rows cascade with it. */
+export function deleteSend(id: number): Promise<void> {
+  return client.delete(`${BASE}/sends/${id}`).then(() => undefined)
 }
 
 export function getSend(id: number): Promise<UniOneSend> {

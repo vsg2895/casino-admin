@@ -172,6 +172,13 @@ export interface VerificationPromotionHistoryEntry {
   newsletter_id: number | null
   status: VerificationPromotionSendStatus
   error: string | null
+  /**
+   * A "Send test" from this section rather than a real subscriber's send.
+   *
+   * Both belong in the log — an operator pressing test wants to see it land —
+   * but only one is evidence that a subscriber was mailed, so the table tags it.
+   */
+  is_test: boolean
   site: { id: number; name: string; domain: string } | null
   site_id: number
   sent_at: string

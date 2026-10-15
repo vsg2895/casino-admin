@@ -20,6 +20,7 @@ import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import Button from 'primevue/button'
 import { useToast } from 'primevue/usetoast'
+import HistoryDeleteButton from '@/components/HistoryDeleteButton.vue'
 import * as api from '@/api/warmupEmails'
 import RecordCount from '@/components/RecordCount.vue'
 import { useSitesStore } from '@/stores/sitesStore'
@@ -380,7 +381,18 @@ onMounted(async () => {
             <span class="text-gray-600">{{ formatDate(data.sent_at) }}</span>
           </template>
         </Column>
-      </DataTable>
+            <!-- One row at a time. Clearing a log is `histories:clear` on the server,
+           which reports what it is about to take. -->
+      <Column header="" :style="{ width: '56px' }">
+        <template #body="{ data }">
+          <HistoryDeleteButton
+            :label="data.email"
+            :remove="() => api.deleteWarmupHistory(data.id)"
+            @deleted="reload"
+          />
+        </template>
+      </Column>
+</DataTable>
     </div>
   </div>
 </template>
