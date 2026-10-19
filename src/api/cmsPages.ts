@@ -10,6 +10,15 @@ export interface CreateCmsPagePayload {
   meta_title?: string | null
   meta_description?: string | null
   status?: CmsPageStatus
+  /**
+   * Keep this page out of the search index (`noindex, follow`).
+   *
+   * The six standard legal pages ship true — every site in the network shares
+   * one template for them. The five trust pages (about, contact,
+   * responsible-gambling, affiliate-disclosure, editorial-policy) ship false,
+   * because Google weighs them when judging the whole domain.
+   */
+  noindex?: boolean
 }
 
 // site_id cannot change once a page is created.

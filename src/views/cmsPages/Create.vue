@@ -26,6 +26,7 @@ const form = reactive<CmsPageFormModel>({
   meta_title: null,
   meta_description: null,
   status: 'draft',
+  noindex: false,
 })
 
 const loading = ref(false)

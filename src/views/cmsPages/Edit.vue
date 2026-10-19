@@ -31,6 +31,7 @@ const form = reactive<CmsPageFormModel>({
   meta_title: null,
   meta_description: null,
   status: 'draft',
+  noindex: false,
 })
 
 onMounted(async () => {
@@ -44,6 +45,7 @@ onMounted(async () => {
     meta_title: data.meta_title,
     meta_description: data.meta_description,
     status: data.status,
+    noindex: data.noindex ?? false,
   })
   loaded.value = true
 })
@@ -60,6 +62,7 @@ async function save(): Promise<void> {
       content: form.content,
       meta_title: form.meta_title,
       meta_description: form.meta_description,
+      noindex: form.noindex,
       status: form.status,
     })
     store.upsert(res.data)

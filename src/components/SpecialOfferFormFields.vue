@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { BonusCategory } from '@shared/types/bonusCategory'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
@@ -52,6 +53,67 @@ const props = defineProps<{
 function clearSlug(): void {
   props.form.slug = null
 }
+
+/**
+ * What the slug WILL be if the field is left empty — a preview, not the source
+ * of truth.
+ *
+ * The server decides, in App\Models\SpecialOffer::slugBase(), and this mirrors
+ * it so an editor can see the address before saving instead of discovering it
+ * afterwards. Keep the two in step: casino slug first, hyphens throughout,
+ * `%` → percent, `&` → and, a trailing "(Copy)" dropped, and the casino prefix
+ * omitted when the title already names it.
+ *
+ * It cannot show the `-2` a collision would add — only the database knows that
+ * — so the note under the field says the final address is confirmed on save.
+ */
+function previewSlug(title: string, casinoSlug: string): string {
+  const base = (title || '')
+    .toLowerCase()
+    .replace(/%/g, ' percent ')
+    .replace(/&/g, ' and ')
+    .replace(/\s*\(\s*cop(?:y|ies)\s*\d*\s*\)\s*$/i, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+  if (base === '') return ''
+
+  const prefix = casinoSlug.replace(/^-+|-+$/g, '')
+
+  if (prefix === '' || base === prefix || `-${base}-`.includes(`-${prefix}-`)) return base
+
+  return `${prefix}-${base}`
+}
+
+/** The casino currently selected in the form, for the slug prefix and the URL. */
+const selectedCasino = computed(() =>
+  props.casinos.find((c) => c.id === props.form.casino_id) ?? null,
+)
+
+/** The slug that will actually be used: what was typed, or the preview. */
+const effectiveSlug = computed(() =>
+  (props.form.slug ?? '').trim() !== ''
+    ? (props.form.slug as string).trim()
+    : previewSlug(props.form.title ?? '', selectedCasino.value?.slug ?? ''),
+)
+
+/**
+ * The full public URL, on one of the sites this offer's casino is attached to.
+ *
+ * An offer is global master data and appears on every attached domain, so there
+ * is no single canonical address — the first attached site is shown as the
+ * example, with the count of the others beside it. Falls back to the path alone
+ * when the attachments are not loaded.
+ */
+const previewUrl = computed(() => {
+  const sites = selectedCasino.value?.sites ?? []
+  const base = sites[0]?.site_url?.replace(/\/+$/, '') ?? ''
+  const path = `/special-offers/${effectiveSlug.value || '…'}`
+
+  return { url: base !== '' ? `${base}${path}` : path, others: Math.max(0, sites.length - 1) }
+})
 
 const ratingOptions = [0, 1, 2, 3, 4, 5].map((n) => ({ label: String(n), value: n }))
 </script>
@@ -112,11 +174,26 @@ const ratingOptions = [0, 1, 2, 3, 4, 5].map((n) => ({ label: String(n), value: 
               @click="clearSlug"
             />
           </div>
+          <!-- The full address, not just the path: this is the string an
+               operator copies, and the one they check against what Search
+               Console reports. -->
           <p class="mt-1 text-xs text-gray-500">
-            Shown as <span class="font-mono">/special-offers/{{ form.slug || '…' }}</span>.
-            Renaming the offer rebuilds this automatically and leaves a redirect from the old
-            address, so shared links keep working. Type here only to override it;
-            <strong>From title</strong> hands it back.
+            <span class="font-mono break-all text-gray-700">{{ previewUrl.url }}</span>
+            <span v-if="previewUrl.others > 0" class="text-gray-400">
+              (and {{ previewUrl.others }} more site{{ previewUrl.others > 1 ? 's' : '' }})
+            </span>
+          </p>
+          <p class="mt-1 text-xs text-gray-500">
+            Leave it empty and it is built from the casino and the title on save —
+            <span class="font-mono">casino-slug-offer-title</span>, lowercase letters, numbers and
+            hyphens. Type here only to override it; <strong>From title</strong> hands it back.
+          </p>
+          <!-- Said plainly, because the previous wording promised a redirect
+               that does not exist and an operator would have trusted it. -->
+          <p class="mt-1 text-xs text-amber-700">
+            Renaming the offer or editing this field <strong>changes the public address</strong> and
+            the old one stops working — there is no automatic redirect. Update any link you have
+            shared or published yourself.
           </p>
           <p v-if="errors?.slug" class="mt-1 text-xs text-red-600">{{ errors.slug }}</p>
         </div>

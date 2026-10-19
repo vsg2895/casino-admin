@@ -170,6 +170,19 @@ export interface VerificationPromotionHistoryEntry {
   email: string
   /** Null once the subscriber has been deleted — `email` keeps the row readable. */
   newsletter_id: number | null
+  /**
+   * Which audience the recipient came from.
+   *
+   * `newsletter` — a subscriber who verified their email address.
+   * `registration` — a member who verified their account registration and
+   * received the same template after the same delay.
+   *
+   * A column rather than an inference from `newsletter_id === null`: that null
+   * already means "subscriber since deleted", so reusing it would make the
+   * history ambiguous exactly where it is read to answer a complaint.
+   */
+  source: 'newsletter' | 'registration'
+  forum_user_id: number | null
   status: VerificationPromotionSendStatus
   error: string | null
   /**

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
+import ToggleSwitch from 'primevue/toggleswitch'
 import Select from 'primevue/select'
 import RichTextEditor from '@/components/RichTextEditor.vue'
 import type { CmsPageStatus } from '@shared/types/cmsPage'
@@ -13,6 +14,7 @@ export interface CmsPageFormModel {
   meta_title: string | null
   meta_description: string | null
   status: CmsPageStatus
+  noindex: boolean
 }
 
 defineProps<{
@@ -85,6 +87,31 @@ const statusOptions: Array<{ label: string; value: CmsPageStatus }> = [
       <div>
         <label class="mb-1 block text-sm font-medium text-gray-700">Meta Description</label>
         <Textarea v-model="form.meta_description" rows="2" fluid auto-resize />
+      </div>
+
+      <!-- A toggle rather than a hidden default, because the right answer
+           differs per page AND per site: the six templated legal pages stay out
+           of the index, while About and the other trust pages belong in it —
+           and whether a trust page is READY to be indexed depends on whether
+           anyone has rewritten it for this site yet. -->
+      <div class="rounded-lg border border-gray-100 bg-gray-50 p-4">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Keep out of Google</label>
+            <p class="mt-1 text-xs text-gray-500">
+              Sets <span class="font-mono">noindex, follow</span>. The page stays reachable and keeps
+              passing link value — it just will not appear in search results.
+            </p>
+            <p class="mt-1 text-xs text-gray-400">
+              ON for the standard legal pages (Privacy Policy, Terms, Cookie Policy, Disclaimer, AML,
+              KYC): every site in the network shares one template for them, so indexing them puts
+              near-identical copies in competition with each other. Leave it OFF for About, Contact,
+              Responsible Gambling, Affiliate Disclosure and Editorial Policy — Google weighs those when
+              judging the whole domain. Turn it on if a trust page is still the untouched template here.
+            </p>
+          </div>
+          <ToggleSwitch v-model="form.noindex" />
+        </div>
       </div>
     </fieldset>
   </div>
