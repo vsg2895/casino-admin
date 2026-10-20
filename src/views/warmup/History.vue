@@ -20,6 +20,7 @@ import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import Button from 'primevue/button'
 import { useToast } from 'primevue/usetoast'
+import { browserTimezone } from '@/utils/dayFilters'
 import HistoryDeleteButton from '@/components/HistoryDeleteButton.vue'
 import * as api from '@/api/warmupEmails'
 import RecordCount from '@/components/RecordCount.vue'
@@ -96,6 +97,10 @@ function draftFilters(): HistoryFilters {
   if (status.value !== null) filters.status = status.value
   if (sentFrom.value !== '') filters.sent_from = sentFrom.value
   if (sentTo.value !== '') filters.sent_to = sentTo.value
+  // Always sent, not only alongside a date: the listing and its count endpoint
+  // share this builder, and a window that moved between the two would make the
+  // header disagree with the rows.
+  filters.tz = browserTimezone()
   return filters
 }
 

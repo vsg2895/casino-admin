@@ -124,6 +124,20 @@ export interface UniOneReceiverFilters {
   sent_to?: string | null
   last_status?: string | null
 
+  /**
+   * The operator's IANA timezone, e.g. "Europe/Tallinn".
+   *
+   * Every date above is a calendar day picked from a local calendar, and the
+   * column it filters is stored in UTC — so the server needs the zone to know
+   * where the operator's day starts. Without it the boundaries were read as
+   * UTC midnight, and an operator east of Greenwich lost the first hours of
+   * their own day out of every window while the table still displayed those
+   * rows (it renders in local time).
+   *
+   * Set automatically from the browser; never a user-facing control.
+   */
+  tz?: string | null
+
   // ── "Counts" column ────────────────────────────────────────────────────────
   min_sends?: number | null
   max_sends?: number | null

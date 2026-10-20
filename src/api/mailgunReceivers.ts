@@ -22,6 +22,13 @@ export interface MailgunReceiverFilters {
   /** Inclusive `YYYY-MM-DD` bounds on the last-sent date. */
   last_sent_from?: string
   last_sent_to?: string
+  /**
+   * The operator's IANA timezone, so the server can place the day boundaries
+   * of the date filters above against the UTC column they compare. Set
+   * automatically from the browser; never a user-facing control.
+   * See utils/dayFilters.
+   */
+  tz?: string
   source?: 'import' | 'manual'
   /** Whose list an address came from. */
   source_label?: ReceiverSourceLabel

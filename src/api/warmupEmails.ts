@@ -31,6 +31,13 @@ export interface WarmupHistoryFilters {
    */
   sent_from?: string
   sent_to?: string
+  /**
+   * The operator's IANA timezone, so the server can place the day boundaries
+   * of the date filters above against the UTC column they compare. Set
+   * automatically from the browser; never a user-facing control.
+   * See utils/dayFilters.
+   */
+  tz?: string
 }
 
 export function listWarmupEmails(params?: WarmupFilters): Promise<PaginatedResponse<WarmupEmail>> {

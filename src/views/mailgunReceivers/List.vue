@@ -24,6 +24,7 @@ import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
+import { asLocalDate, browserTimezone } from '@/utils/dayFilters'
 import * as api from '@/api/mailgunReceivers'
 import RecordCount from '@/components/RecordCount.vue'
 import type { MailgunReceiver, MailgunReceiverImport, ReceiverSourceLabel } from '@shared/types/mailgunReceiver'
@@ -104,11 +105,6 @@ const dateRangeDisabled = computed(() => sent.value === 'no')
  * Not `toISOString()`: that converts to UTC first, so any timezone behind it
  * would send the previous day and silently shift the whole range by one.
  */
-function toIsoDate(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
 type Filters = Omit<api.MailgunReceiverFilters, 'page' | 'per_page'>
 
 function activeFilters(): Filters {
@@ -121,9 +117,12 @@ function activeFilters(): Filters {
   // Dropped when "Never sent" is selected: those rows have no last-sent date, so
   // sending a range would return nothing and read as a broken filter.
   if (!dateRangeDisabled.value) {
-    if (sentFrom.value) f.last_sent_from = toIsoDate(sentFrom.value)
-    if (sentTo.value) f.last_sent_to = toIsoDate(sentTo.value)
+    if (sentFrom.value) f.last_sent_from = asLocalDate(sentFrom.value) ?? undefined
+    if (sentTo.value) f.last_sent_to = asLocalDate(sentTo.value) ?? undefined
   }
+
+  // Always sent, so the listing and its count endpoint resolve the same window.
+  f.tz = browserTimezone()
 
   return f
 }

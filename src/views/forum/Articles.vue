@@ -22,6 +22,7 @@ import DatePicker from 'primevue/datepicker'
 import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
+import { asLocalDate, browserTimezone } from '@/utils/dayFilters'
 import * as api from '@/api/forum'
 import { useSitesStore } from '@/stores/sitesStore'
 import type { ForumAdminSection, ForumArticle, ForumArticleStatus } from '@shared/types/community-forum'
@@ -149,8 +150,13 @@ async function load(): Promise<void> {
       category_id: fCategory.value,
       status: fStatus.value,
       pinned: fPinned.value,
-      from: fFrom.value ? fFrom.value.toISOString().slice(0, 10) : null,
-      to: fTo.value ? fTo.value.toISOString().slice(0, 10) : null,
+      // The LOCAL day plus the zone. `toISOString().slice(0, 10)` was here
+      // and shifted the date: a picker returns local midnight, which for an
+      // operator east of Greenwich is the PREVIOUS day in UTC — so choosing
+      // the 20th filtered the 19th. See utils/dayFilters.
+      from: asLocalDate(fFrom.value),
+      to: asLocalDate(fTo.value),
+      tz: browserTimezone(),
       search: fSearch.value.trim() || null,
     })
     items.value = res.data

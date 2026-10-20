@@ -20,6 +20,7 @@ import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
+import { asLocalDate, browserTimezone } from '@/utils/dayFilters'
 import * as api from '@/api/unione'
 import client from '@/api/client'
 import FileUpload from 'primevue/fileupload'
@@ -140,26 +141,23 @@ const send = ref({
 const activeKeys = computed(() => keys.value.filter((k) => k.is_active))
 const selectedKey = computed(() => keys.value.find((k) => k.id === send.value.key_id) ?? null)
 
-/** Local calendar date, not toISOString() — that shifts a date across UTC. */
-function asDate(d: Date | null): string | null {
-  if (!d) return null
-  const pad = (n: number): string => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
 /**
  * THE filter set, built once and used by both the listing and the export, so
  * the CSV can never disagree with what is on screen.
  */
 function currentFilters(): api.UniOneReceiverFilters {
   return {
+    // Sent on every request, not only when a date is set: the stats call and
+    // the export share this builder, and a window that moves between the two
+    // would make the header disagree with the rows.
+    tz: browserTimezone(),
     status: fStatus.value,
-    from: asDate(fFrom.value),
-    to: asDate(fTo.value),
+    from: asLocalDate(fFrom.value),
+    to: asLocalDate(fTo.value),
     search: fSearch.value || null,
     sent: fSent.value,
-    sent_from: sentWindowDisabled.value ? null : asDate(fSentFrom.value),
-    sent_to: sentWindowDisabled.value ? null : asDate(fSentTo.value),
+    sent_from: sentWindowDisabled.value ? null : asLocalDate(fSentFrom.value),
+    sent_to: sentWindowDisabled.value ? null : asLocalDate(fSentTo.value),
     last_status: fLastStatus.value,
     min_sends: fMinSends.value,
     max_sends: fMaxSends.value,
@@ -437,8 +435,12 @@ onMounted(() => void load())
                unfiltered it describes the list, filtered it describes the
                match. A count whose meaning is ambiguous is worse than none. -->
           <template v-if="stats">
+            <!-- The UNIT is stated, deliberately. This is a count of
+                 ADDRESSES; UniOne's own dashboard counts MESSAGES, and one
+                 address mailed twice is 1 here and 2 there. Leaving the noun
+                 off invited the two numbers to be read as the same thing. -->
             {{ stats.total.toLocaleString() }}
-            {{ hasFilters ? 'matching the filters' : 'on the list' }} ·
+            {{ hasFilters ? 'receivers matching the filters' : 'receivers on the list' }} ·
             <span class="font-medium text-gray-700">{{ (stats.by_status.active ?? 0).toLocaleString() }}</span> active
             <template v-if="stats.never_sent"> · {{ stats.never_sent.toLocaleString() }} never sent</template>
           </template>

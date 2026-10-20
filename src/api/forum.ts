@@ -68,8 +68,15 @@ export interface ForumArticleFilters {
   category_id?: number | null
   status?: string | null
   pinned?: boolean | null
+  /** A LOCAL calendar day — see utils/dayFilters. */
   from?: string | null
   to?: string | null
+  /**
+   * The operator's IANA timezone, so the server can place the day boundaries
+   * of `from`/`to` correctly against the UTC `created_at` column. Set
+   * automatically; never a user-facing control.
+   */
+  tz?: string | null
   search?: string | null
 }
 
