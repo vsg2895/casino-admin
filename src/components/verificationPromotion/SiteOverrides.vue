@@ -140,6 +140,30 @@ function err(key: string): string | undefined {
 }
 
 onMounted(() => void load())
+/**
+ * A never-null view of `current`, for the template only.
+ *
+ * `current` is `VerificationPromotionOverride | null` because it is empty until the dialog
+ * loads. The template already guards the whole block with
+ * `v-if="current"`, but that narrowing does NOT survive into the child
+ * scopes the SFC compiler generates — a `v-for` body and a slot's `#body` each
+ * become their own function, and TypeScript cannot narrow a mutable `.value`
+ * across a function boundary. Every field access inside those scopes was
+ * therefore reported as possibly-null:
+ *
+ *     error TS18047: 'current.value' is possibly 'null'
+ *
+ * Reading through this alias states once, here, what the `v-if` already
+ * guarantees, instead of repeating a non-null assertion at every use. It is
+ * ONLY safe because nothing outside that guarded block reads it — keep it that
+ * way: a template node that can render while `current` is null must use
+ * `current` directly, not this.
+ *
+ * Local builds did not catch any of this. The production image resolves
+ * `vue-tsc` fresh and got a newer build whose template scoping is stricter; the
+ * lockfile added alongside this change is what stops the two drifting again.
+ */
+const draft = computed(() => current.value!)
 </script>
 
 <template>
@@ -166,7 +190,7 @@ onMounted(() => void load())
       <div class="mb-4">
         <label class="mb-1 block text-xs font-medium text-gray-600">Banner image</label>
         <div class="flex flex-wrap items-center gap-2">
-          <InputText v-model="current.hero_image_url" fluid class="min-w-0 flex-1" placeholder="https://… (or upload)" />
+          <InputText v-model="draft.hero_image_url" fluid class="min-w-0 flex-1" placeholder="https://… (or upload)" />
           <label class="inline-flex min-h-10 cursor-pointer items-center rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50">
             {{ uploading ? 'Uploading…' : 'Upload' }}
             <input type="file" accept="image/*" class="hidden" :disabled="uploading" @change="onImagePick" />
@@ -174,7 +198,7 @@ onMounted(() => void load())
         </div>
         <p v-if="err('hero_image_url')" class="mt-1 text-xs text-red-600">{{ err('hero_image_url') }}</p>
         <img
-          v-if="current.hero_image_url" :src="current.hero_image_url" alt=""
+          v-if="draft.hero_image_url" :src="draft.hero_image_url" alt=""
           class="mt-2 max-h-32 rounded border border-gray-200 object-contain"
         />
       </div>
@@ -182,7 +206,7 @@ onMounted(() => void load())
       <div class="grid gap-3 sm:grid-cols-2">
         <div v-for="f in LINK_FIELDS" :key="f.key">
           <label class="mb-1 block text-xs font-medium text-gray-600">{{ f.label }}</label>
-          <InputText v-model="current[f.key]" fluid placeholder="https://…" />
+          <InputText v-model="draft[f.key]" fluid placeholder="https://…" />
           <p class="mt-1 text-xs text-gray-400">{{ f.hint }}</p>
           <p v-if="err(f.key)" class="mt-1 text-xs text-red-600">{{ err(f.key) }}</p>
         </div>
@@ -196,7 +220,7 @@ onMounted(() => void load())
         <div class="grid gap-3 sm:grid-cols-2">
           <div v-for="(label, i) in labels" :key="i">
             <label class="mb-1 block text-xs text-gray-500">{{ label }}</label>
-            <InputText v-model="current.footer_link_urls[i]" fluid placeholder="https://… (default)" />
+            <InputText v-model="draft.footer_link_urls[i]" fluid placeholder="https://… (default)" />
             <p v-if="err(`footer_link_urls.${i}`)" class="mt-1 text-xs text-red-600">
               {{ err(`footer_link_urls.${i}`) }}
             </p>

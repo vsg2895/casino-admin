@@ -164,6 +164,26 @@ defineExpose({
     await reload()
   },
 })
+/**
+ * Deleting one history row, wrapped for the template.
+ *
+ * The template cannot call `api.deleteSend()` directly. `api` is a
+ * NAMESPACE import, and the SFC compiler treats a namespace binding used in a
+ * template as a possible ref — so it emits an unwrap and the type-checker then
+ * looks for `.value` on a module object:
+ *
+ *     Property 'value' does not exist on type 'typeof import(".../api/...")'
+ *
+ * A plain function declared in `<script setup>` is never unwrapped, so routing
+ * the call through one keeps the namespace import for script code (where it
+ * reads well) and gives the template something it can type.
+ *
+ * This surfaced only in the production Docker build: that image resolves
+ * `vue-tsc` fresh, and the newer build classifies the binding differently from
+ * the version in the local node_modules. See admin/README for the lockfile that
+ * stops local and CI disagreeing about a toolchain version again.
+ */
+const removeHistoryRow = (id: number) => api.deleteSend(id)
 </script>
 
 <template>
@@ -276,7 +296,7 @@ defineExpose({
           <!-- Deleting a run takes its chunks and recipient rows with it. -->
           <HistoryDeleteButton
             :label="data.subject"
-            :remove="() => api.deleteSend(data.id)"
+            :remove="() => removeHistoryRow(data.id)"
             @deleted="reload"
           />
         </template>

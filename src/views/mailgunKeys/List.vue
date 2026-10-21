@@ -492,6 +492,30 @@ onMounted(async () => {
       .catch(() => (templateTypes.value = [])),
   ])
 })
+/**
+ * A never-null view of `settings`, for the template only.
+ *
+ * `settings` is `MailgunReceiverSettings | null` because it is empty until the dialog
+ * loads. The template already guards the whole block with
+ * `v-else-if="settings"`, but that narrowing does NOT survive into the child
+ * scopes the SFC compiler generates — a `v-for` body and a slot's `#body` each
+ * become their own function, and TypeScript cannot narrow a mutable `.value`
+ * across a function boundary. Every field access inside those scopes was
+ * therefore reported as possibly-null:
+ *
+ *     error TS18047: 'settings.value' is possibly 'null'
+ *
+ * Reading through this alias states once, here, what the `v-else-if` already
+ * guarantees, instead of repeating a non-null assertion at every use. It is
+ * ONLY safe because nothing outside that guarded block reads it — keep it that
+ * way: a template node that can render while `settings` is null must use
+ * `settings` directly, not this.
+ *
+ * Local builds did not catch any of this. The production image resolves
+ * `vue-tsc` fresh and got a newer build whose template scoping is stricter; the
+ * lockfile added alongside this change is what stops the two drifting again.
+ */
+const settingsDraft = computed(() => settings.value!)
 </script>
 
 <template>
@@ -773,7 +797,7 @@ onMounted(async () => {
     </Dialog>
   </div>
 
-    <!-- Per-credential receiver settings. No credential picker: the row that
+    <!-- Per-credential receiver settingsDraft. No credential picker: the row that
          opened this dialog is the sender. -->
     <Dialog
       v-model:visible="showSettings"
@@ -784,28 +808,28 @@ onMounted(async () => {
       <div v-if="settingsLoading" class="py-8 text-center text-sm text-gray-400">Loading…</div>
 
       <div v-else-if="settings" class="space-y-4">
-        <div v-if="settings.blocked_reason" class="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          This credential will not send: {{ settings.blocked_reason }}.
+        <div v-if="settingsDraft.blocked_reason" class="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          This credential will not send: {{ settingsDraft.blocked_reason }}.
         </div>
 
         <div class="flex items-center gap-2">
-          <Checkbox v-model="settings.send_enabled" binary input-id="s-enabled" />
+          <Checkbox v-model="settingsDraft.send_enabled" binary input-id="s-enabled" />
           <label for="s-enabled" class="text-sm text-gray-700">Send to receivers through this credential</label>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="mb-1 block text-xs font-medium text-gray-600">Receivers per run</label>
-            <InputNumber v-model="settings.batch_size" :min="1" :max="100000" fluid />
+            <InputNumber v-model="settingsDraft.batch_size" :min="1" :max="100000" fluid />
             <p v-if="sErr('batch_size')" class="mt-1 text-xs text-red-600">{{ sErr('batch_size') }}</p>
           </div>
           <div>
             <label class="mb-1 block text-xs font-medium text-gray-600">Order</label>
-            <Select v-model="settings.selection_order" :options="orderOptions" option-label="label" option-value="value" fluid />
+            <Select v-model="settingsDraft.selection_order" :options="orderOptions" option-label="label" option-value="value" fluid />
           </div>
           <div>
             <label class="mb-1 block text-xs font-medium text-gray-600">Cooldown (days)</label>
-            <InputNumber v-model="settings.cooldown_days" :min="0" :max="365" fluid />
+            <InputNumber v-model="settingsDraft.cooldown_days" :min="0" :max="365" fluid />
             <p class="mt-1 text-xs text-gray-400">Skip anyone this credential mailed within N days. Leave empty for no cooldown.</p>
           </div>
           <!-- No "active receivers only": every receiver on the list is mailed.
@@ -823,7 +847,7 @@ onMounted(async () => {
         <div>
           <label class="mb-1 block text-xs font-medium text-gray-600">Send to sources</label>
           <MultiSelect
-            v-model="settings.receiver_sources"
+            v-model="settingsDraft.receiver_sources"
             :options="sourceOptions"
             option-label="label"
             option-value="value"
@@ -839,7 +863,7 @@ onMounted(async () => {
         </div>
         <div>
           <label class="mb-1 block text-xs font-medium text-gray-600">Subject</label>
-          <InputText v-model="settings.message_subject" fluid />
+          <InputText v-model="settingsDraft.message_subject" fluid />
           <p v-if="sErr('message_subject')" class="mt-1 text-xs text-red-600">{{ sErr('message_subject') }}</p>
         </div>
         <!-- The message template. The admin fills in blocks; the backend renders
@@ -870,28 +894,28 @@ onMounted(async () => {
           </div>
 
           <div class="space-y-3 p-3">
-            <p v-if="settings.template_source" class="text-xs text-gray-400">
-              Starting copy and colours come from the <strong>{{ settings.template_source }}</strong>
+            <p v-if="settingsDraft.template_source" class="text-xs text-gray-400">
+              Starting copy and colours come from the <strong>{{ settingsDraft.template_source }}</strong>
               promotion email. Everything below is editable and nothing is saved until you press
-              Save settings.
+              Save settingsDraft.
             </p>
 
             <div>
               <label class="mb-1 block text-xs font-medium text-gray-600">Preview line</label>
-              <InputText v-model="settings.message_template.preheader" fluid />
+              <InputText v-model="settingsDraft.message_template.preheader" fluid />
               <p class="mt-1 text-xs text-gray-400">Shown under the subject in the inbox list. Not visible in the message itself.</p>
               <p v-if="sErr('message_template.preheader')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.preheader') }}</p>
             </div>
 
             <div>
               <label class="mb-1 block text-xs font-medium text-gray-600">Heading</label>
-              <InputText v-model="settings.message_template.heading" fluid />
+              <InputText v-model="settingsDraft.message_template.heading" fluid />
               <p v-if="sErr('message_template.heading')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.heading') }}</p>
             </div>
 
             <div>
               <label class="mb-1 block text-xs font-medium text-gray-600">Greeting</label>
-              <InputText v-model="settings.message_template.greeting" placeholder="Hi {{name}}," fluid />
+              <InputText v-model="settingsDraft.message_template.greeting" placeholder="Hi {{name}}," fluid />
               <!-- v-pre: the braces are the placeholder syntax of the EMAIL
                    template, not Vue's. Without it Vue tries to resolve `name`
                    and `email` as component state. -->
@@ -904,7 +928,7 @@ onMounted(async () => {
 
             <div>
               <label class="mb-1 block text-xs font-medium text-gray-600">Message text</label>
-              <Textarea v-model="settings.message_template.intro_text" rows="4" fluid />
+              <Textarea v-model="settingsDraft.message_template.intro_text" rows="4" fluid />
               <p class="mt-1 text-xs text-gray-400">
                 <code>**bold**</code> becomes bold. <code>{{ NAME_TOKEN }}</code> and
                 <code>{{ EMAIL_TOKEN }}</code> are substituted per recipient.
@@ -914,42 +938,42 @@ onMounted(async () => {
 
             <div>
               <label class="mb-1 block text-xs font-medium text-gray-600">Secondary text</label>
-              <Textarea v-model="settings.message_template.secondary_text" rows="3" fluid />
+              <Textarea v-model="settingsDraft.message_template.secondary_text" rows="3" fluid />
               <p v-if="sErr('message_template.secondary_text')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.secondary_text') }}</p>
             </div>
 
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="mb-1 block text-xs font-medium text-gray-600">Button label</label>
-                <InputText v-model="settings.message_template.button_text" fluid />
+                <InputText v-model="settingsDraft.message_template.button_text" fluid />
                 <p v-if="sErr('message_template.button_text')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.button_text') }}</p>
               </div>
               <div>
                 <label class="mb-1 block text-xs font-medium text-gray-600">Button link</label>
-                <InputText v-model="settings.message_template.button_url" placeholder="https://…" fluid />
+                <InputText v-model="settingsDraft.message_template.button_url" placeholder="https://…" fluid />
                 <p v-if="sErr('message_template.button_url')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.button_url') }}</p>
               </div>
               <div>
                 <label class="mb-1 block text-xs font-medium text-gray-600">Banner image URL</label>
-                <InputText v-model="settings.message_template.hero_image_url" placeholder="https://…" fluid />
+                <InputText v-model="settingsDraft.message_template.hero_image_url" placeholder="https://…" fluid />
                 <p v-if="sErr('message_template.hero_image_url')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.hero_image_url') }}</p>
               </div>
               <div>
                 <label class="mb-1 block text-xs font-medium text-gray-600">Banner link</label>
-                <InputText v-model="settings.message_template.hero_url" placeholder="https://…" fluid />
+                <InputText v-model="settingsDraft.message_template.hero_url" placeholder="https://…" fluid />
                 <p v-if="sErr('message_template.hero_url')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.hero_url') }}</p>
               </div>
             </div>
 
             <div>
               <label class="mb-1 block text-xs font-medium text-gray-600">Disclaimer</label>
-              <Textarea v-model="settings.message_template.disclaimer_text" rows="2" fluid />
+              <Textarea v-model="settingsDraft.message_template.disclaimer_text" rows="2" fluid />
               <p v-if="sErr('message_template.disclaimer_text')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.disclaimer_text') }}</p>
             </div>
 
             <div>
               <label class="mb-1 block text-xs font-medium text-gray-600">Footer</label>
-              <Textarea v-model="settings.message_template.footer_text" rows="2" fluid />
+              <Textarea v-model="settingsDraft.message_template.footer_text" rows="2" fluid />
               <p class="mt-1 text-xs text-gray-400">
                 Sender name, postal address and a monitored contact belong here — commercial mail is
                 expected to carry them, and their absence is itself a spam signal. The unsubscribe
@@ -961,12 +985,12 @@ onMounted(async () => {
             <div class="grid gap-3 sm:grid-cols-2">
               <div>
                 <label class="mb-1 block text-xs font-medium text-gray-600">Postal address</label>
-                <InputText v-model="settings.message_template.postal_address" fluid />
+                <InputText v-model="settingsDraft.message_template.postal_address" fluid />
                 <p v-if="sErr('message_template.postal_address')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.postal_address') }}</p>
               </div>
               <div>
                 <label class="mb-1 block text-xs font-medium text-gray-600">Contact email</label>
-                <InputText v-model="settings.message_template.contact_email" placeholder="hello@example.com" fluid />
+                <InputText v-model="settingsDraft.message_template.contact_email" placeholder="hello@example.com" fluid />
                 <p v-if="sErr('message_template.contact_email')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.contact_email') }}</p>
               </div>
             </div>
@@ -974,12 +998,12 @@ onMounted(async () => {
             <div class="grid gap-3 sm:grid-cols-2">
               <div>
                 <label class="mb-1 block text-xs font-medium text-gray-600">Copyright line</label>
-                <InputText v-model="settings.message_template.copyright_text" placeholder="© 2026 Example Ltd" fluid />
+                <InputText v-model="settingsDraft.message_template.copyright_text" placeholder="© 2026 Example Ltd" fluid />
                 <p v-if="sErr('message_template.copyright_text')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.copyright_text') }}</p>
               </div>
               <div>
                 <label class="mb-1 block text-xs font-medium text-gray-600">Unsubscribe wording</label>
-                <InputText v-model="settings.message_template.unsubscribe_label" placeholder="Unsubscribe" fluid />
+                <InputText v-model="settingsDraft.message_template.unsubscribe_label" placeholder="Unsubscribe" fluid />
                 <p class="mt-1 text-xs text-gray-400">Wording only — the link itself is always added and cannot be removed.</p>
                 <p v-if="sErr('message_template.unsubscribe_label')" class="mt-1 text-xs text-red-600">{{ sErr('message_template.unsubscribe_label') }}</p>
               </div>
@@ -994,7 +1018,7 @@ onMounted(async () => {
                   <input
                     type="color"
                     class="h-7 w-9 cursor-pointer rounded border border-gray-300 bg-white p-0.5"
-                    :value="settings.message_template[c.key]"
+                    :value="settingsDraft.message_template[c.key]"
                     @input="setColor(c.key, $event)"
                   />
                   {{ c.label }}
@@ -1002,7 +1026,7 @@ onMounted(async () => {
               </div>
               <div class="mt-3 w-40">
                 <label class="mb-1 block text-xs font-medium text-gray-600">Button text size</label>
-                <InputNumber v-model="settings.message_template.button_text_font_size" :min="12" :max="24" suffix=" px" fluid />
+                <InputNumber v-model="settingsDraft.message_template.button_text_font_size" :min="12" :max="24" suffix=" px" fluid />
               </div>
             </div>
           </div>
@@ -1010,9 +1034,9 @@ onMounted(async () => {
 
         <div class="rounded-lg bg-gray-50 px-3 py-2 text-sm">
           <span class="text-gray-600">Matching receivers now:</span>
-          <strong class="ml-1 tabular-nums">{{ settings.eligible_count.toLocaleString() }}</strong>
+          <strong class="ml-1 tabular-nums">{{ settingsDraft.eligible_count.toLocaleString() }}</strong>
           <span class="ml-3 text-gray-600">Next run would take:</span>
-          <strong class="ml-1 tabular-nums">{{ settings.next_batch_count.toLocaleString() }}</strong>
+          <strong class="ml-1 tabular-nums">{{ settingsDraft.next_batch_count.toLocaleString() }}</strong>
         </div>
 
         <div>
