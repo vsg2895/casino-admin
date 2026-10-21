@@ -75,6 +75,44 @@ export interface WarmupRecipientPreview {
   site_slug: string
 }
 
+/**
+ * The most recent warmup run, summarised — what `GET /warmup-emails/last-send`
+ * returns, or null when no run has ever happened.
+ *
+ * THREE COUNTS, not one, and they answer different questions:
+ *
+ *   requestedCount  what the operator typed; null means "the whole list"
+ *   queuedCount     what the picker found after the cooldown filter
+ *   sentCount       what the transport accepted — the headline number
+ *
+ * They diverge for ordinary reasons, and the gap is the useful part: asking for
+ * 250 and queueing 180 is a cooldown too long for the list's size, while
+ * queueing 250 and sending 243 is seven addresses that bounced.
+ */
+export interface WarmupLastSend {
+  id: number
+  /** When the run was STARTED. Per-address `sent_at` values trail it. */
+  started_at: string | null
+  requested_count: number | null
+  queued_count: number
+  sent_count: number
+  failed_count: number
+  attempted_count: number
+  cooldown_days: number | null
+  template: string
+  template_label: string
+  site_name: string | null
+  /** The admin who pressed Send; null once that account is deleted. */
+  sent_by: string | null
+  /**
+   * True while batches are still landing, in which case every count above is a
+   * PARTIAL that will keep growing. The screen must say so rather than present
+   * it as the run's total.
+   */
+  in_progress: boolean
+  cancelled_at: string | null
+}
+
 export type WarmupSendStatus = 'sent' | 'failed'
 
 // One recorded delivery attempt — matches WarmupSendRecipientResource.php.

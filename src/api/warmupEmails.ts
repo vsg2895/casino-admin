@@ -4,6 +4,7 @@ import type {
   WarmupEmail,
   WarmupHistoryEntry,
   WarmupImportSummary,
+  WarmupLastSend,
   WarmupRecipientPreview,
   WarmupSendPayload,
   WarmupSendResult,
@@ -160,6 +161,19 @@ export function cancelWarmupRun(): Promise<WarmupCancelResult> {
   return client
     .post<WarmupCancelResult>('/admin/warmup-emails/cancel')
     .then((r) => r.data)
+}
+
+/**
+ * The last warmup run, summarised — or null when none has happened.
+ *
+ * Read on opening the Warmup screen, which is where "how many went out last
+ * time?" is actually asked. Two indexed queries on the server and nothing
+ * written, so it is safe to call on every mount.
+ */
+export function getLastWarmupSend(): Promise<WarmupLastSend | null> {
+  return client
+    .get<ApiResponse<WarmupLastSend | null>>('/admin/warmup-emails/last-send')
+    .then((r) => r.data.data)
 }
 
 // ── History ───────────────────────────────────────────────────────────────────

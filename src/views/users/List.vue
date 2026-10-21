@@ -147,8 +147,22 @@ async function openPosts(row: ForumMemberRow): Promise<void> {
   }
 }
 
-function formatDate(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
+/**
+ * Date AND time, in the reader's own zone.
+ *
+ * The API sends every timestamp as UTC ISO-8601 with its `Z`, so `new Date()`
+ * parses the instant correctly and `toLocaleString` renders it wherever the
+ * operator happens to be sitting. That is the whole conversion — there is no
+ * zone arithmetic to do here, and any added by hand would double-shift it.
+ *
+ * This screen used to print the DATE only, which is what made a confirmation
+ * unreadable: registering and confirming happen minutes apart, so "21 Oct"
+ * against "21 Oct" answers nothing about whether the link was clicked at all
+ * promptly. `dateStyle: 'short'` + `timeStyle: 'short'` is the same pairing
+ * every other history screen in this panel uses.
+ */
+function formatDateTime(iso: string | null): string {
+  return iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '—'
 }
 
 onMounted(() => void load())
@@ -219,17 +233,6 @@ onMounted(() => void load())
             <Tag v-if="!data.verified" value="unconfirmed" severity="warn" />
           </div>
           <p class="text-xs text-gray-500">{{ data.email }}</p>
-          <p class="text-xs text-gray-400">
-            joined {{ formatDate(data.created_at) }}
-            <!-- The confirmation DATE, beside the join date, because the two
-                 are read together: "signed up on the 21st, confirmed the same
-                 day" is what this screen gets asked. Rendered only when it
-                 happened — an unconfirmed member already carries the tag
-                 above, and a second dash would say nothing. -->
-            <template v-if="data.email_verified_at">
-              · verified {{ formatDate(data.email_verified_at) }}
-            </template>
-          </p>
         </template>
       </Column>
 
@@ -265,7 +268,39 @@ onMounted(() => void load())
         </template>
       </Column>
 
-      <Column header="Last seen" style="width:9rem">
+      <!-- Registered and Verified at sit together, in that order, because the
+           question this screen is actually asked is about the GAP between
+           them: a member who signed up and confirmed four minutes later is a
+           healthy signup, and one who confirmed three days later is a
+           deliverability problem. They were previously one line of small grey
+           text inside the Member cell, carrying no time of day, which is why
+           neither question could be answered from here. -->
+      <Column header="Registered" style="width:11rem">
+        <template #body="{ data }: { data: ForumMemberRow }">
+          <span class="text-sm tabular-nums text-gray-600">{{ formatDateTime(data.created_at) }}</span>
+        </template>
+      </Column>
+
+      <Column header="Verified at" style="width:11rem">
+        <template #body="{ data }: { data: ForumMemberRow }">
+          <span v-if="data.email_verified_at" class="text-sm tabular-nums text-gray-600">
+            {{ formatDateTime(data.email_verified_at) }}
+          </span>
+          <!-- "not confirmed", not a dash. An empty cell here reads as missing
+               data; this is a real state, and it is the one that explains why
+               a member gets no mail. It also matches the `unconfirmed` tag on
+               the Member cell rather than restating it in different words. -->
+          <span
+            v-else
+            class="text-sm text-amber-600"
+            title="This member has not clicked the link in their confirmation email"
+          >
+            not confirmed
+          </span>
+        </template>
+      </Column>
+
+      <Column header="Last seen" style="width:11rem">
         <template #body="{ data }: { data: ForumMemberRow }">
           <!-- "never", not a bare dash.
                This column is written by sign-in and by the authenticated
@@ -273,8 +308,8 @@ onMounted(() => void load())
                address. A member who signed up, confirmed by email and has not
                signed in yet is therefore correctly blank, and a dash made that
                read as missing data rather than as the answer. -->
-          <span v-if="data.last_seen_at" class="text-sm text-gray-600">
-            {{ formatDate(data.last_seen_at) }}
+          <span v-if="data.last_seen_at" class="text-sm tabular-nums text-gray-600">
+            {{ formatDateTime(data.last_seen_at) }}
           </span>
           <span
             v-else

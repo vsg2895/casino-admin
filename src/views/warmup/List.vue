@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -17,6 +17,7 @@ import { useSitesStore } from '@/stores/sitesStore'
 import type {
   WarmupEmail,
   WarmupImportSummary,
+  WarmupLastSend,
   WarmupRecipientPreview,
   WarmupTemplate,
 } from '@shared/types/warmupEmail'
@@ -95,6 +96,41 @@ watch(search, () => {
   clearTimeout(searchTimer)
   searchTimer = setTimeout(reloadFromFirstPage, 400)
 })
+
+// ── Last run ─────────────────────────────────────────────────────────────────
+// "How many went out last time?" — the question on opening this screen the
+// morning after a run. Answered from `warmup_sends`, which has recorded every
+// run since the feature shipped; nothing new is written to produce it.
+const lastSend = ref<WarmupLastSend | null>(null)
+
+/**
+ * Re-read while a run is still landing, so the banner is not frozen on a
+ * partial count. 8s: batches are paced, and this is a passive display.
+ */
+const IN_PROGRESS_POLL_MS = 8000
+let lastSendTimer: ReturnType<typeof setTimeout> | undefined
+
+async function loadLastSend(): Promise<void> {
+  try {
+    lastSend.value = await api.getLastWarmupSend()
+  } catch {
+    // Silent on purpose. This is a supplementary read; a toast here would fire
+    // on every poll tick and bury the list's own errors.
+    return
+  }
+
+  clearTimeout(lastSendTimer)
+
+  // Poll ONLY while the server says batches are still landing. The server
+  // bounds that state by the run lock's TTL, so this cannot poll forever.
+  if (lastSend.value?.in_progress) {
+    lastSendTimer = setTimeout(() => void loadLastSend(), IN_PROGRESS_POLL_MS)
+  }
+}
+
+// Leaving the screen must stop the timer, or it keeps firing requests against a
+// component that no longer exists.
+onUnmounted(() => clearTimeout(lastSendTimer))
 
 function formatDate(iso: string | null | undefined): string {
   return iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '—'
@@ -351,7 +387,8 @@ async function confirmCancel(): Promise<void> {
       life: 8000,
     })
     showCancel.value = false
-    await reload()
+    // A cancelled run must stop reading as in-flight.
+    await Promise.all([reload(), loadLastSend()])
   } catch {
     toast.add({
       severity: 'error',
@@ -392,7 +429,8 @@ async function send(): Promise<void> {
     })
     toast.add({ severity: 'success', summary: 'Queued', detail: res.message, life: 7000 })
     showSend.value = false
-    await reload()
+    // The banner starts in its "sending now" state and polls itself from here.
+    await Promise.all([reload(), loadLastSend()])
   } catch (e: unknown) {
     // 409 means a run is already in flight — an expected outcome, not a fault.
     const conflict = axios.isAxiosError(e) && e.response?.status === 409
@@ -408,7 +446,7 @@ async function send(): Promise<void> {
 }
 
 onMounted(async () => {
-  await Promise.all([reload(), sitesStore.fetchSites()])
+  await Promise.all([reload(), sitesStore.fetchSites(), loadLastSend()])
 })
 </script>
 
@@ -434,6 +472,68 @@ onMounted(async () => {
     </div>
 
     <input ref="fileInput" type="file" accept=".xlsx,.csv" class="hidden" @change="onFileSelected" />
+
+    <!-- Last run ────────────────────────────────────────────────────────────
+         Above the import banner because it answers the question this screen is
+         opened with. The SENT count leads and is the only figure given weight:
+         "I sent 250 yesterday" means 250 left the building, and the requested
+         and queued figures only earn a line when they disagree with it. -->
+    <div
+      v-if="lastSend"
+      class="rounded-lg border px-4 py-3 text-sm"
+      :class="lastSend.in_progress
+        ? 'border-amber-200 bg-amber-50 text-amber-900'
+        : lastSend.failed_count > 0
+          ? 'border-orange-200 bg-orange-50 text-orange-900'
+          : 'border-emerald-200 bg-emerald-50 text-emerald-900'"
+    >
+      <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span class="font-medium">
+          {{ lastSend.in_progress ? 'Sending now:' : 'Last send:' }}
+        </span>
+        <span class="text-base font-semibold tabular-nums">
+          {{ lastSend.sent_count.toLocaleString() }}
+        </span>
+        <span>email(s) sent</span>
+
+        <!-- Only while the number is still moving. Without this the partial
+             count reads as the run's total. -->
+        <span v-if="lastSend.in_progress" class="italic">
+          · still running, this figure is rising
+        </span>
+        <template v-else>
+          <span>· {{ formatDate(lastSend.started_at) }}</span>
+        </template>
+
+        <span v-if="lastSend.cancelled_at" class="font-medium">· stopped by an operator</span>
+      </div>
+
+      <!-- The second line exists only when it has something to say. A clean run
+           that sent exactly what it queued needs no explanation, and printing
+           three identical numbers would train the eye to skip the banner. -->
+      <div
+        v-if="lastSend.failed_count > 0 || lastSend.queued_count !== lastSend.sent_count"
+        class="mt-1 text-xs opacity-80"
+      >
+        <span v-if="lastSend.requested_count !== null">
+          {{ lastSend.requested_count.toLocaleString() }} requested
+        </span>
+        <span v-else>whole list requested</span>
+        · {{ lastSend.queued_count.toLocaleString() }} queued
+        <span v-if="lastSend.failed_count > 0">
+          · <span class="font-semibold">{{ lastSend.failed_count.toLocaleString() }} failed</span>
+        </span>
+      </div>
+
+      <div class="mt-1 text-xs opacity-70">
+        {{ lastSend.template_label }}
+        <template v-if="lastSend.site_name"> · {{ lastSend.site_name }}</template>
+        <template v-if="lastSend.cooldown_days !== null">
+          · {{ lastSend.cooldown_days }}-day cooldown
+        </template>
+        <template v-if="lastSend.sent_by"> · by {{ lastSend.sent_by }}</template>
+      </div>
+    </div>
 
     <!-- Last import breakdown -->
     <div v-if="summary" class="rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
