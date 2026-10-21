@@ -221,6 +221,14 @@ onMounted(() => void load())
           <p class="text-xs text-gray-500">{{ data.email }}</p>
           <p class="text-xs text-gray-400">
             joined {{ formatDate(data.created_at) }}
+            <!-- The confirmation DATE, beside the join date, because the two
+                 are read together: "signed up on the 21st, confirmed the same
+                 day" is what this screen gets asked. Rendered only when it
+                 happened — an unconfirmed member already carries the tag
+                 above, and a second dash would say nothing. -->
+            <template v-if="data.email_verified_at">
+              · verified {{ formatDate(data.email_verified_at) }}
+            </template>
           </p>
         </template>
       </Column>
@@ -259,7 +267,22 @@ onMounted(() => void load())
 
       <Column header="Last seen" style="width:9rem">
         <template #body="{ data }: { data: ForumMemberRow }">
-          <span class="text-sm text-gray-600">{{ formatDate(data.last_seen_at) }}</span>
+          <!-- "never", not a bare dash.
+               This column is written by sign-in and by the authenticated
+               heartbeat — never by registration, and never by confirming an
+               address. A member who signed up, confirmed by email and has not
+               signed in yet is therefore correctly blank, and a dash made that
+               read as missing data rather than as the answer. -->
+          <span v-if="data.last_seen_at" class="text-sm text-gray-600">
+            {{ formatDate(data.last_seen_at) }}
+          </span>
+          <span
+            v-else
+            class="text-sm text-gray-400"
+            title="No sign-in yet — confirming an email address does not create a session"
+          >
+            never
+          </span>
         </template>
       </Column>
 
