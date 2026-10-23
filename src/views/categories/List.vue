@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import InputText from 'primevue/inputtext'
+import InputNumber from 'primevue/inputnumber'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import { useToast } from 'primevue/usetoast'
@@ -23,6 +24,42 @@ const toast = useToast()
 function logoUrl(path: string | null): string | null {
   if (!path) return null
   return /^https?:\/\//.test(path) ? path : `${STORAGE_BASE_URL}/storage/${path}`
+}
+
+/**
+ * Reordering.
+ *
+ * `moving` disables the whole column while a request is in flight — the rows
+ * shift under the cursor as soon as a move is applied locally, so a second
+ * click lands on a DIFFERENT category than the one that was aimed at.
+ */
+const moving = ref(false)
+
+async function move(id: number, toIndex: number): Promise<void> {
+  if (moving.value) return
+  moving.value = true
+  try {
+    await store.move(id, toIndex)
+  } catch {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Could not save the new order. The list has been put back.',
+      life: 4000,
+    })
+  } finally {
+    moving.value = false
+  }
+}
+
+/**
+ * The position typed into the box is 1-BASED, because that is what an operator
+ * means by "show it second". The store works in array indexes, so one is
+ * subtracted here — in exactly one place, rather than leaving every caller to
+ * remember it.
+ */
+function moveToPosition(id: number, oneBased: number): void {
+  void move(id, oneBased - 1)
 }
 
 // ── Add ──────────────────────────────────────────────────────────────────────
@@ -174,7 +211,15 @@ onMounted(() => store.fetchCategories())
 
     <!-- Categories list -->
     <section>
-      <h2 class="mb-4 text-xl font-semibold text-indigo-500">Categories list</h2>
+      <h2 class="mb-1 text-xl font-semibold text-indigo-500">Categories list</h2>
+      <!-- Says plainly that this order is global. Categories are shared master
+           data with no per-site override, so an operator setting a position
+           here is setting it for every domain at once — which is worth stating
+           before they change it, not after. -->
+      <p class="mb-4 text-sm text-gray-500">
+        This order is what every public site shows in its casino-categories row — position 1 is the
+        first chip. Changing it here changes it on <strong>all</strong> sites.
+      </p>
       <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
         <DataTable :value="store.categories" :loading="store.loading" striped-rows :pt="{ root: { class: 'text-sm' } }">
           <template #empty>
@@ -198,6 +243,49 @@ onMounted(() => store.fetchCategories())
           <Column field="name" header="Name">
             <template #body="{ data }: { data: Category }">
               <span class="font-medium text-gray-900">{{ data.name }}</span>
+            </template>
+          </Column>
+
+          <!-- POSITION, 1-based and contiguous.
+               The number is the row's place in this table, not a raw
+               `sort_order` — the server renumbers the whole list on every move,
+               so "2" here is always the second chip on every public site. The
+               arrows are the fast path; the box is for moving a long way
+               without clicking repeatedly. -->
+          <Column header="Position" :style="{ width: '190px' }">
+            <template #body="{ data, index }: { data: Category; index: number }">
+              <div class="flex items-center gap-1">
+                <Button
+                  icon="pi pi-arrow-up"
+                  text
+                  severity="secondary"
+                  size="small"
+                  :disabled="moving || index === 0"
+                  v-tooltip="'Move up'"
+                  :aria-label="`Move ${data.name} up`"
+                  @click="move(data.id, index - 1)"
+                />
+                <Button
+                  icon="pi pi-arrow-down"
+                  text
+                  severity="secondary"
+                  size="small"
+                  :disabled="moving || index === store.categories.length - 1"
+                  v-tooltip="'Move down'"
+                  :aria-label="`Move ${data.name} down`"
+                  @click="move(data.id, index + 1)"
+                />
+                <InputNumber
+                  :model-value="index + 1"
+                  :min="1"
+                  :max="store.categories.length"
+                  :allow-empty="false"
+                  :disabled="moving"
+                  :input-style="{ width: '3rem' }"
+                  :aria-label="`Position of ${data.name}`"
+                  @update:model-value="(v: number) => v !== index + 1 && moveToPosition(data.id, v)"
+                />
+              </div>
             </template>
           </Column>
 

@@ -25,6 +25,23 @@ export function updateCategory(
   return client.put<ApiResponse<Category>>(`/admin/categories/${id}`, payload).then((r) => r.data)
 }
 
+/**
+ * Set the order categories appear in, on every site at once.
+ *
+ * Takes the ids in the order they should be shown; the server writes
+ * `sort_order` as the index, so the stored values are always contiguous and a
+ * tie is impossible. It answers with the whole re-ordered list, which is what
+ * the caller should trust rather than its own optimistic copy.
+ *
+ * Whole-list rather than one row's number because position is RELATIVE —
+ * "second" is a statement about the row, not about one chip in it.
+ */
+export function reorderCategories(ids: number[]): Promise<{ reordered: number; data: Category[] }> {
+  return client
+    .post<{ reordered: number; data: Category[] }>('/admin/categories/reorder', { ids })
+    .then((r) => r.data)
+}
+
 export function deleteCategory(id: number): Promise<void> {
   return client.delete(`/admin/categories/${id}`).then(() => undefined)
 }
