@@ -42,12 +42,31 @@ export function previewVerificationPromotion(
 // Send a test of the SAVED template through the SAVED transport — the same
 // provider + key the real promotion uses, so a success here proves that path.
 // Same fixed branding as the automatic send, so the test is byte-identical.
+/**
+ * Send a one-off test of the saved template.
+ *
+ * `siteId` does NOT change what lands in the inbox — this template is pinned to
+ * one brand on the server, so the mail is identical whichever site is chosen.
+ * What it decides is which site the row is filed under in the After-verification
+ * history, and therefore whether the "Site" filter on that tab can find it.
+ *
+ * Omitted, the server falls back to the first active site, which is what it did
+ * before the picker existed.
+ */
 export function sendTestVerificationPromotion(
   to: string,
   name?: string,
+  siteId?: number | null,
 ): Promise<{ ok: boolean; message: string }> {
   return client
-    .post<{ ok: boolean; message: string }>('/admin/verification-promotion/test', { to, name })
+    .post<{ ok: boolean; message: string }>('/admin/verification-promotion/test', {
+      to,
+      name,
+      // Only send the key when there is a value: `site_id: null` would be
+      // rejected by nothing, but an absent field is what the server's fallback
+      // branch is written against.
+      ...(siteId == null ? {} : { site_id: siteId }),
+    })
     .then((r) => r.data)
 }
 

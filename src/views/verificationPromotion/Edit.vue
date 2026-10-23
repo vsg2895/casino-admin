@@ -29,6 +29,7 @@ import axios from 'axios'
 import * as api from '@/api/verificationPromotion'
 import { listSendgridKeys } from '@/api/sendgridKeys'
 import { listMailgunKeys } from '@/api/mailgunKeys'
+import { useSitesStore } from '@/stores/sitesStore'
 import type {
   EmailProvider,
   UpdateVerificationPromotionEmailPayload,
@@ -37,6 +38,7 @@ import type {
 import type { ErrorResponse } from '@shared/types/api'
 
 const toast = useToast()
+const sitesStore = useSitesStore()
 const router = useRouter()
 
 const fromDomain = ref('example.com')
@@ -58,6 +60,27 @@ const showTest = ref(false)
 const testEmail = ref('')
 const testName = ref('')
 const testSending = ref(false)
+
+/**
+ * Which site the test is FILED UNDER — not which branding it carries.
+ *
+ * This template is pinned to one brand on the server, so every test lands in
+ * the inbox looking identical whatever is chosen here. What the choice decides
+ * is the site on the row written to the After-verification history, and so
+ * whether the "Site" filter on that tab can find the test afterwards.
+ *
+ * Before this existed the server always filed a test under the first active
+ * site, so a test of a Winpalack-branded mail appeared under Idev Affiliation
+ * with nothing on screen explaining it.
+ *
+ * Null until the sites load, which the server reads as "use the old default" —
+ * so a send before the list arrives behaves exactly as it always did.
+ */
+const testSiteId = ref<number | null>(null)
+
+const testSiteOptions = computed(() =>
+  sitesStore.sites.map((site) => ({ label: site.name, value: site.id })),
+)
 
 const sendgridKeys = ref<{ label: string; value: number }[]>([])
 const mailgunKeys = ref<{ label: string; value: number }[]>([])
@@ -230,6 +253,24 @@ onMounted(async () => {
   } catch {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load the promotion.', life: 5000 })
   }
+
+  /*
+   * The site list for the test dialog's picker.
+   *
+   * Independently of the template load above, and never fatal: the picker is a
+   * convenience, and the server falls back to its old default when no site is
+   * sent — so a failure here leaves the button working exactly as before
+   * rather than blocking a test.
+   */
+  try {
+    await sitesStore.fetchSites()
+    // Default to the site the server would have picked anyway — the first
+    // ACTIVE one by id — so opening the dialog and pressing Send without
+    // touching the picker files the row where it always went.
+    testSiteId.value = sitesStore.sites.find((s) => s.active)?.id
+      ?? sitesStore.sites[0]?.id
+      ?? null
+  } catch { /* picker stays empty; the server's fallback still applies */ }
 
   // Key lists are loaded independently: one provider's endpoint failing must not
   // blank out the other's dropdown.
@@ -421,6 +462,7 @@ async function sendTest(): Promise<void> {
     const res = await api.sendTestVerificationPromotion(
       testEmail.value.trim(),
       testName.value.trim() || undefined,
+      testSiteId.value,
     )
     toast.add({ severity: 'success', summary: 'Sent', detail: res.message, life: 4000 })
     showTest.value = false
@@ -1098,6 +1140,27 @@ function err(field: string): string | undefined {
           <label class="mb-1 block text-xs font-medium text-gray-600">Recipient name (optional)</label>
           <InputText v-model="testName" fluid />
           <p class="mt-1 text-xs text-gray-400">Drives the “Dear {name},” greeting.</p>
+        </div>
+        <!-- Rendered only when the list actually loaded. An empty dropdown
+             would suggest the choice is broken, when in fact the server simply
+             falls back to its own default. -->
+        <div v-if="testSiteOptions.length > 0">
+          <label class="mb-1 block text-xs font-medium text-gray-600">Record under site</label>
+          <Select
+            v-model="testSiteId"
+            :options="testSiteOptions"
+            option-label="label"
+            option-value="value"
+            fluid
+          />
+          <!-- Says what the control does AND what it does not do. The obvious
+               reading of a site picker on an email dialog is that it changes
+               the branding; here it cannot, and an operator who expects it to
+               would file a bug against working code. -->
+          <p class="mt-1 text-xs text-gray-400">
+            Which site this test appears under in the After-verification history.
+            It does not change the email — the branding is fixed for every site.
+          </p>
         </div>
         <Message severity="info" :closable="false" class="text-xs">
           Sends the <strong>saved</strong> template through the transport configured above, so this
