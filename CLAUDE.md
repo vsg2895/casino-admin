@@ -123,6 +123,13 @@ cd admin && npm run build           # 3. verify
 - A Pinia store is for state more than one view needs. A one-off list doesn't need one.
 - Long lists use PrimeVue DataTable with server-side paging where a `count` endpoint
   exists (`casinos/count`, `newsletters/count`, `promotion-history/count`, …).
+- **Every paginated list is simple-paginated**: the listing returns no `meta.total`
+  (`SimplePaginatedResponse<T>` from `@shared/types/pagination`, or `meta.has_more` on
+  the hand-built forum / articles / UniOne endpoints). Size the paginator with
+  `pagerMeta(pageWindow(list), count)` (or `handPageWindow`) from `utils/pagination.ts`,
+  where `count` is the `/count` call made beside the listing. If that call fails, the
+  pager still steps forward one page at a time. Anything that quotes a number (a badge,
+  a stat tile, "delete N filtered") must show the count itself, never the pager's estimate.
 - Queued work (imports) exposes a status endpoint — poll `…/imports/{import}` until
   `finished_at` and show real progress rather than a spinner.
 

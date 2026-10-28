@@ -29,9 +29,12 @@ export interface ArticlePage {
   data: Article[]
   meta: {
     current_page: number
-    last_page: number
-    total: number
     per_page: number
+    /**
+     * Whether a next page exists. There is no `total`: the listing is
+     * simple-paginated, and the screen sizes its paginator from countArticles().
+     */
+    has_more: boolean
     published_count: number
     /**
      * The two curated rails, counted VISIBLE-and-flagged rather than merely
@@ -65,6 +68,13 @@ export function listArticles(
       + (perPage ? `&per_page=${perPage}` : ''),
     )
     .then((r) => r.data)
+}
+
+/** Every entry in this site's section — a dedicated COUNT that sizes the paginator. */
+export function countArticles(siteId: number, type: ArticleType = 'guide'): Promise<number> {
+  return client
+    .get<{ total: number }>(`/admin/sites/${siteId}/articles/count${query(type)}`)
+    .then((r) => r.data.total)
 }
 
 export function getArticle(siteId: number, id: number, type: ArticleType = 'guide'): Promise<Article> {

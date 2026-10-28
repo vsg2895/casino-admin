@@ -13,6 +13,7 @@ import axios from 'axios'
 import { useNewsletterStore } from '@/stores/newsletterStore'
 import { useSitesStore } from '@/stores/sitesStore'
 import { exportNewsletters, importNewsletters, getImportStatus, countNewsletters } from '@/api/newsletter'
+import { pagerMeta } from '@/utils/pagination'
 import RecordCount from '@/components/RecordCount.vue'
 import type { Newsletter } from '@shared/types/newsletter'
 import type { NewsletterImportProgress } from '@shared/types/newsletterImport'
@@ -85,12 +86,16 @@ function formatDate(iso: string | null | undefined): string {
 // three pages, however many subscribers actually exist.
 const page = ref(1)
 const perPage = ref(50)
-const totalRecords = computed(() => store.meta?.total ?? 0)
 const first = computed(() => (page.value - 1) * perPage.value)
 
 // Total from the dedicated COUNT endpoint — never from the listing response,
 // so the paginated query stays free of counting work as the list grows.
 const recordTotal = ref<number | null>(null)
+
+// The listing carries no total (it is simple-paginated), so the same COUNT also
+// sizes the paginator.
+const pager = computed(() => pagerMeta(store.pageInfo, recordTotal.value))
+const totalRecords = computed(() => pager.value.total)
 
 // One definition of "what is the admin looking at", shared by the listing and
 // the count so the badge can never disagree with the rows on screen.
@@ -128,7 +133,7 @@ async function reload(): Promise<void> {
 
   // A bulk delete can leave the current page past the end of the list. Step
   // back to the last real page rather than showing an empty table.
-  const lastPage = store.meta?.last_page ?? 1
+  const lastPage = pager.value.last_page
   if (page.value > lastPage) {
     page.value = lastPage
     await fetchPage()

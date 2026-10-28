@@ -27,6 +27,7 @@ import { useToast } from 'primevue/usetoast'
 import HistoryDeleteButton from '@/components/HistoryDeleteButton.vue'
 import * as api from '@/api/newsletterPhones'
 import RecordCount from '@/components/RecordCount.vue'
+import { pageWindow, pagerMeta } from '@/utils/pagination'
 import type { PhoneSmsHistory } from '@shared/types/newsletterPhone'
 
 /**
@@ -82,7 +83,8 @@ async function reload(): Promise<void> {
       api.countSmsHistory(activeFilters()).catch(() => null),
     ])
     items.value = list.data
-    meta.value = { total: list.meta.total, last_page: list.meta.last_page }
+    // The listing carries no total (simple-paginated); the COUNT sizes the pager.
+    meta.value = pagerMeta(pageWindow(list), count)
     perPage.value = list.meta.per_page
     recordTotal.value = count
   } catch {

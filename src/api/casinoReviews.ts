@@ -1,5 +1,6 @@
 import client from './client'
-import type { ApiResponse, PaginatedResponse } from '@shared/types/api'
+import type { ApiResponse } from '@shared/types/api'
+import type { SimplePaginatedResponse } from '@shared/types/pagination'
 import type { CasinoReview, CasinoReviewStatus } from '@shared/types/casinoReview'
 
 export interface CasinoReviewFilters {
@@ -12,9 +13,9 @@ export interface CasinoReviewFilters {
   rating?: number
 }
 
-export function listReviews(params?: CasinoReviewFilters): Promise<PaginatedResponse<CasinoReview>> {
+export function listReviews(params?: CasinoReviewFilters): Promise<SimplePaginatedResponse<CasinoReview>> {
   return client
-    .get<PaginatedResponse<CasinoReview>>('/admin/reviews', { params })
+    .get<SimplePaginatedResponse<CasinoReview>>('/admin/reviews', { params })
     .then((r) => r.data)
 }
 

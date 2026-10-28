@@ -1,18 +1,24 @@
 import client from './client'
 import { downloadFile } from './download'
-import type { ApiResponse, PaginatedResponse } from '@shared/types/api'
+import type { ApiResponse } from '@shared/types/api'
+import type { SimplePaginatedResponse } from '@shared/types/pagination'
 import type {
   EmailSchedule,
   ScheduleRecipientPreview,
   UpsertEmailSchedulePayload,
 } from '@shared/types/emailSchedule'
 
-export function listSchedules(page = 1, perPage?: number): Promise<PaginatedResponse<EmailSchedule>> {
+export function listSchedules(page = 1, perPage?: number): Promise<SimplePaginatedResponse<EmailSchedule>> {
   return client
-    .get<PaginatedResponse<EmailSchedule>>('/admin/schedules', {
+    .get<SimplePaginatedResponse<EmailSchedule>>('/admin/schedules', {
       params: { page, ...(perPage ? { per_page: perPage } : {}) },
     })
     .then((r) => r.data)
+}
+
+/** Total schedules — a dedicated COUNT that sizes the list's paginator. */
+export function countSchedules(): Promise<number> {
+  return client.get<{ total: number }>('/admin/schedules/count').then((r) => r.data.total)
 }
 
 export function createSchedule(payload: UpsertEmailSchedulePayload): Promise<ApiResponse<EmailSchedule>> {

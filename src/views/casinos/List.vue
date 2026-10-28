@@ -18,6 +18,7 @@ import * as casinosApi from '@/api/casinos'
 import * as attachmentsApi from '@/api/casinoAttachments'
 import * as profilesApi from '@/api/casinoDetails'
 import RecordCount from '@/components/RecordCount.vue'
+import { pagerMeta } from '@/utils/pagination'
 import type { Casino } from '@shared/types/casino'
 import type { ErrorResponse } from '@shared/types/api'
 
@@ -157,7 +158,10 @@ function extractError(e: unknown, fallback: string): string {
 // separate COUNT endpoint and was telling the truth.
 const page = ref(1)
 const perPage = ref(15)
-const totalRecords = computed(() => store.meta?.total ?? 0)
+// The listing carries no total (simple-paginated): the paginator is sized
+// from the same COUNT the badge shows, `recordTotal` below.
+const pager = computed(() => pagerMeta(store.pageInfo, recordTotal.value))
+const totalRecords = computed(() => pager.value.total)
 const first = computed(() => (page.value - 1) * perPage.value)
 
 function fetchPage(): Promise<void> {
@@ -170,7 +174,7 @@ async function reload(): Promise<void> {
   // Deleting the last row of the last page leaves us past the end of the list.
   // Step back rather than showing an empty table with a paginator that offers
   // no way out.
-  const lastPage = store.meta?.last_page ?? 1
+  const lastPage = pager.value.last_page
   if (page.value > lastPage) {
     page.value = lastPage
     await fetchPage()

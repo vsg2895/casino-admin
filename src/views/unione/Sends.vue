@@ -29,6 +29,7 @@ import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
 import * as api from '@/api/unione'
+import { handPageWindow, pagerMeta } from '@/utils/pagination'
 import HistoryDeleteButton from '@/components/HistoryDeleteButton.vue'
 import RecordCount from '@/components/RecordCount.vue'
 import type { UniOneApiKey, UniOneSend } from '@shared/types/unione'
@@ -51,6 +52,9 @@ const page = ref(1)
 const perPage = ref(25)
 const meta = ref<{ total: number; last_page: number } | null>(null)
 const totalRecords = computed(() => meta.value?.total ?? 0)
+// The exact COUNT, for the badge — null while loading or if it failed, so the
+// badge never quotes the paginator's estimate.
+const recordTotal = ref<number | null>(null)
 const first = computed(() => (page.value - 1) * perPage.value)
 
 // ── Filters ───────────────────────────────────────────────────────────────────
@@ -89,9 +93,15 @@ function activeFilters(): Record<string, unknown> {
 async function reload(): Promise<void> {
   loading.value = true
   try {
-    const list = await api.listSends({ page: page.value, per_page: perPage.value, ...activeFilters() })
+    // The listing carries no total (simple-paginated); the dedicated COUNT,
+    // requested beside it, sizes the paginator and the badge. Never fatal.
+    const [list, count] = await Promise.all([
+      api.listSends({ page: page.value, per_page: perPage.value, ...activeFilters() }),
+      api.countSends(activeFilters()).catch(() => null),
+    ])
     items.value = list.data
-    meta.value = { total: list.meta.total, last_page: list.meta.last_page }
+    recordTotal.value = count
+    meta.value = pagerMeta(handPageWindow(list), count)
   } catch {
     toast.add({
       severity: 'error',
@@ -219,7 +229,7 @@ const removeHistoryRow = (id: number) => api.deleteSend(id)
         @change="applyFilters"
       />
       <Button label="Apply" size="small" :loading="loading" @click="applyFilters" />
-      <RecordCount label="Total Runs" :total="totalRecords" :loading="loading" class="ml-auto" />
+      <RecordCount label="Total Runs" :total="recordTotal" :loading="loading" class="ml-auto" />
     </div>
 
     <DataTable

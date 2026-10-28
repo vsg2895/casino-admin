@@ -22,6 +22,7 @@ import ToggleSwitch from 'primevue/toggleswitch'
 import { useToast } from 'primevue/usetoast'
 import * as api from '@/api/casinoReviews'
 import RecordCount from '@/components/RecordCount.vue'
+import { pageWindow, pagerMeta } from '@/utils/pagination'
 import { useSitesStore } from '@/stores/sitesStore'
 import type { CasinoReview, CasinoReviewStatus } from '@shared/types/casinoReview'
 
@@ -91,7 +92,8 @@ async function reload(): Promise<void> {
       api.countReviews(applied.value).catch(() => null),
     ])
     items.value = list.data
-    meta.value = { total: list.meta.total, last_page: list.meta.last_page }
+    // The listing carries no total (simple-paginated); the COUNT sizes the pager.
+    meta.value = pagerMeta(pageWindow(list), count)
     perPage.value = list.meta.per_page
     recordTotal.value = count
   } catch {

@@ -2,12 +2,14 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import * as newsletterApi from '@/api/newsletter'
 import type { Newsletter } from '@shared/types/newsletter'
-import type { PaginatedResponse } from '@shared/types/api'
+import { pageWindow, type PageWindow } from '@/utils/pagination'
 
 export const useNewsletterStore = defineStore('newsletter', () => {
   const items = ref<Newsletter[]>([])
   const loading = ref(false)
-  const meta = ref<PaginatedResponse<Newsletter>['meta'] | null>(null)
+  // Where the current page sits. No total: the listing is simple-paginated, and
+  // the screen sizes its paginator from countNewsletters() instead.
+  const pageInfo = ref<PageWindow | null>(null)
 
   async function fetchNewsletters(params?: {
     page?: number
@@ -21,7 +23,7 @@ export const useNewsletterStore = defineStore('newsletter', () => {
     try {
       const response = await newsletterApi.listNewsletters(params)
       items.value = response.data
-      meta.value = response.meta
+      pageInfo.value = pageWindow(response)
     } finally {
       loading.value = false
     }
@@ -81,7 +83,7 @@ export const useNewsletterStore = defineStore('newsletter', () => {
   return {
     items,
     loading,
-    meta,
+    pageInfo,
     fetchNewsletters,
     add,
     remove,

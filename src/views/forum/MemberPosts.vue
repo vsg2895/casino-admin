@@ -24,6 +24,7 @@ import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
 import * as api from '@/api/forum'
+import { handPageWindow, pagerMeta } from '@/utils/pagination'
 import { useSitesStore } from '@/stores/sitesStore'
 import type { ForumMemberPost, ForumPostStatus, ForumModerationAction } from '@shared/types/community-forum'
 
@@ -69,17 +70,20 @@ const byStatus = computed(() => meta.value?.by_status ?? {})
 async function load(): Promise<void> {
   loading.value = true
   try {
-    const res = await api.listForumMemberPosts({
-      page: page.value,
-      per_page: perPage.value,
+    const filters = {
       status: fStatus.value,
       site_id: fSite.value,
       search: fSearch.value || null,
-    })
+    }
+    // The listing carries no total (simple-paginated); the dedicated COUNT,
+    // requested beside it, sizes the paginator. Never fatal.
+    const [res, count] = await Promise.all([
+      api.listForumMemberPosts({ page: page.value, per_page: perPage.value, ...filters }),
+      api.countForumMemberPosts(filters).catch(() => null),
+    ])
     items.value = res.data
     meta.value = {
-      total: res.meta.total,
-      last_page: res.meta.last_page,
+      ...pagerMeta(handPageWindow(res), count),
       by_status: res.meta.by_status ?? {},
     }
   } catch {

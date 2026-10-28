@@ -15,6 +15,7 @@ import axios from 'axios'
 import RichTextEditor from '@/components/RichTextEditor.vue'
 import ImageDropzone from '@/components/ImageDropzone.vue'
 import * as articlesApi from '@/api/articles'
+import { handPageWindow, pagerMeta } from '@/utils/pagination'
 import * as newsCategoriesApi from '@/api/newsCategories'
 import type { NewsCategory } from '@shared/types/newsCategory'
 import type { ArticleType } from '@/api/articles'
@@ -101,6 +102,9 @@ const featuredCount = ref(0)
 const page = ref(1)
 const perPage = ref(15)
 const totalRecords = ref(0)
+// The section's exact size, from the dedicated COUNT — null if it failed. The
+// "All" tile shows this; `totalRecords` only sizes the paginator.
+const entryTotal = ref<number | null>(null)
 // PrimeVue's paginator works in row offsets, not page numbers.
 const first = computed(() => (page.value - 1) * perPage.value)
 
@@ -128,9 +132,16 @@ function formatDate(iso: string | null): string {
 async function reload(): Promise<void> {
   loading.value = true
   try {
-    const res = await articlesApi.listArticles(siteId, articleType, page.value, perPage.value)
+    // The listing carries no total (simple-paginated); the dedicated COUNT,
+    // requested beside it, sizes the paginator. Never fatal.
+    const [res, count] = await Promise.all([
+      articlesApi.listArticles(siteId, articleType, page.value, perPage.value),
+      articlesApi.countArticles(siteId, articleType).catch(() => null),
+    ])
+    const pager = pagerMeta(handPageWindow(res), count)
     items.value = res.data
-    totalRecords.value = res.meta.total
+    entryTotal.value = count
+    totalRecords.value = pager.total
     perPage.value = res.meta.per_page
     // Counted server-side over the whole section, not over the page in hand.
     publishedCount.value = res.meta.published_count
@@ -140,7 +151,7 @@ async function reload(): Promise<void> {
     // A deletion can empty the last page. Stepping back beats showing an empty
     // table under a paginator that says there are results.
     if (res.data.length === 0 && page.value > 1) {
-      page.value = res.meta.last_page > 0 ? res.meta.last_page : 1
+      page.value = pager.last_page
       await reload()
     }
   } catch {
@@ -415,7 +426,7 @@ onMounted(async () => {
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <div class="rounded-lg border border-gray-200 bg-white px-3 py-2">
         <p class="text-xs text-gray-500">All {{ section.plural.toLowerCase() }}</p>
-        <p class="text-xl font-semibold tabular-nums text-gray-900">{{ totalRecords }}</p>
+        <p class="text-xl font-semibold tabular-nums text-gray-900">{{ entryTotal ?? '—' }}</p>
         <p class="text-[11px] text-gray-400">drafts included</p>
       </div>
       <div class="rounded-lg border border-gray-200 bg-white px-3 py-2">
@@ -484,6 +495,16 @@ onMounted(async () => {
         <Column header="Title">
           <template #body="{ data }">
             <span class="font-medium text-gray-900">{{ data.title }}</span>
+            <!-- Scraped and not rewritten yet: the title and excerpt are still the
+                 SOURCE's words. Shown so nobody publishes them by mistake;
+                 `news:rewrite` clears it. -->
+            <Tag
+              v-if="data.awaiting_rewrite"
+              value="Not rewritten"
+              severity="danger"
+              class="ml-2 align-middle !text-[0.65rem]"
+              title="Still the source's headline and teaser. Run news:rewrite before publishing."
+            />
             <p class="font-mono text-xs text-gray-400">{{ section.urlPrefix }}{{ data.slug }}</p>
           </template>
         </Column>

@@ -1,5 +1,6 @@
 import client from './client'
-import type { ApiResponse, PaginatedResponse } from '@shared/types/api'
+import type { ApiResponse } from '@shared/types/api'
+import type { SimplePaginatedResponse } from '@shared/types/pagination'
 import type {
   BulkSmsResult,
   NewsletterPhone,
@@ -24,9 +25,9 @@ export interface PhoneListFilters extends PhoneAudienceFilters {
 
 export function listNewsletterPhones(
   params?: PhoneListFilters,
-): Promise<PaginatedResponse<NewsletterPhone>> {
+): Promise<SimplePaginatedResponse<NewsletterPhone>> {
   return client
-    .get<PaginatedResponse<NewsletterPhone>>('/admin/newsletter-phones', { params })
+    .get<SimplePaginatedResponse<NewsletterPhone>>('/admin/newsletter-phones', { params })
     .then((r) => r.data)
 }
 
@@ -129,9 +130,9 @@ export interface SmsHistoryFilters {
 
 export function listSmsHistory(
   params?: SmsHistoryFilters,
-): Promise<PaginatedResponse<PhoneSmsHistory>> {
+): Promise<SimplePaginatedResponse<PhoneSmsHistory>> {
   return client
-    .get<PaginatedResponse<PhoneSmsHistory>>('/admin/newsletter-phones/history', { params })
+    .get<SimplePaginatedResponse<PhoneSmsHistory>>('/admin/newsletter-phones/history', { params })
     .then((r) => r.data)
 }
 

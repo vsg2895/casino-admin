@@ -12,6 +12,7 @@ import { useCmsPagesStore } from '@/stores/cmsPagesStore'
 import { useSitesStore } from '@/stores/sitesStore'
 import * as cmsApi from '@/api/cmsPages'
 import type { CmsPageAdmin } from '@shared/types/cmsPage'
+import { pagerMeta } from '@/utils/pagination'
 
 const router = useRouter()
 const store = useCmsPagesStore()
@@ -32,7 +33,12 @@ const siteFilter = ref<number | null>(null)
 // carries.
 const page = ref(1)
 const perPage = ref(50)
-const totalRecords = computed(() => store.meta?.total ?? 0)
+// The listing carries no total (simple-paginated). The paginator is sized from
+// a dedicated COUNT, fetched with every reload (filter change, delete) but not
+// on a page turn, which cannot change it.
+const recordTotal = ref<number | null>(null)
+const pager = computed(() => pagerMeta(store.pageInfo, recordTotal.value))
+const totalRecords = computed(() => pager.value.total)
 const first = computed(() => (page.value - 1) * perPage.value)
 
 function fetchPage(): Promise<void> {
@@ -43,11 +49,18 @@ function fetchPage(): Promise<void> {
   })
 }
 
+// Never fatal: without it the paginator still pages forward one at a time.
+async function fetchCount(): Promise<void> {
+  recordTotal.value = await cmsApi
+    .countCmsPages(siteFilter.value ? { site_id: siteFilter.value } : {})
+    .catch(() => null)
+}
+
 async function reload(): Promise<void> {
-  await fetchPage()
+  await Promise.all([fetchPage(), fetchCount()])
 
   // Deleting the last row of the last page leaves us past the end of the list.
-  const lastPage = store.meta?.last_page ?? 1
+  const lastPage = pager.value.last_page
   if (page.value > lastPage) {
     page.value = lastPage
     await fetchPage()

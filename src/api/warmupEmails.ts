@@ -1,5 +1,6 @@
 import client from './client'
-import type { ApiResponse, PaginatedResponse } from '@shared/types/api'
+import type { ApiResponse } from '@shared/types/api'
+import type { SimplePaginatedResponse } from '@shared/types/pagination'
 import type {
   WarmupEmail,
   WarmupHistoryEntry,
@@ -25,6 +26,8 @@ export interface WarmupHistoryFilters {
   site_id?: number
   template?: string
   status?: WarmupSendStatus
+  /** One run's rows only — `WarmupLastSend.id`. */
+  send_id?: number
   /**
    * Inclusive `sent_at` bounds, as `YYYY-MM-DD`. Both ends cover the whole day
    * in UTC — the zone the column is stored in — so a row sent near midnight can
@@ -41,9 +44,9 @@ export interface WarmupHistoryFilters {
   tz?: string
 }
 
-export function listWarmupEmails(params?: WarmupFilters): Promise<PaginatedResponse<WarmupEmail>> {
+export function listWarmupEmails(params?: WarmupFilters): Promise<SimplePaginatedResponse<WarmupEmail>> {
   return client
-    .get<PaginatedResponse<WarmupEmail>>('/admin/warmup-emails', { params })
+    .get<SimplePaginatedResponse<WarmupEmail>>('/admin/warmup-emails', { params })
     .then((r) => r.data)
 }
 
@@ -181,9 +184,9 @@ export function getLastWarmupSend(): Promise<WarmupLastSend | null> {
 // and when. Read-only.
 export function listWarmupHistory(
   params?: WarmupHistoryFilters,
-): Promise<PaginatedResponse<WarmupHistoryEntry>> {
+): Promise<SimplePaginatedResponse<WarmupHistoryEntry>> {
   return client
-    .get<PaginatedResponse<WarmupHistoryEntry>>('/admin/warmup-emails/history', { params })
+    .get<SimplePaginatedResponse<WarmupHistoryEntry>>('/admin/warmup-emails/history', { params })
     .then((r) => r.data)
 }
 

@@ -1,5 +1,5 @@
 import client from './client'
-import type { PaginatedResponse } from '@shared/types/api'
+import type { SimplePaginatedResponse } from '@shared/types/pagination'
 import type { VerifyEmailSend, VerifyEmailSendFilters } from '@shared/types/verifyEmailSend'
 
 /**
@@ -15,8 +15,8 @@ const BASE = '/admin/verify-email-sends'
 
 export function listVerifyEmailSends(
   params?: VerifyEmailSendFilters,
-): Promise<PaginatedResponse<VerifyEmailSend>> {
-  return client.get<PaginatedResponse<VerifyEmailSend>>(BASE, { params }).then((r) => r.data)
+): Promise<SimplePaginatedResponse<VerifyEmailSend>> {
+  return client.get<SimplePaginatedResponse<VerifyEmailSend>>(BASE, { params }).then((r) => r.data)
 }
 
 /**

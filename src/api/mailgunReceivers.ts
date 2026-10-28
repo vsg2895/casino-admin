@@ -1,5 +1,6 @@
 import client from './client'
-import type { ApiResponse, PaginatedResponse } from '@shared/types/api'
+import type { ApiResponse } from '@shared/types/api'
+import type { SimplePaginatedResponse } from '@shared/types/pagination'
 import type {
   MailgunReceiver,
   ReceiverSourceLabel,
@@ -47,9 +48,9 @@ export function listMailgunReceiverSources(): Promise<MailgunReceiverSources> {
 
 export function listMailgunReceivers(
   params?: MailgunReceiverFilters,
-): Promise<PaginatedResponse<MailgunReceiver>> {
+): Promise<SimplePaginatedResponse<MailgunReceiver>> {
   return client
-    .get<PaginatedResponse<MailgunReceiver>>('/admin/mailgun-receivers', { params })
+    .get<SimplePaginatedResponse<MailgunReceiver>>('/admin/mailgun-receivers', { params })
     .then((r) => r.data)
 }
 

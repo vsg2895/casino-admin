@@ -2,7 +2,8 @@ import client from './client'
 import { downloadFile } from './download'
 import type { Newsletter } from '@shared/types/newsletter'
 import type { NewsletterImportProgress } from '@shared/types/newsletterImport'
-import type { ApiResponse, PaginatedResponse } from '@shared/types/api'
+import type { ApiResponse } from '@shared/types/api'
+import type { SimplePaginatedResponse } from '@shared/types/pagination'
 
 export function listNewsletters(params?: {
   page?: number
@@ -14,8 +15,8 @@ export function listNewsletters(params?: {
   // Email search. A prefix match, except a term starting with `@`, which
   // matches a domain anywhere in the address. See NewsletterController.
   search?: string
-}): Promise<PaginatedResponse<Newsletter>> {
-  return client.get<PaginatedResponse<Newsletter>>('/admin/newsletters', { params }).then((r) => r.data)
+}): Promise<SimplePaginatedResponse<Newsletter>> {
+  return client.get<SimplePaginatedResponse<Newsletter>>('/admin/newsletters', { params }).then((r) => r.data)
 }
 
 // Total matching the current filters. A dedicated COUNT on the server, issued

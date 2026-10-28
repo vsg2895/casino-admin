@@ -27,6 +27,7 @@ import { useToast } from 'primevue/usetoast'
 import { asLocalDate, browserTimezone } from '@/utils/dayFilters'
 import * as api from '@/api/mailgunReceivers'
 import RecordCount from '@/components/RecordCount.vue'
+import { pageWindow, pagerMeta } from '@/utils/pagination'
 import type { MailgunReceiver, MailgunReceiverImport, ReceiverSourceLabel } from '@shared/types/mailgunReceiver'
 
 const toast = useToast()
@@ -136,7 +137,8 @@ async function reload(): Promise<void> {
       api.countMailgunReceivers(activeFilters()).catch(() => null),
     ])
     items.value = list.data
-    meta.value = { total: list.meta.total, last_page: list.meta.last_page }
+    // The listing carries no total (simple-paginated); the COUNT sizes the pager.
+    meta.value = pagerMeta(pageWindow(list), count)
     perPage.value = list.meta.per_page
     recordTotal.value = count
   } catch {

@@ -1,5 +1,4 @@
 import client from './client'
-import type { PaginatedResponse } from '@shared/types/api'
 import type {
   EmailValidationAnalysis,
   EmailValidationCheckFlags,
@@ -9,6 +8,7 @@ import type {
   EmailValidationStats,
   EmailValidationVerdict,
 } from '@shared/types/emailValidation'
+import type { SimplePaginatedResponse } from '@shared/types/pagination'
 
 // Read-only by design: no create/update/delete, and no "re-validate" action —
 // that would spend a paid SendGrid credit from an audit screen. Rows leave only
@@ -34,12 +34,15 @@ export interface EmailValidationFilters extends Partial<Record<keyof EmailValida
   direction?: 'asc' | 'desc'
 }
 
-export function listEmailValidationLogs(
-  params?: EmailValidationFilters,
-): Promise<PaginatedResponse<EmailValidationLog>> {
-  return client
-    .get<PaginatedResponse<EmailValidationLog>>('/admin/email-validation', { params })
-    .then((r) => r.data)
+/**
+ * A page of the log WITHOUT a total: the listing is simple-paginated, and the
+ * screen gets its total from countEmailValidationLogs() instead, so the server
+ * runs the COUNT once rather than twice.
+ */
+export type EmailValidationLogPage = SimplePaginatedResponse<EmailValidationLog>
+
+export function listEmailValidationLogs(params?: EmailValidationFilters): Promise<EmailValidationLogPage> {
+  return client.get<EmailValidationLogPage>('/admin/email-validation', { params }).then((r) => r.data)
 }
 
 // Total for the current filters, issued separately so the paginated query never

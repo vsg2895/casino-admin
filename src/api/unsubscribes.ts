@@ -1,6 +1,6 @@
 import client from './client'
 import { downloadFile } from './download'
-import type { PaginatedResponse } from '@shared/types/api'
+import type { SimplePaginatedResponse } from '@shared/types/pagination'
 import type { Unsubscribe, UnsubscribeType } from '@shared/types/unsubscribe'
 
 export interface UnsubscribeFilters {
@@ -10,8 +10,8 @@ export interface UnsubscribeFilters {
   search?: string
 }
 
-export function listUnsubscribes(params?: UnsubscribeFilters): Promise<PaginatedResponse<Unsubscribe>> {
-  return client.get<PaginatedResponse<Unsubscribe>>('/admin/unsubscribes', { params }).then((r) => r.data)
+export function listUnsubscribes(params?: UnsubscribeFilters): Promise<SimplePaginatedResponse<Unsubscribe>> {
+  return client.get<SimplePaginatedResponse<Unsubscribe>>('/admin/unsubscribes', { params }).then((r) => r.data)
 }
 
 // Total matching the current filters. A dedicated COUNT on the server, issued

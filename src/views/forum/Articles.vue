@@ -24,6 +24,7 @@ import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
 import { asLocalDate, browserTimezone } from '@/utils/dayFilters'
 import * as api from '@/api/forum'
+import { handPageWindow, pagerMeta } from '@/utils/pagination'
 import { useSitesStore } from '@/stores/sitesStore'
 import type { ForumAdminSection, ForumArticle, ForumArticleStatus } from '@shared/types/community-forum'
 
@@ -144,9 +145,7 @@ async function load(): Promise<void> {
   if (siteId.value === null) return
   loading.value = true
   try {
-    const res = await api.listArticles(siteId.value, {
-      page: page.value,
-      per_page: perPage.value,
+    const filters = {
       category_id: fCategory.value,
       status: fStatus.value,
       pinned: fPinned.value,
@@ -158,9 +157,15 @@ async function load(): Promise<void> {
       to: asLocalDate(fTo.value),
       tz: browserTimezone(),
       search: fSearch.value.trim() || null,
-    })
+    }
+    // The listing carries no total (simple-paginated); the dedicated COUNT,
+    // requested beside it, sizes the paginator. Never fatal.
+    const [res, count] = await Promise.all([
+      api.listArticles(siteId.value, { page: page.value, per_page: perPage.value, ...filters }),
+      api.countArticles(siteId.value, filters).catch(() => null),
+    ])
     items.value = res.data
-    meta.value = { total: res.meta.total, last_page: res.meta.last_page }
+    meta.value = pagerMeta(handPageWindow(res), count)
   } catch {
     toast.add({ severity: 'error', summary: 'Could not load discussions', life: 4000 })
   } finally {

@@ -25,6 +25,7 @@ import { useToast } from 'primevue/usetoast'
 import * as api from '@/api/verifyEmailSends'
 import HistoryDeleteButton from '@/components/HistoryDeleteButton.vue'
 import RecordCount from '@/components/RecordCount.vue'
+import { pageWindow, pagerMeta } from '@/utils/pagination'
 import { useSitesStore } from '@/stores/sitesStore'
 import type { VerifyEmailSend, VerifyEmailSendStatus } from '@shared/types/verifyEmailSend'
 
@@ -84,7 +85,8 @@ async function reload(): Promise<void> {
       api.countVerifyEmailSends(activeFilters()).catch(() => null),
     ])
     items.value = list.data
-    meta.value = { total: list.meta.total, last_page: list.meta.last_page }
+    // The listing carries no total (simple-paginated); the COUNT sizes the pager.
+    meta.value = pagerMeta(pageWindow(list), counts?.total ?? null)
     perPage.value = list.meta.per_page
     recordTotal.value = counts?.total ?? null
     failedTotal.value = counts?.failed ?? null

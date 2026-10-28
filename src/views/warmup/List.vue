@@ -13,9 +13,11 @@ import { useToast } from 'primevue/usetoast'
 import axios from 'axios'
 import * as api from '@/api/warmupEmails'
 import RecordCount from '@/components/RecordCount.vue'
+import { pageWindow, pagerMeta } from '@/utils/pagination'
 import { useSitesStore } from '@/stores/sitesStore'
 import type {
   WarmupEmail,
+  WarmupHistoryEntry,
   WarmupImportSummary,
   WarmupLastSend,
   WarmupRecipientPreview,
@@ -70,7 +72,8 @@ async function reload(): Promise<void> {
       api.countWarmupEmails(activeFilters()).catch(() => null),
     ])
     items.value = list.data
-    meta.value = { total: list.meta.total, last_page: list.meta.last_page }
+    // The listing carries no total (simple-paginated); the COUNT sizes the pager.
+    meta.value = pagerMeta(pageWindow(list), count)
     perPage.value = list.meta.per_page
     recordTotal.value = count
   } catch {
@@ -131,6 +134,67 @@ async function loadLastSend(): Promise<void> {
 // Leaving the screen must stop the timer, or it keeps firing requests against a
 // component that no longer exists.
 onUnmounted(() => clearTimeout(lastSendTimer))
+
+// ── Last run's failures ──────────────────────────────────────────────────────
+// The banner says "2 failed"; this answers "which, and why". Read from the
+// per-address history narrowed to that run and `status=failed`, so it lists
+// exactly the rows `failed_count` counted. Loaded only when opened, a page at a
+// time — a bad run can fail thousands.
+const FAILED_PER_PAGE = 20
+const failedOpen = ref(false)
+const failedRows = ref<WarmupHistoryEntry[]>([])
+const failedPage = ref(0)
+const failedHasMore = ref(false)
+const failedLoading = ref(false)
+const failedError = ref(false)
+/** Bumped on every reset, so a page requested before it is dropped on arrival. */
+let failedGeneration = 0
+
+async function loadFailed(): Promise<void> {
+  if (!lastSend.value) return
+  const sendId = lastSend.value.id
+  const generation = failedGeneration
+  failedLoading.value = true
+  failedError.value = false
+  try {
+    const res = await api.listWarmupHistory({
+      send_id: sendId,
+      status: 'failed',
+      page: failedPage.value + 1,
+      per_page: FAILED_PER_PAGE,
+    })
+    // The list was reset (a newer run, or more failures) while this was in flight.
+    if (generation !== failedGeneration) return
+    failedRows.value.push(...res.data)
+    failedPage.value = res.meta.current_page
+    failedHasMore.value = res.links.next !== null
+  } catch {
+    if (generation === failedGeneration) failedError.value = true
+  } finally {
+    if (generation === failedGeneration) failedLoading.value = false
+  }
+}
+
+function toggleFailed(): void {
+  failedOpen.value = !failedOpen.value
+  if (failedOpen.value && failedPage.value === 0) void loadFailed()
+}
+
+// A different run, or more failures landing while it runs: start over, and
+// re-read if the list is open so it never shows another run's rows.
+watch(
+  () => [lastSend.value?.id, lastSend.value?.failed_count] as const,
+  ([id], [prevId]) => {
+    failedGeneration++
+    failedLoading.value = false
+    failedError.value = false
+    failedRows.value = []
+    failedPage.value = 0
+    failedHasMore.value = false
+    if (id !== prevId) failedOpen.value = false
+    if (failedOpen.value) void loadFailed()
+  },
+)
 
 function formatDate(iso: string | null | undefined): string {
   return iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '—'
@@ -523,6 +587,65 @@ onMounted(async () => {
         <span v-if="lastSend.failed_count > 0">
           · <span class="font-semibold">{{ lastSend.failed_count.toLocaleString() }} failed</span>
         </span>
+        <button
+          v-if="lastSend.failed_count > 0"
+          type="button"
+          class="ml-2 inline-flex items-center gap-1 rounded-md border border-current/30 px-2 py-0.5 font-medium hover:bg-white/60"
+          :aria-expanded="failedOpen"
+          aria-controls="warmup-last-send-failed"
+          @click="toggleFailed"
+        >
+          {{ failedOpen ? 'Hide failed' : 'Show failed' }}
+          <i class="pi text-[0.65rem]" :class="failedOpen ? 'pi-chevron-up' : 'pi-chevron-down'" />
+        </button>
+      </div>
+
+      <!-- Which addresses failed, why, and when. -->
+      <div
+        v-if="failedOpen && lastSend.failed_count > 0"
+        id="warmup-last-send-failed"
+        class="mt-3 overflow-hidden rounded-md border border-orange-200 bg-white text-slate-700"
+      >
+        <div class="max-h-80 overflow-auto">
+          <table class="w-full min-w-[36rem] text-left text-xs">
+            <thead class="sticky top-0 bg-orange-50 text-orange-900">
+              <tr>
+                <th class="px-3 py-2 font-semibold">Email</th>
+                <th class="px-3 py-2 font-semibold">Error</th>
+                <th class="whitespace-nowrap px-3 py-2 font-semibold">Date</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-orange-100">
+              <tr v-for="row in failedRows" :key="row.id" class="align-top">
+                <td class="whitespace-nowrap px-3 py-2 font-medium">{{ row.email }}</td>
+                <td class="break-words px-3 py-2 text-red-700">{{ row.error ?? 'No error recorded' }}</td>
+                <td class="whitespace-nowrap px-3 py-2 tabular-nums">{{ formatDate(row.sent_at) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="flex items-center justify-between gap-2 border-t border-orange-100 px-3 py-2 text-xs">
+          <span class="opacity-70">
+            Showing {{ failedRows.length.toLocaleString() }} of {{ lastSend.failed_count.toLocaleString() }}
+          </span>
+          <span v-if="failedLoading" class="italic opacity-70">Loading…</span>
+          <button
+            v-else-if="failedError"
+            type="button"
+            class="font-medium text-red-700 hover:underline"
+            @click="loadFailed"
+          >
+            Couldn’t load — retry
+          </button>
+          <button
+            v-else-if="failedHasMore"
+            type="button"
+            class="font-medium text-orange-800 hover:underline"
+            @click="loadFailed"
+          >
+            Load more
+          </button>
+        </div>
       </div>
 
       <div class="mt-1 text-xs opacity-70">

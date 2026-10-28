@@ -22,6 +22,7 @@ import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
 import { asLocalDate, browserTimezone } from '@/utils/dayFilters'
 import * as api from '@/api/unione'
+import { handPageWindow, pagerMeta } from '@/utils/pagination'
 import client from '@/api/client'
 import FileUpload from 'primevue/fileupload'
 import type {
@@ -179,18 +180,21 @@ const hasFilters = computed(() =>
 async function load(): Promise<void> {
   loading.value = true
   try {
-    const [list, s] = await Promise.all([
+    const [list, count, s] = await Promise.all([
       api.listReceivers({
         page: page.value, per_page: perPage.value,
         ...currentFilters(),
       }),
+      // The listing carries no total (simple-paginated); this COUNT sizes the
+      // paginator. Never fatal.
+      api.countReceivers(currentFilters()).catch(() => null),
       // Never fatal — a failed stats call must not take the list down.
       // Same filters as the listing: the header describes what the table is
       // showing, not the whole list.
       api.receiverStats(currentFilters()).catch(() => null),
     ])
     items.value = list.data
-    meta.value = { total: list.meta.total, last_page: list.meta.last_page }
+    meta.value = pagerMeta(handPageWindow(list), count)
     stats.value = s
   } catch {
     toast.add({ severity: 'error', summary: 'Could not load receivers', life: 4000 })

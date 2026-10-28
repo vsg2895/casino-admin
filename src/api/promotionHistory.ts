@@ -1,5 +1,5 @@
 import client from './client'
-import type { PaginatedResponse } from '@shared/types/api'
+import type { SimplePaginatedResponse } from '@shared/types/pagination'
 import type { PromotionEmailHistory, PromotionEmailStatus } from '@shared/types/promotionEmailHistory'
 
 export interface PromotionHistoryFilters {
@@ -13,9 +13,9 @@ export interface PromotionHistoryFilters {
 
 export function listPromotionHistory(
   params?: PromotionHistoryFilters,
-): Promise<PaginatedResponse<PromotionEmailHistory>> {
+): Promise<SimplePaginatedResponse<PromotionEmailHistory>> {
   return client
-    .get<PaginatedResponse<PromotionEmailHistory>>('/admin/promotion-history', { params })
+    .get<SimplePaginatedResponse<PromotionEmailHistory>>('/admin/promotion-history', { params })
     .then((r) => r.data)
 }
 

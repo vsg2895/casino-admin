@@ -25,9 +25,13 @@ import type {
  * network's backlog in one list rather than switching sites to find it.
  */
 
+/**
+ * One page WITHOUT a total: these listings are simple-paginated. Each screen
+ * sizes its paginator from the listing's `/count` endpoint instead.
+ */
 interface Paginated<T> {
   data: T[]
-  meta: { current_page: number; last_page: number; total: number; per_page: number }
+  meta: { current_page: number; per_page: number; has_more: boolean }
 }
 
 // ── taxonomy ─────────────────────────────────────────────────────────────────
@@ -82,6 +86,11 @@ export interface ForumArticleFilters {
 
 export function listArticles(siteId: number, params?: ForumArticleFilters): Promise<Paginated<ForumArticle>> {
   return client.get<Paginated<ForumArticle>>(`/admin/sites/${siteId}/forum-articles`, { params }).then((r) => r.data)
+}
+
+/** Discussions matching the filters — a dedicated COUNT, issued beside listArticles(). */
+export function countArticles(siteId: number, params?: Omit<ForumArticleFilters, 'page' | 'per_page'>): Promise<number> {
+  return client.get<{ total: number }>(`/admin/sites/${siteId}/forum-articles/count`, { params }).then((r) => r.data.total)
 }
 
 export function getArticle(siteId: number, id: number): Promise<ForumArticle> {
@@ -150,6 +159,11 @@ export function listModerationPosts(params?: ForumModerationFilters): Promise<Pa
   return client.get<Paginated<ForumModerationPost>>('/admin/forum-posts', { params }).then((r) => r.data)
 }
 
+/** Queue entries matching the filters — a dedicated COUNT, issued beside listModerationPosts(). */
+export function countModerationPosts(params?: Omit<ForumModerationFilters, 'page' | 'per_page'>): Promise<number> {
+  return client.get<{ total: number }>('/admin/forum-posts/count', { params }).then((r) => r.data.total)
+}
+
 export function moderationCounts(siteId?: number | null): Promise<ForumModerationCounts> {
   return client
     .get<{ data: ForumModerationCounts }>('/admin/forum-posts/counts', { params: { site_id: siteId ?? undefined } })
@@ -188,9 +202,9 @@ export interface ForumMemberPostPage {
   data: ForumMemberPost[]
   meta: {
     current_page: number
-    last_page: number
-    total: number
     per_page: number
+    /** No total: the screen sizes its paginator from countForumMemberPosts(). */
+    has_more: boolean
     /** Totals per status for the tabs — scoped by site, never by status. */
     by_status: Record<string, number>
   }
@@ -200,6 +214,11 @@ export function listForumMemberPosts(params?: ForumMemberPostFilters): Promise<F
   return client
     .get<ForumMemberPostPage>('/admin/forum-member-posts', { params })
     .then((r) => r.data)
+}
+
+/** Member posts matching the filters — a dedicated COUNT, issued beside listForumMemberPosts(). */
+export function countForumMemberPosts(params?: Omit<ForumMemberPostFilters, 'page' | 'per_page'>): Promise<number> {
+  return client.get<{ total: number }>('/admin/forum-member-posts/count', { params }).then((r) => r.data.total)
 }
 
 export function setMemberStatus(
@@ -233,8 +252,22 @@ export interface ForumMemberFilters {
   search?: string | null
 }
 
-export function listMembers(params?: ForumMemberFilters): Promise<Paginated<ForumMemberRow>> {
-  return client.get<Paginated<ForumMemberRow>>('/admin/forum-members', { params }).then((r) => r.data)
+/**
+ * A page of members WITHOUT a total: the listing is simple-paginated, and the
+ * screen sizes its paginator from countMembers() instead.
+ */
+export interface ForumMemberPage {
+  data: ForumMemberRow[]
+  meta: { current_page: number; per_page: number; has_more: boolean }
+}
+
+export function listMembers(params?: ForumMemberFilters): Promise<ForumMemberPage> {
+  return client.get<ForumMemberPage>('/admin/forum-members', { params }).then((r) => r.data)
+}
+
+/** Members matching the filters — a dedicated COUNT, issued beside listMembers(). */
+export function countMembers(params?: Omit<ForumMemberFilters, 'page' | 'per_page'>): Promise<number> {
+  return client.get<{ total: number }>('/admin/forum-members/count', { params }).then((r) => r.data.total)
 }
 
 /**

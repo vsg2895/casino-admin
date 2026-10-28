@@ -1,5 +1,5 @@
 import client from './client'
-import type { PaginatedResponse } from '@shared/types/api'
+import type { SimplePaginatedResponse } from '@shared/types/pagination'
 import type {
   UpdateVerificationPromotionEmailPayload,
   VerificationPromotionEmail,
@@ -151,9 +151,9 @@ export interface VerificationPromotionHistoryFilters {
 
 export function listVerificationPromotionHistory(
   params?: VerificationPromotionHistoryFilters,
-): Promise<PaginatedResponse<VerificationPromotionHistoryEntry>> {
+): Promise<SimplePaginatedResponse<VerificationPromotionHistoryEntry>> {
   return client
-    .get<PaginatedResponse<VerificationPromotionHistoryEntry>>(
+    .get<SimplePaginatedResponse<VerificationPromotionHistoryEntry>>(
       '/admin/verification-promotion/history',
       { params },
     )

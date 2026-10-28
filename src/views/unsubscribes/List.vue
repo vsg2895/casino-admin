@@ -13,6 +13,7 @@ import { useToast } from 'primevue/usetoast'
 import { useSitesStore } from '@/stores/sitesStore'
 import { listUnsubscribes, countUnsubscribes, exportUnsubscribes, deleteUnsubscribe } from '@/api/unsubscribes'
 import RecordCount from '@/components/RecordCount.vue'
+import { pageWindow, pagerMeta } from '@/utils/pagination'
 import type { Unsubscribe, UnsubscribeType } from '@shared/types/unsubscribe'
 
 const sitesStore = useSitesStore()
@@ -85,7 +86,8 @@ async function reload(): Promise<void> {
       countUnsubscribes(filters).catch(() => null),
     ])
     items.value = res.data
-    total.value = res.meta.total
+    // The listing carries no total (simple-paginated); the COUNT sizes the pager.
+    total.value = pagerMeta(pageWindow(res), count).total
     perPage.value = res.meta.per_page
     recordTotal.value = count
   } catch {

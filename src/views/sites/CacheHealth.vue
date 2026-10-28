@@ -8,6 +8,7 @@ import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
 import * as revalidationsApi from '@/api/siteRevalidations'
 import * as sitesApi from '@/api/sites'
+import { pageWindow, pagerMeta } from '@/utils/pagination'
 import type { SiteRevalidation } from '@shared/types/siteRevalidation'
 import type { Site } from '@shared/types/site'
 
@@ -53,12 +54,15 @@ async function onPage(event: { page: number; rows: number }): Promise<void> {
 async function reload(): Promise<void> {
   loading.value = true
   try {
-    const [history, siteRes] = await Promise.all([
+    // The listing carries no total (simple-paginated); the dedicated COUNT,
+    // requested beside it, sizes the paginator. Never fatal.
+    const [history, count, siteRes] = await Promise.all([
       revalidationsApi.listRevalidations(siteId, perPage.value, page.value),
+      revalidationsApi.countRevalidations(siteId).catch(() => null),
       sitesApi.getSite(siteId),
     ])
     items.value = history.data
-    totalRecords.value = history.meta?.total ?? history.data.length
+    totalRecords.value = pagerMeta(pageWindow(history), count).total
     site.value = siteRes.data
   } catch {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Could not load cache history.', life: 4000 })

@@ -1,6 +1,7 @@
 import client from './client'
 import type { CmsPageAdmin, CmsPageStatus } from '@shared/types/cmsPage'
-import type { ApiResponse, PaginatedResponse } from '@shared/types/api'
+import type { ApiResponse } from '@shared/types/api'
+import type { SimplePaginatedResponse } from '@shared/types/pagination'
 
 export interface CreateCmsPagePayload {
   site_id: number
@@ -24,8 +25,13 @@ export interface CreateCmsPagePayload {
 // site_id cannot change once a page is created.
 export type UpdateCmsPagePayload = Partial<Omit<CreateCmsPagePayload, 'site_id'>>
 
-export function listCmsPages(params?: { page?: number; per_page?: number; site_id?: number }): Promise<PaginatedResponse<CmsPageAdmin>> {
-  return client.get<PaginatedResponse<CmsPageAdmin>>('/admin/pages', { params }).then((r) => r.data)
+export function listCmsPages(params?: { page?: number; per_page?: number; site_id?: number }): Promise<SimplePaginatedResponse<CmsPageAdmin>> {
+  return client.get<SimplePaginatedResponse<CmsPageAdmin>>('/admin/pages', { params }).then((r) => r.data)
+}
+
+/** Pages matching the site filter — a dedicated COUNT that sizes the list's paginator. */
+export function countCmsPages(params?: { site_id?: number }): Promise<number> {
+  return client.get<{ total: number }>('/admin/pages/count', { params }).then((r) => r.data.total)
 }
 
 export function getCmsPage(id: number): Promise<ApiResponse<CmsPageAdmin>> {

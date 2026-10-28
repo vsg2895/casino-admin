@@ -26,6 +26,7 @@ import Dialog from 'primevue/dialog'
 import { useToast } from 'primevue/usetoast'
 import * as api from '@/api/forum'
 import RecordCount from '@/components/RecordCount.vue'
+import { handPageWindow, pagerMeta, type PageWindow } from '@/utils/pagination'
 import type {
   ForumMemberRole,
   ForumMemberRow,
@@ -40,8 +41,11 @@ const loading = ref(false)
 
 const page = ref(1)
 const perPage = ref(25)
-const meta = ref<{ total: number; last_page: number } | null>(null)
-const totalRecords = computed(() => meta.value?.total ?? 0)
+// The listing carries no total (it is simple-paginated); the total comes from
+// the dedicated COUNT, requested beside it; pagerMeta() sizes the paginator from both.
+const pageInfo = ref<PageWindow | null>(null)
+const recordTotal = ref<number | null>(null)
+const totalRecords = computed(() => pagerMeta(pageInfo.value, recordTotal.value).total)
 const first = computed(() => (page.value - 1) * perPage.value)
 
 // ── filters (Apply-driven, matching Reviews and the moderation queue) ────────
@@ -81,16 +85,20 @@ const hasFilters = computed(
 async function load(): Promise<void> {
   loading.value = true
   try {
-    const res = await api.listMembers({
-      page: page.value,
-      per_page: perPage.value,
+    const filters = {
       status: status.value,
       role: role.value,
       verified: verified.value,
       search: search.value.trim() || null,
-    })
+    }
+    const [res, count] = await Promise.all([
+      api.listMembers({ page: page.value, per_page: perPage.value, ...filters }),
+      // Never fatal: without it the paginator still pages forward one at a time.
+      api.countMembers(filters).catch(() => null),
+    ])
     items.value = res.data
-    meta.value = { total: res.meta.total, last_page: res.meta.last_page }
+    pageInfo.value = handPageWindow(res)
+    recordTotal.value = count
   } catch {
     toast.add({ severity: 'error', summary: 'Could not load members', life: 4000 })
   } finally {
@@ -173,8 +181,8 @@ onMounted(() => void load())
     <div class="mb-4">
       <h1 class="text-xl font-semibold text-gray-900">Users</h1>
       <p class="mt-1 text-sm text-gray-500">
-        <template v-if="meta">
-          <span class="font-medium text-gray-700">{{ meta.total.toLocaleString() }}</span>
+        <template v-if="recordTotal !== null">
+          <span class="font-medium text-gray-700">{{ recordTotal.toLocaleString() }}</span>
           {{ hasFilters ? 'matching the filters' : 'registered' }} ·
         </template>
         Visitor accounts registered on winpalack.com. Separate from the admin
@@ -201,13 +209,12 @@ onMounted(() => void load())
       </div>
       <Button label="Apply" icon="pi pi-filter" @click="apply" />
 
-      <!-- The count of what the FILTERS match, not of the table.
-           `meta.total` is the server's count of the filtered set — the same
-           number the paginator is built from — so it already moves with every
-           filter and never has to be requested separately. -->
+      <!-- The count of what the FILTERS match, not of the table: the
+           dedicated COUNT, requested with every load, which is also what
+           sizes the paginator. -->
       <RecordCount
         label="Users"
-        :total="meta ? meta.total : null"
+        :total="recordTotal"
         :loading="loading"
         class="ml-auto"
       />

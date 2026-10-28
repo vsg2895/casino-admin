@@ -29,6 +29,7 @@ import { listTwilioConfigs } from '@/api/twilioConfigs'
 import { listSmsTemplates } from '@/api/smsTemplates'
 import { segmentCount, segmentSummary } from '@/utils/smsSegments'
 import RecordCount from '@/components/RecordCount.vue'
+import { pageWindow, pagerMeta } from '@/utils/pagination'
 import SmsHistory from '@/views/smsHistory/List.vue'
 import type { SmsTemplate } from '@shared/types/smsTemplate'
 import type {
@@ -152,7 +153,8 @@ async function reload(): Promise<void> {
       api.countNewsletterPhones({ ...audienceFilters(), opted_out: false }).catch(() => null),
     ])
     items.value = list.data
-    meta.value = { total: list.meta.total, last_page: list.meta.last_page }
+    // The listing carries no total (simple-paginated); the COUNT sizes the pager.
+    meta.value = pagerMeta(pageWindow(list), count)
     perPage.value = list.meta.per_page
     recordTotal.value = count
     sendableTotal.value = sendable
@@ -833,7 +835,11 @@ onMounted(async () => {
     <!-- Delete everything matching the filters -->
     <Dialog v-model:visible="showDeleteAll" modal header="Delete filtered numbers" :style="{ width: '480px' }">
       <p class="text-sm text-gray-700">
-        This permanently deletes <strong>{{ totalRecords.toLocaleString() }}</strong> number(s) —
+        <!-- The exact COUNT only: if it failed, the paginator's total is an
+             estimate, and a destructive dialog must not quote one. -->
+        This permanently deletes
+        <strong v-if="recordTotal !== null">{{ recordTotal.toLocaleString() }}</strong>
+        <template v-else>every</template> number(s) —
         everything matching the filters currently applied, not just this page. There is no trash to
         restore from.
       </p>

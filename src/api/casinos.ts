@@ -1,6 +1,7 @@
 import client from './client'
 import type { Casino } from '@shared/types/casino'
-import type { ApiResponse, PaginatedResponse } from '@shared/types/api'
+import type { ApiResponse } from '@shared/types/api'
+import type { SimplePaginatedResponse } from '@shared/types/pagination'
 
 export interface CreateCasinoPayload {
   name: string
@@ -26,8 +27,8 @@ export type UpdateCasinoPayload = Partial<CreateCasinoPayload>
 export function listCasinos(params?: {
   page?: number
   per_page?: number
-}): Promise<PaginatedResponse<Casino>> {
-  return client.get<PaginatedResponse<Casino>>('/admin/casinos', { params }).then((r) => r.data)
+}): Promise<SimplePaginatedResponse<Casino>> {
+  return client.get<SimplePaginatedResponse<Casino>>('/admin/casinos', { params }).then((r) => r.data)
 }
 
 // Total casinos. A dedicated COUNT on the server, issued separately from the

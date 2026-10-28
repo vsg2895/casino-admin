@@ -24,6 +24,7 @@ import { browserTimezone } from '@/utils/dayFilters'
 import HistoryDeleteButton from '@/components/HistoryDeleteButton.vue'
 import * as api from '@/api/warmupEmails'
 import RecordCount from '@/components/RecordCount.vue'
+import { pageWindow, pagerMeta } from '@/utils/pagination'
 import { useSitesStore } from '@/stores/sitesStore'
 import type { WarmupHistoryEntry, WarmupSendStatus, WarmupTemplate } from '@shared/types/warmupEmail'
 
@@ -144,7 +145,8 @@ async function reload(): Promise<void> {
       api.countWarmupHistory(activeFilters()).catch(() => null),
     ])
     items.value = list.data
-    meta.value = { total: list.meta.total, last_page: list.meta.last_page }
+    // The listing carries no total (simple-paginated); the COUNT sizes the pager.
+    meta.value = pagerMeta(pageWindow(list), count)
     perPage.value = list.meta.per_page
     recordTotal.value = count
   } catch {

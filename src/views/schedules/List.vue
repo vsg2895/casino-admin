@@ -13,6 +13,7 @@ import { useToast } from 'primevue/usetoast'
 import axios from 'axios'
 import { useSitesStore } from '@/stores/sitesStore'
 import * as api from '@/api/emailSchedules'
+import { pageWindow, pagerMeta } from '@/utils/pagination'
 import * as sendgridApi from '@/api/sendgridKeys'
 import * as mailgunApi from '@/api/mailgunKeys'
 import type {
@@ -117,9 +118,14 @@ async function onPage(event: { page: number; rows: number }): Promise<void> {
 async function reload(): Promise<void> {
   loading.value = true
   try {
-    const response = await api.listSchedules(page.value, perPage.value)
+    // The listing carries no total (simple-paginated); the dedicated COUNT,
+    // requested beside it, sizes the paginator. Never fatal.
+    const [response, count] = await Promise.all([
+      api.listSchedules(page.value, perPage.value),
+      api.countSchedules().catch(() => null),
+    ])
     items.value = response.data
-    totalRecords.value = response.meta?.total ?? response.data.length
+    totalRecords.value = pagerMeta(pageWindow(response), count).total
   } catch {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load schedules.', life: 4000 })
   } finally {

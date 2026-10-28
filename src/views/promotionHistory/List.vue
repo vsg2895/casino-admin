@@ -17,6 +17,7 @@ import {
   deletePromotionHistory,
 } from '@/api/promotionHistory'
 import RecordCount from '@/components/RecordCount.vue'
+import { pageWindow, pagerMeta } from '@/utils/pagination'
 import type { PromotionEmailHistory, PromotionEmailStatus } from '@shared/types/promotionEmailHistory'
 
 const sitesStore = useSitesStore()
@@ -127,7 +128,8 @@ async function reload(): Promise<void> {
       countPromotionHistory(filters).catch(() => null),
     ])
     items.value = res.data
-    total.value = res.meta.total
+    // The listing carries no total (simple-paginated); the COUNT sizes the pager.
+    total.value = pagerMeta(pageWindow(res), count).total
     perPage.value = res.meta.per_page
     recordTotal.value = count
   } catch {

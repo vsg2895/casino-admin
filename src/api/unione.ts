@@ -22,9 +22,13 @@ import type {
 
 const BASE = '/admin/unione'
 
+/**
+ * One page WITHOUT a total: these listings are simple-paginated. Each screen
+ * sizes its paginator from the listing's `/count` endpoint instead.
+ */
 interface Paginated<T> {
   data: T[]
-  meta: { current_page: number; last_page: number; total: number; per_page?: number }
+  meta: { current_page: number; per_page: number; has_more: boolean }
 }
 
 // ── keys ─────────────────────────────────────────────────────────────────────
@@ -149,6 +153,11 @@ export function listReceivers(params?: UniOneReceiverFilters): Promise<Paginated
   return client.get<Paginated<UniOneReceiver>>(`${BASE}/receivers`, { params }).then((r) => r.data)
 }
 
+/** Receivers matching the filters — a dedicated COUNT, issued beside listReceivers(). */
+export function countReceivers(params?: Omit<UniOneReceiverFilters, 'page' | 'per_page'>): Promise<number> {
+  return client.get<{ total: number }>(`${BASE}/receivers/count`, { params }).then((r) => r.data.total)
+}
+
 /**
  * The summary above the receivers table.
  *
@@ -235,6 +244,11 @@ export function startSend(payload: Record<string, unknown>): Promise<UniOneSend>
 
 export function listSends(params?: Record<string, unknown>): Promise<Paginated<UniOneSend>> {
   return client.get<Paginated<UniOneSend>>(`${BASE}/sends`, { params }).then((r) => r.data)
+}
+
+/** Runs matching the filters — a dedicated COUNT, issued beside listSends(). */
+export function countSends(params?: Record<string, unknown>): Promise<number> {
+  return client.get<{ total: number }>(`${BASE}/sends/count`, { params }).then((r) => r.data.total)
 }
 
 /** Remove ONE run. Its chunks and recipient rows cascade with it. */
