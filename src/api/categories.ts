@@ -8,6 +8,8 @@ export interface UpsertCategoryPayload {
   /** Stored path from uploadCategoryLogo(). Explicit null clears the logo. */
   logo_path?: string | null
   sort_order?: number | null
+  /** Keep out of search results: noindex on the category page, absent from the sitemap. */
+  noindex?: boolean
 }
 
 export function listCategories(): Promise<ApiResponse<Category[]>> {

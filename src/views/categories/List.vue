@@ -6,6 +6,7 @@ import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
+import ToggleSwitch from 'primevue/toggleswitch'
 import { useToast } from 'primevue/usetoast'
 import axios from 'axios'
 import { useCategoriesStore } from '@/stores/categoriesStore'
@@ -119,6 +120,7 @@ async function pickLogo(event: Event, target: 'new' | 'edit'): Promise<void> {
 const editing = ref<Category | null>(null)
 const editName = ref('')
 const editLogo = ref<string | null>(null)
+const editNoindex = ref(false)
 const saving = ref(false)
 
 const editLogoUrl = computed(() => logoUrl(editLogo.value))
@@ -127,6 +129,7 @@ function openEdit(category: Category): void {
   editing.value = category
   editName.value = category.name
   editLogo.value = category.logo_path
+  editNoindex.value = category.noindex ?? false
 }
 
 function closeEdit(): void {
@@ -140,6 +143,7 @@ async function saveEdit(): Promise<void> {
     await store.update(editing.value.id, {
       name: editName.value.trim(),
       logo_path: editLogo.value,
+      noindex: editNoindex.value,
     })
     toast.add({ severity: 'success', summary: 'Saved', detail: 'Category updated.', life: 2500 })
     closeEdit()
@@ -337,6 +341,14 @@ onMounted(() => store.fetchCategories())
             />
           </div>
           <p class="mt-1 text-xs text-gray-500">SVG only, up to 256 KB. Shown beside the category on every website.</p>
+        </div>
+
+        <div class="flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
+          <div>
+            <label class="text-sm text-gray-700">Keep out of search results</label>
+            <p class="text-xs text-gray-400">Sets noindex and leaves the category out of the sitemap, on every site. The page stays reachable.</p>
+          </div>
+          <ToggleSwitch v-model="editNoindex" />
         </div>
       </div>
 

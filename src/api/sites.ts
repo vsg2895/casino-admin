@@ -43,6 +43,14 @@ export interface UpdateSitePayload {
   author_bio?: string | null
   author_avatar_path?: string | null
   methodology_page_slug?: string | null
+  // Legal identity — null clears a field (and hides its line publicly).
+  legal_entity_name?: string | null
+  registered_address?: string | null
+  company_number?: string | null
+  governing_law?: string | null
+  contact_email?: string | null
+  support_email?: string | null
+  privacy_email?: string | null
 }
 
 /**

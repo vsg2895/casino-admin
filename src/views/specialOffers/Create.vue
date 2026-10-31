@@ -28,7 +28,7 @@ const form = reactive<SpecialOfferFormModel>({
   banner_image: null,
   bonuses: null,
   wagering_requirement: null, min_deposit: null, max_cashout: null,
-  bonus_code: null, expires_at: null, terms_url: null,
+  bonus_code: null, expires_at: null, terms_url: null, noindex: false,
   affiliate_url: null,
   description: null,
   rating: 0,

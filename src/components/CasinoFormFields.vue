@@ -28,6 +28,7 @@ export interface CasinoFormModel {
   reviewed_at: string | null
   meta_title: string | null
   meta_description: string | null
+  noindex: boolean
   active: boolean
   category_ids: number[]
   country_ids: number[]
@@ -344,6 +345,13 @@ const slugDiffers = computed(
           <label class="mb-1 block text-sm font-medium text-gray-700">Meta Description</label>
           <InputText v-model="form.meta_description" fluid />
         </div>
+      </div>
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <label class="text-sm text-gray-700">Keep out of search results</label>
+          <p class="text-xs text-gray-400">Sets noindex and leaves the review out of the sitemap, on every site. The page stays reachable by direct link.</p>
+        </div>
+        <ToggleSwitch v-model="form.noindex" />
       </div>
     </fieldset>
   </div>

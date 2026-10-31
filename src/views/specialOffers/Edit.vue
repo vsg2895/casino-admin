@@ -31,7 +31,7 @@ const form = reactive<SpecialOfferFormModel>({
   casino_id: null,
   bonus_category_id: null, title: '', slug: null, image_path: null, banner_image: null, bonuses: null,
   wagering_requirement: null, min_deposit: null, max_cashout: null,
-  bonus_code: null, expires_at: null, terms_url: null,
+  bonus_code: null, expires_at: null, terms_url: null, noindex: false,
   affiliate_url: null, description: null, rating: 0, sort_order: 0, active: true,
 })
 
@@ -58,6 +58,8 @@ onMounted(async () => {
     bonus_code: offer.terms?.bonus_code ?? null,
     expires_at: offer.terms?.expires_at ?? null,
     terms_url: offer.terms?.terms_url ?? null,
+    // The admin payload carries the flag as `is_indexable`, its inverse.
+    noindex: offer.is_indexable === false,
     description: offer.description, rating: offer.rating, sort_order: offer.sort_order, active: offer.active,
   })
   loaded.value = true

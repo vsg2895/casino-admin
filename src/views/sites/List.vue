@@ -233,6 +233,14 @@ async function toggleActive(site: Site): Promise<void> {
                 @click="router.push({ name: 'site-navigation', params: { id: site.id } })"
               />
               <Button
+                icon="pi pi-id-card"
+                size="small"
+                text
+                severity="secondary"
+                v-tooltip="'Authors'"
+                @click="router.push({ name: 'site-authors', params: { id: site.id } })"
+              />
+              <Button
                 icon="pi pi-search"
                 size="small"
                 text

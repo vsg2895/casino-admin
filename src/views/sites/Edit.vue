@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { computed, ref, reactive, watch } from 'vue'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
@@ -7,7 +7,7 @@ import ToggleSwitch from 'primevue/toggleswitch'
 import Button from 'primevue/button'
 import axios from 'axios'
 import * as sitesApi from '@/api/sites'
-import type { Site } from '@shared/types/site'
+import type { LegalIdentityField, Site } from '@shared/types/site'
 import type { ErrorResponse } from '@shared/types/api'
 
 interface SiteEditForm {
@@ -30,6 +30,13 @@ interface SiteEditForm {
   author_role: string | null
   author_bio: string | null
   methodology_page_slug: string | null
+  legal_entity_name: string
+  registered_address: string
+  company_number: string
+  governing_law: string
+  contact_email: string
+  support_email: string
+  privacy_email: string
 }
 
 const props = defineProps<{
@@ -62,7 +69,31 @@ const form = reactive<SiteEditForm>({
   author_role: null,
   author_bio: null,
   methodology_page_slug: null,
+  legal_entity_name: '',
+  registered_address: '',
+  company_number: '',
+  governing_law: '',
+  contact_email: '',
+  support_email: '',
+  privacy_email: '',
 })
+
+/** Labels for the "still empty" warning; matches LegalIdentity::REQUIRED. */
+const LEGAL_LABELS: Record<LegalIdentityField, string> = {
+  legal_entity_name: 'Legal entity name',
+  registered_address: 'Registered address',
+  company_number: 'Company number',
+  governing_law: 'Governing law',
+  contact_email: 'Contact email',
+  support_email: 'Support email',
+  privacy_email: 'Privacy email',
+}
+
+const legalMissing = computed<string[]>(() =>
+  (['legal_entity_name', 'registered_address', 'contact_email'] as const)
+    .filter((field) => form[field].trim() === '')
+    .map((field) => LEGAL_LABELS[field]),
+)
 
 const loading = ref(false)
 const fieldErrors = ref<Record<string, string>>({})
@@ -91,6 +122,13 @@ watch(
       form.author_role = props.site.author_role
       form.author_bio = props.site.author_bio
       form.methodology_page_slug = props.site.methodology_page_slug
+      form.legal_entity_name = props.site.legal_entity_name ?? ''
+      form.registered_address = props.site.registered_address ?? ''
+      form.company_number = props.site.company_number ?? ''
+      form.governing_law = props.site.governing_law ?? ''
+      form.contact_email = props.site.contact_email ?? ''
+      form.support_email = props.site.support_email ?? ''
+      form.privacy_email = props.site.privacy_email ?? ''
       fieldErrors.value = {}
       globalError.value = null
     }
@@ -124,6 +162,13 @@ async function submit(): Promise<void> {
       author_role: form.author_role,
       author_bio: form.author_bio,
       methodology_page_slug: form.methodology_page_slug,
+      legal_entity_name: form.legal_entity_name.trim() || null,
+      registered_address: form.registered_address.trim() || null,
+      company_number: form.company_number.trim() || null,
+      governing_law: form.governing_law.trim() || null,
+      contact_email: form.contact_email.trim() || null,
+      support_email: form.support_email.trim() || null,
+      privacy_email: form.privacy_email.trim() || null,
     })
     emit('updated', response.data)
     emit('update:visible', false)
@@ -378,6 +423,55 @@ async function submit(): Promise<void> {
             <p class="mt-1 text-xs text-gray-400">
               One of this site's CMS pages. Leave empty and the byline links to nothing.
             </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-lg border border-gray-200 p-4">
+        <h3 class="text-sm font-semibold text-gray-800">Legal identity</h3>
+        <p class="mt-0.5 text-xs text-gray-500">
+          Shown in the legal pages, the footer and the Organization schema. An empty field is
+          hidden on the public site — nothing is ever printed in its place. Enter only real,
+          verified details.
+        </p>
+        <p v-if="legalMissing.length" class="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <i class="pi pi-exclamation-triangle mr-1" />
+          Not set yet: {{ legalMissing.join(', ') }}. The lines that need them are hidden on the site
+          until you fill them in.
+        </p>
+        <div class="mt-3 grid grid-cols-2 gap-3">
+          <div class="col-span-2">
+            <label class="mb-1 block text-xs font-medium text-gray-600">Legal entity name</label>
+            <InputText v-model="form.legal_entity_name" fluid placeholder="e.g. Example Media Ltd" :invalid="!!fieldErrors.legal_entity_name" />
+            <small v-if="fieldErrors.legal_entity_name" class="text-red-500">{{ fieldErrors.legal_entity_name }}</small>
+          </div>
+          <div class="col-span-2">
+            <label class="mb-1 block text-xs font-medium text-gray-600">Registered address</label>
+            <Textarea v-model="form.registered_address" rows="2" fluid :invalid="!!fieldErrors.registered_address" />
+            <small v-if="fieldErrors.registered_address" class="text-red-500">{{ fieldErrors.registered_address }}</small>
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-medium text-gray-600">Company number (optional)</label>
+            <InputText v-model="form.company_number" fluid :invalid="!!fieldErrors.company_number" />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-medium text-gray-600">Governing law</label>
+            <InputText v-model="form.governing_law" fluid placeholder="Used in Terms" :invalid="!!fieldErrors.governing_law" />
+          </div>
+          <div class="col-span-2">
+            <label class="mb-1 block text-xs font-medium text-gray-600">Contact email</label>
+            <InputText v-model="form.contact_email" type="email" fluid :invalid="!!fieldErrors.contact_email" />
+            <small v-if="fieldErrors.contact_email" class="text-red-500">{{ fieldErrors.contact_email }}</small>
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-medium text-gray-600">Support email</label>
+            <InputText v-model="form.support_email" type="email" fluid placeholder="Defaults to contact email" :invalid="!!fieldErrors.support_email" />
+            <small v-if="fieldErrors.support_email" class="text-red-500">{{ fieldErrors.support_email }}</small>
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-medium text-gray-600">Privacy email</label>
+            <InputText v-model="form.privacy_email" type="email" fluid placeholder="Defaults to contact email" :invalid="!!fieldErrors.privacy_email" />
+            <small v-if="fieldErrors.privacy_email" class="text-red-500">{{ fieldErrors.privacy_email }}</small>
           </div>
         </div>
       </div>

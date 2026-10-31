@@ -38,6 +38,8 @@ export interface SpecialOfferFormModel {
   bonus_code: string | null
   expires_at: string | null
   terms_url: string | null
+  /** Keep out of search results: noindex on the offer page, absent from the sitemap. */
+  noindex: boolean
 }
 
 const props = defineProps<{
@@ -280,6 +282,14 @@ const ratingOptions = [0, 1, 2, 3, 4, 5].map((n) => ({ label: String(n), value: 
         <p class="mt-1 text-xs text-gray-400">Linked beside the offer, never as fine print.</p>
         <p v-if="errors?.terms_url" class="mt-1 text-xs text-red-600">{{ errors.terms_url }}</p>
       </div>
+    </div>
+
+    <div class="flex items-center justify-between gap-3 border-t border-gray-100 pt-4">
+      <div>
+        <label class="text-sm text-gray-700">Keep out of search results</label>
+        <p class="text-xs text-gray-400">Sets noindex and leaves the offer out of the sitemap. The page stays reachable by direct link.</p>
+      </div>
+      <ToggleSwitch v-model="form.noindex" />
     </div>
   </div>
 

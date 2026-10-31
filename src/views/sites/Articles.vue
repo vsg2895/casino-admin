@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import BylineFields from '@/components/BylineFields.vue'
+import type { BylineValue } from '@/components/BylineFields.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DataTable from 'primevue/datatable'
@@ -168,6 +170,21 @@ const saving = ref(false)
 const fieldErrors = ref<Record<string, string>>({})
 const editingPublished = ref(false)
 
+/**
+ * The entry open in the dialog is a scraped draft that was hidden when it was
+ * opened. The server refuses to switch one on until it has a body (see
+ * UpdateArticleRequest::after()); the switch mirrors that rule instead of
+ * letting the editor find out from a failed save.
+ */
+const editingIngestedDraft = ref(false)
+
+const NOT_REWRITTEN_HINT = 'Not rewritten yet. Run php artisan news:rewrite first, then approve it.'
+
+/** Tags stripped: an editor's empty `<p></p>` is still no body. */
+const formHasBody = computed(() => (form.value.body ?? '').replace(/<[^>]*>/g, '').trim() !== '')
+
+const approvalBlocked = computed(() => editingIngestedDraft.value && !formHasBody.value)
+
 const blank = (): ArticleForm => ({
   title: '',
   slug: null,
@@ -206,6 +223,9 @@ type ArticleForm = UpsertArticlePayload & {
 
 const form = ref<ArticleForm>(blank() as ArticleForm)
 
+/** Who wrote and who checked the entry. Sent with every save from the dialog. */
+const byline = ref<BylineValue>({ author_id: null, reviewed_by_id: null, last_reviewed_at: null })
+
 /**
  * The publish timestamp exactly as the server holds it, for the entry being
  * edited.
@@ -224,8 +244,10 @@ const originalPublishedAt = ref<string | null>(null)
 function openCreate(): void {
   editingId.value = null
   editingPublished.value = false
+  editingIngestedDraft.value = false
   originalPublishedAt.value = null
   form.value = blank()
+  byline.value = { author_id: null, reviewed_by_id: null, last_reviewed_at: null }
   fieldErrors.value = {}
   showDialog.value = true
 }
@@ -237,6 +259,8 @@ async function openEdit(a: Article): Promise<void> {
   try {
     const full = await articlesApi.getArticle(siteId, a.id, articleType)
     originalPublishedAt.value = full.published_at ?? null
+    // Hand-written posts have no source; only feed items need the rewrite.
+    editingIngestedDraft.value = full.source_url !== null && full.active === false
     form.value = {
       title: full.title,
       slug: full.slug,
@@ -252,6 +276,11 @@ async function openEdit(a: Article): Promise<void> {
       meta_title: full.meta_title,
       meta_description: full.meta_description,
       noindex: full.noindex,
+    }
+    byline.value = {
+      author_id: full.author_id ?? null,
+      reviewed_by_id: full.reviewed_by_id ?? null,
+      last_reviewed_at: full.last_reviewed_at ?? null,
     }
     showDialog.value = true
   } catch {
@@ -302,8 +331,12 @@ async function patchRow(row: Article, changes: Partial<Article>): Promise<void> 
     )
 
     Object.assign(row, changes)
-  } catch {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Could not save that change.', life: 4000 })
+  } catch (e: unknown) {
+    // The server's own reason when it gave one — "not rewritten yet" is
+    // something the editor can act on; "could not save" is not.
+    const data = axios.isAxiosError(e) ? (e.response?.data as ErrorResponse | undefined) : undefined
+    const reason = data?.errors ? Object.values(data.errors)[0]?.[0] : undefined
+    toast.add({ severity: 'error', summary: 'Error', detail: reason ?? 'Could not save that change.', life: 5000 })
     // Reload so the control cannot keep showing a value the server rejected.
     await reload()
   } finally {
@@ -352,7 +385,7 @@ async function save(): Promise<void> {
   saving.value = true
   fieldErrors.value = {}
   try {
-    const payload = { ...form.value, published_at: resolvePublishedAt() }
+    const payload = { ...form.value, ...byline.value, published_at: resolvePublishedAt() }
 
     if (editingId.value === null) {
       await articlesApi.createArticle(siteId, payload, articleType)
@@ -530,9 +563,12 @@ onMounted(async () => {
              things end up DELETED instead. -->
         <Column header="Shown" :style="{ width: '90px' }">
           <template #body="{ data }">
+            <!-- A hidden draft that is not rewritten cannot be switched on; a
+                 live one can still be switched off. -->
             <ToggleSwitch
               :model-value="data.active"
-              :disabled="busyId === data.id"
+              :disabled="busyId === data.id || (data.awaiting_rewrite === true && !data.active)"
+              :title="data.awaiting_rewrite && !data.active ? NOT_REWRITTEN_HINT : undefined"
               @update:model-value="(v) => toggleShown(data, v)"
             />
           </template>
@@ -666,8 +702,10 @@ onMounted(async () => {
               Off hides it immediately and keeps everything else — the publish date is not
               touched, so switching it back on restores the post exactly as it was.
             </p>
+            <p v-if="approvalBlocked" class="mt-1 text-xs text-red-600">{{ NOT_REWRITTEN_HINT }}</p>
+            <p v-else-if="fieldErrors['active']" class="mt-1 text-xs text-red-600">{{ fieldErrors['active'] }}</p>
           </div>
-          <ToggleSwitch v-model="form.active" />
+          <ToggleSwitch v-model="form.active" :disabled="approvalBlocked" />
         </div>
 
         <div v-if="articleType === 'news'">
@@ -700,6 +738,11 @@ onMounted(async () => {
             </p>
           </div>
           <ToggleSwitch v-model="form.to_be_most_popular" />
+        </div>
+
+        <div class="border-t border-gray-100 pt-3">
+          <label class="mb-2 block text-sm text-gray-700">Byline</label>
+          <BylineFields v-model="byline" :site-id="siteId" />
         </div>
 
         <div class="flex items-center justify-between gap-3 border-t border-gray-100 pt-3">

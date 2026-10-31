@@ -18,6 +18,9 @@ import * as casinosApi from '@/api/casinos'
 import * as attachmentsApi from '@/api/casinoAttachments'
 import * as detailsApi from '@/api/casinoDetails'
 import { useCasinosStore } from '@/stores/casinosStore'
+import { useSitesStore } from '@/stores/sitesStore'
+import BylineFields from '@/components/BylineFields.vue'
+import type { BylineValue } from '@/components/BylineFields.vue'
 import { useCategoriesStore } from '@/stores/categoriesStore'
 import { useCountriesStore } from '@/stores/countriesStore'
 import type { SpecialOffer } from '@shared/types/specialOffer'
@@ -30,6 +33,7 @@ const toast = useToast()
 const store = useCasinosStore()
 const categoriesStore = useCategoriesStore()
 const countriesStore = useCountriesStore()
+const sitesStore = useSitesStore()
 
 const casinoId = Number(route.params.id)
 const activeTab = ref('details')
@@ -39,7 +43,7 @@ const loaded = ref(false)
 const form = reactive<CasinoFormModel>({
   name: '', slug: '', image_path: null, banner_image: null, bonuses: null, affiliate_url: null,
   description: null, rating: 0, sort_order: 0, featured_special_offer_id: null,
-  bonuses_intro: null, reviewed_at: null, meta_title: null, meta_description: null, active: false, category_ids: [], country_ids: [],
+  bonuses_intro: null, reviewed_at: null, meta_title: null, meta_description: null, noindex: false, active: false, category_ids: [], country_ids: [],
 })
 
 const saving = ref(false)
@@ -54,6 +58,11 @@ const CASINO_OVERRIDE_FIELDS: OverrideField[] = [
 ]
 const attachments = ref<AttachmentEntry[]>([])
 const attachSaving = ref(false)
+
+// Per-site bylines. Casinos are shared by every site but authors are not, so
+// each attached site names its own writer and reviewer.
+interface SiteByline { site_id: number; site_name: string; value: BylineValue; saving: boolean }
+const bylines = ref<SiteByline[]>([])
 
 // The factual profile. Loaded and saved on its own endpoints, so the casino
 // save above is completely unchanged by this feature.
@@ -85,11 +94,19 @@ onMounted(async () => {
     reviewed_at: casino.reviewed_at ?? null,
     meta_title: casino.meta_title,
     meta_description: casino.meta_description,
+    noindex: casino.noindex ?? false,
     active: casino.active,
     category_ids: casino.category_ids ?? [],
     country_ids: casino.country_ids ?? [],
   })
   offers.value = casino.special_offers ?? []
+  await sitesStore.fetchSites()
+  bylines.value = attachRes.data.map((a) => ({
+    site_id: a.site_id,
+    site_name: sitesStore.sites.find((s) => s.id === a.site_id)?.name ?? `Site #${a.site_id}`,
+    value: { author_id: a.author_id ?? null, reviewed_by_id: a.reviewed_by_id ?? null, last_reviewed_at: a.last_reviewed_at ?? null },
+    saving: false,
+  }))
   attachments.value = attachRes.data.map((a) => ({
     site_id: a.site_id,
     affiliate_url: a.affiliate_url,
@@ -141,6 +158,19 @@ async function saveDetail(): Promise<void> {
   }
 }
 
+async function saveByline(row: SiteByline): Promise<void> {
+  row.saving = true
+  try {
+    await attachmentsApi.updateCasinoByline(casinoId, row.site_id, row.value)
+    toast.add({ severity: 'success', summary: 'Saved', detail: `Byline saved for ${row.site_name}.`, life: 3000 })
+  } catch (e: unknown) {
+    const data = axios.isAxiosError(e) ? (e.response?.data as ErrorResponse | undefined) : undefined
+    toast.add({ severity: 'error', summary: 'Error', detail: data?.message ?? 'Failed to save the byline.', life: 4000 })
+  } finally {
+    row.saving = false
+  }
+}
+
 async function saveAttachments(): Promise<void> {
   attachSaving.value = true
   try {
@@ -177,6 +207,7 @@ async function saveAttachments(): Promise<void> {
         <Tab value="details">Details</Tab>
         <Tab value="profile">Operator Profile</Tab>
         <Tab value="sites">Attach to Sites</Tab>
+        <Tab value="bylines">Bylines</Tab>
       </TabList>
       <TabPanels class="!pt-4">
         <TabPanel value="details">
@@ -202,6 +233,23 @@ async function saveAttachments(): Promise<void> {
             />
             <div class="flex justify-end">
               <Button label="Save Attachments" icon="pi pi-check" :loading="attachSaving" @click="saveAttachments" />
+            </div>
+          </div>
+        </TabPanel>
+        <TabPanel value="bylines">
+          <div class="space-y-4">
+            <p class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Who wrote and who checked this review, per site. Name only real people who did the
+              work; the byline shows on the site once that author is visible. "Last reviewed" falls
+              back to the global review date on the Details tab when left empty.
+            </p>
+            <p v-if="bylines.length === 0" class="text-sm text-gray-400">Attach the casino to a site first (and save).</p>
+            <div v-for="row in bylines" :key="row.site_id" class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+              <div class="mb-3 flex items-center justify-between">
+                <h3 class="text-sm font-semibold text-gray-800">{{ row.site_name }}</h3>
+                <Button label="Save byline" icon="pi pi-check" size="small" :loading="row.saving" @click="saveByline(row)" />
+              </div>
+              <BylineFields v-model="row.value" :site-id="row.site_id" />
             </div>
           </div>
         </TabPanel>

@@ -175,6 +175,7 @@ onMounted(() => {
         <Column header="Status" :style="{ width: '110px' }">
           <template #body="{ data }: { data: CmsPageAdmin }">
             <Tag :severity="data.status === 'published' ? 'success' : 'warn'" :value="data.status === 'published' ? 'Published' : 'Draft'" />
+            <Tag v-if="data.draft_updated_at" severity="info" value="Draft pending" class="ml-1" v-tooltip="'A revision awaits review — open the page to publish it'" />
           </template>
         </Column>
 

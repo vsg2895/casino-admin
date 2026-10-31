@@ -71,6 +71,13 @@ const router = createRouter({
           meta: { requiresAuth: true, title: 'Forum page' },
         },
         {
+          // The people behind one site's bylines — per site, like guides.
+          path: 'sites/:id/authors',
+          name: 'site-authors',
+          component: () => import('@/views/sites/Authors.vue'),
+          meta: { requiresAuth: true, title: 'Authors' },
+        },
+        {
           path: 'sites/:id/guides',
           name: 'site-guides',
           component: () => import('@/views/sites/Articles.vue'),

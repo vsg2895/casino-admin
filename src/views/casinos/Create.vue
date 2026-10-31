@@ -32,6 +32,7 @@ const form = reactive<CasinoFormModel>({
   featured_special_offer_id: null,
   meta_title: null,
   meta_description: null,
+  noindex: false,
   active: false,
   category_ids: [],
   country_ids: [],
@@ -77,7 +78,7 @@ function clearForm(): void {
   Object.assign(form, {
     name: '', slug: '', image_path: null, banner_image: null, bonuses: null, affiliate_url: null,
     description: null, rating: 0, sort_order: 0, featured_special_offer_id: null,
-    bonuses_intro: null, meta_title: null, meta_description: null, active: false, category_ids: [], country_ids: [],
+    bonuses_intro: null, meta_title: null, meta_description: null, noindex: false, active: false, category_ids: [], country_ids: [],
   })
 }
 </script>

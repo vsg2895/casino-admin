@@ -1,3 +1,12 @@
+export type LegalIdentityField =
+  | 'legal_entity_name'
+  | 'registered_address'
+  | 'company_number'
+  | 'governing_law'
+  | 'contact_email'
+  | 'support_email'
+  | 'privacy_email'
+
 // Fields match SiteResource.php exactly. api_key is never present.
 export interface Site {
   id: number
@@ -75,6 +84,19 @@ export interface Site {
   author_avatar_path: string | null
   /** Slug of the CMS page describing how reviews are done. */
   methodology_page_slug: string | null
+  /**
+   * Legal identity — rendered into legal pages, the footer and the
+   * Organization JSON-LD. An empty value hides its line publicly.
+   */
+  legal_entity_name: string | null
+  registered_address: string | null
+  company_number: string | null
+  governing_law: string | null
+  contact_email: string | null
+  support_email: string | null
+  privacy_email: string | null
+  /** Required identity fields still empty — shown as an admin warning. */
+  legal_identity_missing: LegalIdentityField[]
   created_at: string
   updated_at: string
 }
