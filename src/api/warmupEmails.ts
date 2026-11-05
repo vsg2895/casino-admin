@@ -2,6 +2,7 @@ import client from './client'
 import type { ApiResponse } from '@shared/types/api'
 import type { SimplePaginatedResponse } from '@shared/types/pagination'
 import type {
+  WarmupCustomPreview,
   WarmupEmail,
   WarmupHistoryEntry,
   WarmupImportSummary,
@@ -91,6 +92,18 @@ export function importWarmupEmails(file: File): Promise<WarmupImportSummary> {
 // never offer something the send would reject.
 export function listWarmupTemplates(): Promise<{ data: WarmupTemplate[] }> {
   return client.get<{ data: WarmupTemplate[] }>('/admin/warmup-emails/templates').then((r) => r.data)
+}
+
+// The "Custom HTML" email as it will be sent: the HTML exactly as typed, the
+// generated plain-text part, its size and the pre-send warnings. Read-only —
+// nothing is stored or mailed. Same limits as the send, so what previews can go.
+export function previewWarmupCustomEmail(payload: {
+  custom_subject: string
+  custom_html: string
+}): Promise<WarmupCustomPreview> {
+  return client
+    .post<ApiResponse<WarmupCustomPreview>>('/admin/warmup-emails/custom-preview', payload)
+    .then((r) => r.data.data)
 }
 
 // Queues a warmup run: one site's template, sent to `count` addresses — or to the

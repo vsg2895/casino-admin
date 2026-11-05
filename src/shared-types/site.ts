@@ -35,6 +35,8 @@ export interface Site {
    * what the front end reads to decide whether to render the nav link at all.
    */
   countries_enabled: boolean
+  /** Countries whose page this site keeps out of search engines. Admin responses only. */
+  noindex_country_ids?: number[]
   /**
    * Does this site display AND accept visitor reviews? Opt-in per site, off by
    * default. Gates both directions — the public read and write endpoints 404
@@ -95,6 +97,8 @@ export interface Site {
   contact_email: string | null
   support_email: string | null
   privacy_email: string | null
+  /** Analytics service the site runs, by name; null = none. Named in the Privacy and Cookie policies. */
+  analytics_provider: string | null
   /** Required identity fields still empty — shown as an admin warning. */
   legal_identity_missing: LegalIdentityField[]
   created_at: string

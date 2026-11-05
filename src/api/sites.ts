@@ -20,6 +20,8 @@ export interface UpdateSitePayload {
   active?: boolean
   newsletter_emails_enabled?: boolean
   countries_enabled?: boolean
+  /** The whole set: what is sent replaces it. */
+  noindex_country_ids?: number[]
   reviews_enabled?: boolean
   review_auto_publish?: boolean
   // Whether this site renders each casino's factual operator profile. Default
@@ -51,6 +53,7 @@ export interface UpdateSitePayload {
   contact_email?: string | null
   support_email?: string | null
   privacy_email?: string | null
+  analytics_provider?: string | null
 }
 
 /**

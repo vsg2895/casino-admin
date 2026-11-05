@@ -12,6 +12,9 @@ export interface CasinoAttachmentEntry {
   author_id?: number | null
   reviewed_by_id?: number | null
   last_reviewed_at?: string | null
+  // This site's own review text; null = the shared description. Own endpoint,
+  // never sent with sync(), for the same reason as the byline.
+  description?: string | null
 }
 
 export interface CasinoBylinePayload {
@@ -44,5 +47,16 @@ export function updateCasinoByline(
 ): Promise<ApiResponse<CasinoAttachmentEntry>> {
   return client
     .put<ApiResponse<CasinoAttachmentEntry>>(`/admin/casinos/${casinoId}/sites/${siteId}/byline`, payload)
+    .then((r) => r.data)
+}
+
+/** This site's own review text for this casino; null or empty clears it. */
+export function updateCasinoSiteDescription(
+  casinoId: number,
+  siteId: number,
+  description: string | null,
+): Promise<ApiResponse<CasinoAttachmentEntry>> {
+  return client
+    .put<ApiResponse<CasinoAttachmentEntry>>(`/admin/casinos/${casinoId}/sites/${siteId}/description`, { description })
     .then((r) => r.data)
 }

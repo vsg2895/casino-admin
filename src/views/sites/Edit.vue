@@ -5,8 +5,10 @@ import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Button from 'primevue/button'
+import MultiSelect from 'primevue/multiselect'
 import axios from 'axios'
 import * as sitesApi from '@/api/sites'
+import { useCountriesStore } from '@/stores/countriesStore'
 import type { LegalIdentityField, Site } from '@shared/types/site'
 import type { ErrorResponse } from '@shared/types/api'
 
@@ -17,6 +19,7 @@ interface SiteEditForm {
   revalidation_url: string
   newsletter_emails_enabled: boolean
   countries_enabled: boolean
+  noindex_country_ids: number[]
   reviews_enabled: boolean
   review_auto_publish: boolean
   operator_profile_enabled: boolean
@@ -37,6 +40,7 @@ interface SiteEditForm {
   contact_email: string
   support_email: string
   privacy_email: string
+  analytics_provider: string
 }
 
 const props = defineProps<{
@@ -56,6 +60,7 @@ const form = reactive<SiteEditForm>({
   revalidation_url: '',
   newsletter_emails_enabled: true,
   countries_enabled: false,
+  noindex_country_ids: [],
   reviews_enabled: false,
   review_auto_publish: true,
   operator_profile_enabled: false,
@@ -76,6 +81,7 @@ const form = reactive<SiteEditForm>({
   contact_email: '',
   support_email: '',
   privacy_email: '',
+  analytics_provider: '',
 })
 
 /** Labels for the "still empty" warning; matches LegalIdentity::REQUIRED. */
@@ -95,6 +101,11 @@ const legalMissing = computed<string[]>(() =>
     .map((field) => LEGAL_LABELS[field]),
 )
 
+const countriesStore = useCountriesStore()
+const countryOptions = computed(() =>
+  countriesStore.countries.map((c) => ({ label: c.name, value: c.id })),
+)
+
 const loading = ref(false)
 const fieldErrors = ref<Record<string, string>>({})
 const globalError = ref<string | null>(null)
@@ -109,6 +120,9 @@ watch(
       form.revalidation_url = props.site.revalidation_url ?? ''
       form.newsletter_emails_enabled = props.site.newsletter_emails_enabled
       form.countries_enabled = props.site.countries_enabled
+      form.noindex_country_ids = [...(props.site.noindex_country_ids ?? [])]
+      // Options for the "hidden from search" picker; loaded once per session.
+      void countriesStore.ensureLoaded()
       form.reviews_enabled = props.site.reviews_enabled
       form.review_auto_publish = props.site.review_auto_publish
       form.operator_profile_enabled = props.site.operator_profile_enabled
@@ -129,6 +143,7 @@ watch(
       form.contact_email = props.site.contact_email ?? ''
       form.support_email = props.site.support_email ?? ''
       form.privacy_email = props.site.privacy_email ?? ''
+      form.analytics_provider = props.site.analytics_provider ?? ''
       fieldErrors.value = {}
       globalError.value = null
     }
@@ -149,6 +164,9 @@ async function submit(): Promise<void> {
       revalidation_url: form.revalidation_url.trim() || null,
       newsletter_emails_enabled: form.newsletter_emails_enabled,
       countries_enabled: form.countries_enabled,
+      // Only when the API sent the set: before its migration runs the field is
+      // absent, and sending [] would read as "clear it".
+      ...(props.site.noindex_country_ids !== undefined ? { noindex_country_ids: form.noindex_country_ids } : {}),
       reviews_enabled: form.reviews_enabled,
       review_auto_publish: form.review_auto_publish,
       operator_profile_enabled: form.operator_profile_enabled,
@@ -169,6 +187,7 @@ async function submit(): Promise<void> {
       contact_email: form.contact_email.trim() || null,
       support_email: form.support_email.trim() || null,
       privacy_email: form.privacy_email.trim() || null,
+      analytics_provider: form.analytics_provider.trim() || null,
     })
     emit('updated', response.data)
     emit('update:visible', false)
@@ -284,6 +303,38 @@ async function submit(): Promise<void> {
             </p>
           </div>
           <ToggleSwitch class="shrink-0" v-model="form.countries_enabled" />
+        </div>
+
+        <!-- Per site: countries are shared master data, so this is the only
+             place one domain can keep a country page out of search without
+             changing the others. -->
+        <div
+          v-if="site?.noindex_country_ids !== undefined"
+          class="mt-3 border-t border-gray-100 pt-3 pl-4"
+          :class="form.countries_enabled ? '' : 'opacity-50'"
+        >
+          <label class="block text-sm font-medium text-gray-700">Countries hidden from search</label>
+          <p class="mt-0.5 mb-2 text-xs text-gray-500">
+            Their pages stay on the site and in the country list, but are marked
+            <code>noindex</code> and left out of the sitemap &mdash; for example countries where
+            online gambling is prohibited. Pages with fewer than 3 casinos are hidden from
+            search automatically on sites that apply that rule.
+          </p>
+          <MultiSelect
+            v-model="form.noindex_country_ids"
+            :options="countryOptions"
+            option-label="label"
+            option-value="value"
+            display="chip"
+            filter
+            placeholder="None"
+            class="w-full"
+            :loading="countriesStore.loading"
+            :disabled="!form.countries_enabled"
+          />
+          <p v-if="fieldErrors.noindex_country_ids" class="mt-1 text-xs text-red-600">
+            {{ fieldErrors.noindex_country_ids }}
+          </p>
         </div>
 
         <div class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
@@ -472,6 +523,12 @@ async function submit(): Promise<void> {
             <label class="mb-1 block text-xs font-medium text-gray-600">Privacy email</label>
             <InputText v-model="form.privacy_email" type="email" fluid placeholder="Defaults to contact email" :invalid="!!fieldErrors.privacy_email" />
             <small v-if="fieldErrors.privacy_email" class="text-red-500">{{ fieldErrors.privacy_email }}</small>
+          </div>
+          <div class="col-span-2">
+            <label class="mb-1 block text-xs font-medium text-gray-600">Analytics provider (optional)</label>
+            <InputText v-model="form.analytics_provider" fluid placeholder="e.g. Google Analytics — leave empty if the site runs none" :invalid="!!fieldErrors.analytics_provider" />
+            <small v-if="fieldErrors.analytics_provider" class="text-red-500">{{ fieldErrors.analytics_provider }}</small>
+            <small v-else class="text-gray-500">Named in the Privacy and Cookie policies. Empty: they say nothing about analytics.</small>
           </div>
         </div>
       </div>

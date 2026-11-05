@@ -50,6 +50,8 @@ The casino edit form is tabbed:
 - **Attach to Sites** — one row per registered site with a "show on this site" checkbox
   and the per-site overrides: `affiliate_url`, `position`, `featured`, `active`, plus an
   "apply to all selected" shortcut.
+- **Bylines** and **Site descriptions** — per attached site, each saved on its own
+  endpoint (`…/sites/{site}/byline`, `…/sites/{site}/description`), never through sync.
 
 Save posts the **full** attachment array to
 `POST /api/v1/admin/casinos/{id}/sites/sync` — the backend replaces the pivot state in

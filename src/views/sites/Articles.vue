@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import BylineFields from '@/components/BylineFields.vue'
 import type { BylineValue } from '@/components/BylineFields.vue'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -16,6 +16,7 @@ import { useToast } from 'primevue/usetoast'
 import axios from 'axios'
 import RichTextEditor from '@/components/RichTextEditor.vue'
 import ImageDropzone from '@/components/ImageDropzone.vue'
+import { STORAGE_BASE_URL } from '@/config/urls'
 import * as articlesApi from '@/api/articles'
 import { handPageWindow, pagerMeta } from '@/utils/pagination'
 import * as newsCategoriesApi from '@/api/newsCategories'
@@ -198,7 +199,9 @@ const blank = (): ArticleForm => ({
   news_category_id: null as number | null,
   meta_title: null,
   meta_description: null,
-  noindex: false,
+  // News starts out of search: it is indexed only once it clears the bar
+  // below the switch (NewsIndexGate on the server).
+  noindex: articleType === 'news',
 })
 
 /**
@@ -222,6 +225,60 @@ type ArticleForm = UpsertArticlePayload & {
 }
 
 const form = ref<ArticleForm>(blank() as ArticleForm)
+
+/*
+ * The hero's pixel width, measured in the browser. A cover under 1200px wide
+ * cannot be the page's share image or a large Google preview, so the site
+ * falls back to its generic card; the editor is told before saving.
+ * null = no image, not loaded yet, or an SVG (never a share image).
+ */
+const SHARE_IMAGE_MIN_WIDTH = 1200
+
+/*
+ * The bar a news post must clear before it may be indexed. Mirrors
+ * NewsIndexGate on the server, which is what actually enforces it.
+ */
+const INDEX_MIN_WORDS = 300
+const bodyWords = computed(() => {
+  const text = (form.value.body ?? '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim()
+  return text === '' ? 0 : text.split(/\s+/).length
+})
+const hasInternalLink = computed(() => {
+  const domain = (site.value?.domain ?? '').toLowerCase().replace(/^www\./, '')
+  const hrefs = [...(form.value.body ?? '').matchAll(/<a\b[^>]*\bhref\s*=\s*["']([^"']+)["']/gi)].map((m) => m[1] ?? '')
+  return hrefs.some((href) => {
+    let path = href
+    if (/^https?:\/\//i.test(href)) {
+      try {
+        const url = new URL(href)
+        if (url.hostname.toLowerCase().replace(/^www\./, '') !== domain) return false
+        path = url.pathname
+      } catch {
+        return false
+      }
+    } else if (!href.startsWith('/')) {
+      return false
+    }
+    return /^\/(casinos|bonuses|categories|special-offers)\/[a-z0-9-]+\/?$/i.test(path)
+  })
+})
+const indexReady = computed(() => bodyWords.value >= INDEX_MIN_WORDS && hasInternalLink.value)
+const heroWidth = ref<number | null>(null)
+const heroIsSvg = computed(() => /\.svg(\?|$)/i.test(form.value.hero_image_path ?? ''))
+
+watch(
+  () => form.value.hero_image_path,
+  (path) => {
+    heroWidth.value = null
+    if (!path || heroIsSvg.value) return
+    const url = /^https?:\/\//.test(path) ? path : `${STORAGE_BASE_URL}/storage/${path.replace(/^\/+/, '')}`
+    const img = new Image()
+    img.onload = () => {
+      if (form.value.hero_image_path === path) heroWidth.value = img.naturalWidth
+    }
+    img.src = url
+  },
+)
 
 /** Who wrote and who checked the entry. Sent with every save from the dialog. */
 const byline = ref<BylineValue>({ author_id: null, reviewed_by_id: null, last_reviewed_at: null })
@@ -666,6 +723,14 @@ onMounted(async () => {
         <div>
           <label class="mb-1 block text-xs font-medium text-gray-600">Hero image</label>
           <ImageDropzone v-model="form.hero_image_path" />
+          <p v-if="heroIsSvg && articleType === 'news'" class="mt-1 text-xs text-amber-600">
+            A drawn SVG cover shows on the page, but shares use the site card. Upload a JPG/PNG/WebP at least
+            {{ SHARE_IMAGE_MIN_WIDTH }}px wide for a large preview.
+          </p>
+          <p v-else-if="heroWidth !== null && heroWidth < SHARE_IMAGE_MIN_WIDTH" class="mt-1 text-xs text-amber-600">
+            This image is {{ heroWidth }}px wide. Under {{ SHARE_IMAGE_MIN_WIDTH }}px it is not used as the share image
+            or for large Google previews; 1600×900 (16:9) is recommended.
+          </p>
         </div>
 
         <div>
@@ -749,6 +814,13 @@ onMounted(async () => {
           <div>
             <label class="text-sm text-gray-700">Keep out of search results</label>
             <p class="text-xs text-gray-400">Sets noindex. The page stays reachable by direct link.</p>
+            <!-- News is indexed only once it adds value; the server enforces
+                 the same bar (NewsIndexGate) and refuses the untick otherwise. -->
+            <p v-if="articleType === 'news'" class="mt-1 text-xs" :class="indexReady ? 'text-emerald-600' : 'text-amber-600'">
+              To index: {{ bodyWords }}/{{ INDEX_MIN_WORDS }} words · link to a casino, bonus or category page:
+              {{ hasInternalLink ? 'yes' : 'no' }}
+            </p>
+            <p v-if="fieldErrors['noindex']" class="mt-1 text-xs text-red-600">{{ fieldErrors['noindex'] }}</p>
           </div>
           <ToggleSwitch v-model="form.noindex" />
         </div>

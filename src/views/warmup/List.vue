@@ -9,6 +9,7 @@ import InputNumber from 'primevue/inputnumber'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
+import Textarea from 'primevue/textarea'
 import { useToast } from 'primevue/usetoast'
 import axios from 'axios'
 import * as api from '@/api/warmupEmails'
@@ -20,9 +21,11 @@ import type {
   WarmupHistoryEntry,
   WarmupImportSummary,
   WarmupLastSend,
+  WarmupCustomPreview,
   WarmupRecipientPreview,
   WarmupTemplate,
 } from '@shared/types/warmupEmail'
+import { WARMUP_CUSTOM_TEMPLATE } from '@shared/types/warmupEmail'
 import type { ErrorResponse } from '@shared/types/api'
 
 const toast = useToast()
@@ -343,6 +346,46 @@ const selectedTemplate = computed(() =>
   templates.value.find((t) => t.value === sendTemplate.value) ?? null,
 )
 
+// ── Custom HTML ───────────────────────────────────────────────────────────────
+// The operator's own subject and HTML instead of a stored site template. Sent
+// exactly as typed (the server only adds a plain-text part and a
+// List-Unsubscribe header), so the preview below is the message.
+const isCustom = computed(() => sendTemplate.value === WARMUP_CUSTOM_TEMPLATE)
+const customSubject = ref('')
+const customHtml = ref('')
+const customPreview = ref<WarmupCustomPreview | null>(null)
+const customPreviewLoading = ref(false)
+const customPreviewTab = ref<'html' | 'text'>('html')
+
+// Size as the server measures it (UTF-8 bytes), for the counter under the box.
+const customHtmlKb = computed(() => (new TextEncoder().encode(customHtml.value).length / 1000).toFixed(1))
+
+const customReady = computed(
+  () => customSubject.value.trim() !== '' && customHtml.value.trim() !== '',
+)
+
+async function loadCustomPreview(): Promise<void> {
+  if (!customReady.value) return
+  customPreviewLoading.value = true
+  try {
+    customPreview.value = await api.previewWarmupCustomEmail({
+      custom_subject: customSubject.value,
+      custom_html: customHtml.value,
+    })
+    customPreviewTab.value = 'html'
+  } catch (e: unknown) {
+    customPreview.value = null
+    toast.add({ severity: 'error', summary: 'Preview failed', detail: extractError(e, 'Could not preview the email.'), life: 6000 })
+  } finally {
+    customPreviewLoading.value = false
+  }
+}
+
+// A preview of the PREVIOUS text beside edited text would be a lie.
+watch([customSubject, customHtml], () => {
+  customPreview.value = null
+})
+
 // ── Audience preview ──────────────────────────────────────────────────────────
 // Runs the same query as the send, so what the dialog promises is what gets
 // mailed. It also carries the cooldown bounds, so min/max are not duplicated here.
@@ -361,10 +404,23 @@ const willReach = computed(() => preview.value?.recipients ?? 0)
 const minCooldown = computed(() => preview.value?.min_cooldown_days ?? MIN_COOLDOWN_DAYS)
 const maxCooldown = computed(() => preview.value?.max_cooldown_days ?? MAX_COOLDOWN_DAYS)
 
+// How long the run takes at the server's pace — sends are spaced, never burst.
+const sendRate = computed(() => preview.value?.rate_per_window ?? 8)
+const sendWindowSeconds = computed(() => preview.value?.rate_window_seconds ?? 60)
+const sendInterval = computed(() => preview.value?.min_interval_seconds ?? 7.5)
+const estimatedMinutes = computed(() => {
+  const perSecond = Math.min(
+    sendRate.value / sendWindowSeconds.value,
+    sendInterval.value > 0 ? 1 / sendInterval.value : Infinity,
+  )
+  return Math.max(1, Math.ceil(willReach.value / perSecond / 60))
+})
+
 const canSend = computed(
   () =>
     warmupSiteName.value !== null &&
     sendTemplate.value !== null &&
+    (!isCustom.value || customReady.value) &&
     willReach.value > 0 &&
     (sendAll.value ||
       (sendCount.value !== null && sendCount.value >= 1 && sendCount.value <= listTotal.value)),
@@ -490,6 +546,9 @@ async function send(): Promise<void> {
       template: sendTemplate.value as string,
       count: sendAll.value ? null : sendCount.value,
       cooldown_days: sendAll.value ? null : sendCooldownDays.value,
+      ...(isCustom.value
+        ? { custom_subject: customSubject.value, custom_html: customHtml.value }
+        : {}),
     })
     toast.add({ severity: 'success', summary: 'Queued', detail: res.message, life: 7000 })
     showSend.value = false
@@ -796,12 +855,12 @@ onMounted(async () => {
     </Dialog>
 
     <!-- Send -->
-    <Dialog v-model:visible="showSend" modal header="Send warmup emails" :style="{ width: '560px' }">
+    <Dialog v-model:visible="showSend" modal header="Send warmup emails" :style="{ width: isCustom ? '780px' : '560px' }">
       <div class="space-y-4">
         <p class="text-sm text-gray-600">
-          Sends one of a site's own email templates over the <code>.env</code> SMTP mailer —
-          the same transport as before. Using a real template means warmup traffic looks like
-          your genuine mail, which is what actually builds the mailbox's reputation.
+          Sends the site's own promotion template, or your own HTML, over the <code>.env</code>
+          SMTP mailer. Messages go out at most {{ sendRate }} a minute, one every
+          ~{{ sendInterval }} s, so the mailbox never sends in bursts.
         </p>
 
         <!-- Not a picker: warmup is pinned to one site server-side, so the send
@@ -843,9 +902,98 @@ onMounted(async () => {
             {{ selectedTemplate.description }}
           </p>
           <p v-else class="mt-1 text-xs text-gray-500">
-            Rendered from the selected site's stored template. The verify email is excluded —
-            its confirmation link means nothing for a warmup address.
+            Promotion is rendered from the site's stored template. Custom HTML sends a subject
+            and HTML you paste below.
           </p>
+        </div>
+
+        <!-- Custom HTML: sent exactly as typed; the server adds a plain-text part
+             and a List-Unsubscribe header. Preview is optional but recommended. -->
+        <div v-if="isCustom" class="space-y-3 rounded-lg border border-gray-200 px-3 py-3">
+          <div>
+            <label for="warmup-custom-subject" class="mb-1 block text-xs font-medium text-gray-600">Subject</label>
+            <InputText
+              id="warmup-custom-subject"
+              v-model="customSubject"
+              maxlength="255"
+              fluid
+              placeholder="e.g. Your weekly picks from Fsozbet"
+            />
+          </div>
+
+          <div>
+            <label for="warmup-custom-html" class="mb-1 block text-xs font-medium text-gray-600">HTML</label>
+            <Textarea
+              id="warmup-custom-html"
+              v-model="customHtml"
+              rows="10"
+              fluid
+              spellcheck="false"
+              class="font-mono text-xs"
+              placeholder="<html><body>…</body></html>"
+            />
+            <p class="mt-1 text-xs text-gray-500">
+              {{ customHtmlKb }} KB. Gmail clips messages over about 102 KB. A plain-text version
+              is generated from this HTML automatically.
+            </p>
+          </div>
+
+          <Button
+            label="Preview email"
+            icon="pi pi-eye"
+            size="small"
+            outlined
+            :disabled="!customReady"
+            :loading="customPreviewLoading"
+            @click="loadCustomPreview"
+          />
+
+          <div v-if="customPreview" class="space-y-2">
+            <ul
+              v-if="customPreview.warnings.length"
+              class="space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+            >
+              <li v-for="w in customPreview.warnings" :key="w">⚠ {{ w }}</li>
+            </ul>
+            <p v-else class="text-xs text-emerald-700">No delivery warnings.</p>
+
+            <div class="rounded-lg border border-gray-200">
+              <div class="flex items-center gap-1 border-b border-gray-200 bg-gray-50 px-2 py-1.5 text-xs">
+                <span class="mr-auto truncate text-gray-600">
+                  <span class="font-medium text-gray-800">Subject:</span> {{ customPreview.subject }}
+                </span>
+                <button
+                  type="button"
+                  class="rounded px-2 py-1"
+                  :class="customPreviewTab === 'html' ? 'bg-white font-medium text-gray-900 shadow-sm' : 'text-gray-500'"
+                  @click="customPreviewTab = 'html'"
+                >
+                  HTML
+                </button>
+                <button
+                  type="button"
+                  class="rounded px-2 py-1"
+                  :class="customPreviewTab === 'text' ? 'bg-white font-medium text-gray-900 shadow-sm' : 'text-gray-500'"
+                  @click="customPreviewTab = 'text'"
+                >
+                  Plain text
+                </button>
+              </div>
+              <!-- Empty `sandbox`: no scripts, no forms, no navigation of the admin.
+                   The HTML renders as a mail client would show it. -->
+              <iframe
+                v-if="customPreviewTab === 'html'"
+                :srcdoc="customPreview.html"
+                sandbox=""
+                title="Custom email preview"
+                class="h-96 w-full bg-white"
+              />
+              <pre
+                v-else
+                class="max-h-96 overflow-auto whitespace-pre-wrap px-3 py-2 font-mono text-xs text-gray-800"
+              >{{ customPreview.text }}</pre>
+            </div>
+          </div>
         </div>
 
         <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3">
@@ -911,6 +1059,10 @@ onMounted(async () => {
                 · {{ preview.eligible.toLocaleString() }} eligible of
                 {{ preview.total.toLocaleString() }} on the list
               </span>
+              <p v-if="willReach > 0" class="mt-1 text-xs text-gray-500">
+                At {{ sendRate }} per minute, evenly spaced, this takes about
+                {{ estimatedMinutes.toLocaleString() }} minute{{ estimatedMinutes === 1 ? '' : 's' }}.
+              </p>
             </template>
           </div>
 

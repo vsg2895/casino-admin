@@ -30,10 +30,9 @@ export interface WarmupSendResult {
 }
 
 // A template a warmup run may use. Served by /admin/warmup-emails/templates,
-// which is the catalog filtered by WarmupMailResolver::ALLOWED_TEMPLATES — all
-// four site templates. Verify is offered but carries a caveat: its confirmation
-// link means nothing for a seed address, so prefer subscribe/promotion for
-// routine warming.
+// which is the catalog filtered by WarmupMailResolver::ALLOWED_TEMPLATES:
+// the site's stored Promotion email, plus `custom` — the operator's own subject
+// and HTML, typed in the send dialog (WARMUP_CUSTOM_TEMPLATE below).
 export interface WarmupTemplate {
   value: string
   label: string
@@ -53,6 +52,24 @@ export interface WarmupSendPayload {
   template: string
   count?: number | null
   cooldown_days?: number | null
+  // Required when `template` is WARMUP_CUSTOM_TEMPLATE, ignored otherwise.
+  custom_subject?: string | null
+  custom_html?: string | null
+}
+
+/** The template key for "Custom HTML" — WarmupMailResolver::TYPE_CUSTOM. */
+export const WARMUP_CUSTOM_TEMPLATE = 'custom'
+
+// POST /admin/warmup-emails/custom-preview — the custom email as it will be
+// sent. Read-only: nothing is stored or mailed.
+export interface WarmupCustomPreview {
+  subject: string
+  html: string // exactly what is sent; render it in a sandboxed iframe
+  text: string // the generated plain-text part
+  html_bytes: number
+  // Pre-send checks a provider would raise (size, scripts, http links, …).
+  // Advisory: none of them blocks the send.
+  warnings: string[]
 }
 
 // Audience preview from /admin/warmup-emails/recipients — the same query the send
@@ -73,6 +90,13 @@ export interface WarmupRecipientPreview {
   site_id: number | null
   site_name: string | null
   site_slug: string
+  // The pace a run goes at: at most `rate_per_window` sends per
+  // `rate_window_seconds` (8 per 60 s), each at least `min_interval_seconds`
+  // after the previous one (7.5 s). From WarmupRateLimiter, for the
+  // "takes about N minutes" estimate.
+  rate_per_window: number
+  rate_window_seconds: number
+  min_interval_seconds: number
 }
 
 /**
