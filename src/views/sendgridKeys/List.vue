@@ -8,10 +8,15 @@ import ToggleSwitch from 'primevue/toggleswitch'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
+import Checkbox from 'primevue/checkbox'
+import Textarea from 'primevue/textarea'
 import { useToast } from 'primevue/usetoast'
 import axios from 'axios'
 import * as api from '@/api/sendgridKeys'
+import { sendgridReceiverCampaign, sendgridReceiverList } from '@/api/sendgridReceivers'
+import ReceiverSettingsDialog from '@/components/receivers/ReceiverSettingsDialog.vue'
 import { listEmailTemplateTypes } from '@/api/emailTemplateTypes'
+import { API_BASE_URL } from '@/config/urls'
 import { useAuthStore } from '@/stores/authStore'
 import { useSitesStore } from '@/stores/sitesStore'
 import type { SendgridKey, UpsertSendgridKeyPayload } from '@shared/types/sendgridKey'
@@ -49,11 +54,21 @@ const fieldErrors = ref<Record<string, string>>({})
 interface KeyForm {
   name: string
   api_key: string
+  // Sender of receiver campaigns (Custom Receivers → Sendgrid Receivers). Must
+  // be a verified SendGrid sender. Schedules and the test ignore it.
+  from_address: string
+  from_name: string
+  // Signed Event Webhook public key — lets bounces from this account reach
+  // the shared suppression list.
+  webhook_verification_key: string
   active: boolean
 }
 
+/** Where SendGrid → Settings → Mail Settings → Event Webhook must post. */
+const WEBHOOK_URL = `${API_BASE_URL}/sendgrid-webhook`
+
 function emptyForm(): KeyForm {
-  return { name: '', api_key: '', active: true }
+  return { name: '', api_key: '', from_address: '', from_name: '', webhook_verification_key: '', active: true }
 }
 const form = reactive<KeyForm>(emptyForm())
 
@@ -65,7 +80,14 @@ function openCreate(): void {
 }
 
 function openEdit(k: SendgridKey): void {
-  Object.assign(form, { name: k.name, api_key: '', active: k.status === 'active' })
+  Object.assign(form, {
+    name: k.name,
+    api_key: '',
+    from_address: k.from_address ?? '',
+    from_name: k.from_name ?? '',
+    webhook_verification_key: k.webhook_verification_key ?? '',
+    active: k.status === 'active',
+  })
   editingId.value = k.id
   fieldErrors.value = {}
   showDialog.value = true
@@ -74,6 +96,10 @@ function openEdit(k: SendgridKey): void {
 function payload(): UpsertSendgridKeyPayload {
   const base: UpsertSendgridKeyPayload = {
     name: form.name,
+    // null rather than '' so emptying the box clears the stored value.
+    from_address: form.from_address.trim() || null,
+    from_name: form.from_name.trim() || null,
+    webhook_verification_key: form.webhook_verification_key.trim() || null,
     status: form.active ? 'active' : 'inactive',
   }
   // Only send the key when the admin typed one (required on create, optional on
@@ -227,6 +253,38 @@ async function confirmDelete(): Promise<void> {
   }
 }
 
+// ── Receiver campaigns — the SendGrid receiver list ─────────────────────────────
+// The row whose button was clicked IS the sender; the dialog owns the rest.
+const settingsFor = ref<SendgridKey | null>(null)
+
+// Whole-list reset, not per key: receivers are one pool, and each key only
+// decides which of them it sends to. Twin of
+// `php artisan mailgun:reset-receiver-sends --list=sendgrid`.
+const showResetSends = ref(false)
+const resetSendsLoading = ref(false)
+const resetSendsClearErrors = ref(false)
+
+async function confirmResetSends(): Promise<void> {
+  resetSendsLoading.value = true
+  try {
+    const affected = await sendgridReceiverList.resetSends(resetSendsClearErrors.value)
+    toast.add({
+      severity: 'success',
+      summary: 'Send counters reset',
+      detail: affected === 0
+        ? 'No receiver was carrying send state.'
+        : `Cleared last sent and sent count on ${affected} receiver(s).`,
+      life: 4000,
+    })
+    showResetSends.value = false
+    resetSendsClearErrors.value = false
+  } catch {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to reset the send counters.', life: 4000 })
+  } finally {
+    resetSendsLoading.value = false
+  }
+}
+
 function err(field: string): string | undefined {
   return fieldErrors.value[field]
 }
@@ -251,10 +309,21 @@ onMounted(async () => {
       <div>
         <h2 class="text-lg font-semibold text-gray-900">SendGrid Keys</h2>
         <p class="text-sm text-gray-500">
-          Store SendGrid API keys to send scheduled promotion campaigns through the SendGrid API.
+          Store SendGrid API keys to send scheduled promotion campaigns through the SendGrid API,
+          and campaigns to Custom Receivers → Sendgrid Receivers.
         </p>
       </div>
-      <Button label="New key" icon="pi pi-plus" @click="openCreate" />
+      <div class="flex items-center gap-2">
+        <Button
+          label="Reset send counters"
+          icon="pi pi-refresh"
+          outlined
+          severity="secondary"
+          v-tooltip.top="'Clear Last sent and Sent on every SendGrid receiver'"
+          @click="showResetSends = true"
+        />
+        <Button label="New key" icon="pi pi-plus" @click="openCreate" />
+      </div>
     </div>
 
     <!-- Table -->
@@ -272,6 +341,13 @@ onMounted(async () => {
         <Column header="Key">
           <template #body="{ data }: { data: SendgridKey }">
             <code class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{{ data.masked_key }}</code>
+          </template>
+        </Column>
+        <Column header="From" :style="{ width: '210px' }">
+          <template #body="{ data }: { data: SendgridKey }">
+            <span v-if="data.from_address" class="text-gray-700">{{ data.from_address }}</span>
+            <!-- Only receiver campaigns need it; schedules use the site template's sender. -->
+            <span v-else class="text-xs text-gray-400">not set</span>
           </template>
         </Column>
         <Column header="Status" :style="{ width: '120px' }">
@@ -295,6 +371,7 @@ onMounted(async () => {
         </Column>
         <Column header="Actions" :style="{ width: '150px' }">
           <template #body="{ data }: { data: SendgridKey }">
+            <Button icon="pi pi-users" text severity="secondary" size="small" v-tooltip.top="'Receiver settings'" @click="settingsFor = data" />
             <Button icon="pi pi-send" text severity="secondary" size="small" v-tooltip.top="'Send test email'" @click="openTest(data)" />
             <Button icon="pi pi-pencil" text severity="secondary" size="small" v-tooltip.top="'Edit'" @click="openEdit(data)" />
             <Button icon="pi pi-trash" text severity="danger" size="small" v-tooltip.top="'Delete'" @click="deleting = data" />
@@ -324,6 +401,45 @@ onMounted(async () => {
             {{ editingId ? 'The stored key is never shown. Enter a new value only to replace it.' : 'Paste the key from your SendGrid dashboard. It is stored encrypted.' }}
           </p>
           <p v-if="err('api_key')" class="mt-1 text-xs text-red-600">{{ err('api_key') }}</p>
+        </div>
+
+        <!-- Sender of receiver campaigns. Optional for everything else: schedules
+             and the test send from the site template's own address. -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="mb-1 block text-xs font-medium text-gray-600">
+              From address <span class="font-normal text-gray-400">(receivers)</span>
+            </label>
+            <InputText v-model="form.from_address" fluid autocomplete="off" placeholder="offers@example.com" />
+            <p v-if="err('from_address')" class="mt-1 text-xs text-red-600">{{ err('from_address') }}</p>
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-medium text-gray-600">
+              From name <span class="font-normal text-gray-400">(optional)</span>
+            </label>
+            <InputText v-model="form.from_name" fluid autocomplete="off" placeholder="Example Offers" />
+            <p v-if="err('from_name')" class="mt-1 text-xs text-red-600">{{ err('from_name') }}</p>
+          </div>
+          <p class="col-span-2 -mt-1 text-xs text-gray-400">
+            Required to send to Sendgrid Receivers, and must be a verified sender in SendGrid.
+            Scheduled promotions keep using each site template's own From address.
+          </p>
+        </div>
+
+        <!-- Bounces and spam reports. SendGrid reports them after the send, so
+             without this the SendGrid list keeps mailing dead addresses. -->
+        <div>
+          <label class="mb-1 block text-xs font-medium text-gray-600">
+            Event webhook verification key <span class="font-normal text-gray-400">(optional)</span>
+          </label>
+          <Textarea v-model="form.webhook_verification_key" rows="3" fluid autocomplete="off" class="font-mono text-xs" />
+          <p class="mt-1 text-xs text-gray-400">
+            In SendGrid → Settings → Mail Settings → Event Webhook: set the Post URL to
+            <code class="break-all">{{ WEBHOOK_URL }}</code>, select Bounced, Dropped, Spam Reports and
+            Unsubscribes, turn on <strong>Signed Event Webhook</strong>, then paste its verification key
+            here. Hard bounces, spam reports and unsubscribes are then suppressed on both receiver lists.
+          </p>
+          <p v-if="err('webhook_verification_key')" class="mt-1 text-xs text-red-600">{{ err('webhook_verification_key') }}</p>
         </div>
 
         <section class="flex items-center justify-between rounded-lg border border-gray-200 p-3">
@@ -424,5 +540,44 @@ onMounted(async () => {
         <Button label="Delete" severity="danger" :loading="deletingLoading" @click="confirmDelete" />
       </template>
     </Dialog>
+
+    <!-- Reset send counters confirm. Warns about the cooldown, because that is
+         the consequence people do not expect from "clear a column". -->
+    <Dialog v-model:visible="showResetSends" modal header="Reset receiver send counters" :style="{ width: '480px' }">
+      <p class="text-sm text-gray-700">
+        Clears <strong>Last sent</strong> and <strong>Sent</strong> on
+        <strong>every</strong> SendGrid receiver, not just this key's. Mailgun Receivers are not touched.
+      </p>
+      <p class="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        Last sent is what the cooldown window checks. After this, every receiver
+        qualifies again — the next campaign can mail the whole list.
+      </p>
+      <p class="mt-3 text-sm text-gray-500">
+        Unsubscribes, suppressions and the delivery history are not affected.
+      </p>
+      <div class="mt-4 flex items-center gap-2">
+        <Checkbox v-model="resetSendsClearErrors" input-id="sg-reset-clear-errors" binary />
+        <label for="sg-reset-clear-errors" class="text-sm text-gray-700">
+          Also clear the last error on each receiver
+        </label>
+      </div>
+      <template #footer>
+        <Button label="Cancel" text @click="showResetSends = false" />
+        <Button
+          label="Reset counters"
+          icon="pi pi-refresh"
+          severity="danger"
+          :loading="resetSendsLoading"
+          @click="confirmResetSends"
+        />
+      </template>
+    </Dialog>
+
+    <ReceiverSettingsDialog
+      :credential="settingsFor"
+      :api="sendgridReceiverCampaign"
+      :list-api="sendgridReceiverList"
+      @close="settingsFor = null"
+    />
   </div>
 </template>

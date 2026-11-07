@@ -16,7 +16,8 @@ Conventions: [../docs/CONVENTIONS.md](../docs/CONVENTIONS.md)
 | **Content** | Casinos (+ Attach to Sites, + Countries), Special Offers, Categories, Countries, Reviews (moderation), CMS/Legal Pages, Social Links |
 | **Email templates** | per site: Email Template (welcome), Verify Email, Promotion Email; plus the **global** Promotion-after-verification |
 | **Audience** | Newsletter (email), Newsletter Phones (SMS), Unsubscribes |
-| **Delivery** | Schedules, **Email History** (promotion · verify · after-verification · warmup · SMS · UniOne runs, one tabbed section, each row deletable), SendGrid Keys, Mailgun Keys, Twilio Configs, SMS Templates, Warmup |
+| **Delivery** | Schedules (audience: newsletters / Custom Receivers / warmup + count + cooldown), **Email History** (schedules · verify · after-verification · warmup · SMS · UniOne runs, one tabbed section, each row deletable), SendGrid Keys, Mailgun Keys, Twilio Configs, SMS Templates, Warmup |
+| **Custom Receivers** | sidebar group: Mailgun Receivers + Sendgrid Receivers — two lists, one screen (`components/receivers/ReceiverListPanel.vue`) fed by `api/receiverLists.ts`; SendGrid Keys' receiver dialog is `components/receivers/ReceiverSettingsDialog.vue` |
 | **Account** | Change Password |
 
 Routes live in `src/router/index.ts`; each area has a folder under `src/views/`.
@@ -79,7 +80,8 @@ src/
 │                  auth, sites, casinos, casinoAttachments, casinoReviews, categories,
 │                  countries, specialOffers,
 │                  cmsPages, socialLinks, newsletter, newsletterPhones, smsTemplates,
-│                  twilioConfigs, sendgridKeys, mailgunKeys, emailSchedules,
+│                  twilioConfigs, sendgridKeys, mailgunKeys, receiverLists, mailgunReceivers,
+│                  sendgridReceivers, emailSchedules,
 │                  siteEmailTemplates, siteVerifyEmails, sitePromotionEmails,
 │                  verificationPromotion, warmupEmails, promotionHistory, unsubscribes,
 │                  emailTemplateTypes, uploads, download
@@ -124,7 +126,7 @@ cd admin && npm run build           # 3. verify
 - API JSON is snake_case; convert at the boundary, don't reshape the API.
 - A Pinia store is for state more than one view needs. A one-off list doesn't need one.
 - Long lists use PrimeVue DataTable with server-side paging where a `count` endpoint
-  exists (`casinos/count`, `newsletters/count`, `promotion-history/count`, …).
+  exists (`casinos/count`, `newsletters/count`, `schedule-history/count`, …).
 - **Every paginated list is simple-paginated**: the listing returns no `meta.total`
   (`SimplePaginatedResponse<T>` from `@shared/types/pagination`, or `meta.has_more` on
   the hand-built forum / articles / UniOne endpoints). Size the paginator with

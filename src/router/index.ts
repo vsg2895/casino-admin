@@ -84,12 +84,6 @@ const router = createRouter({
           meta: { requiresAuth: true, title: 'Guides', articleType: 'guide' },
         },
         {
-          path: 'sites/:id/news-categories',
-          name: 'site-news-categories',
-          component: () => import('@/views/newsCategories/List.vue'),
-          meta: { requiresAuth: true, title: 'News categories' },
-        },
-        {
           // The SAME screen as guides. The two sections differ only in their
           // labels, their feature flag and the minimum-count rule, so one
           // component reads those from route meta rather than existing twice
@@ -347,7 +341,9 @@ const router = createRouter({
            */
           path: 'promotion-history',
           name: 'promotion-history',
-          redirect: { name: 'email-history', query: { tab: 'promotion' } },
+          // The Promotion tab is gone; its sends are listed, with more detail,
+          // under Schedules.
+          redirect: { name: 'email-history', query: { tab: 'schedules' } },
         },
         /*
          * UniOne — two ADDITIVE route records.
@@ -373,10 +369,32 @@ const router = createRouter({
           component: () => import('@/views/sendgridKeys/List.vue'),
           meta: { requiresAuth: true, title: 'SendGrid Keys' },
         },
-                {
+        /*
+         * Custom Receivers — two address lists, one per provider, grouped in the
+         * sidebar. The Mailgun list used to be the top-level `mailgun-receivers`
+         * screen; that path stays as a REDIRECT, because it is bookmarked.
+         */
+        {
+          path: 'custom-receivers/mailgun',
+          name: 'custom-receivers-mailgun',
+          component: () => import('@/views/customReceivers/MailgunReceivers.vue'),
+          meta: { requiresAuth: true, title: 'Mailgun Receivers' },
+        },
+        {
+          path: 'custom-receivers/sendgrid',
+          name: 'custom-receivers-sendgrid',
+          component: () => import('@/views/customReceivers/SendgridReceivers.vue'),
+          meta: { requiresAuth: true, title: 'Sendgrid Receivers' },
+        },
+        {
+          path: 'custom-receivers',
+          name: 'custom-receivers',
+          redirect: { name: 'custom-receivers-mailgun' },
+        },
+        {
           path: 'mailgun-receivers',
           name: 'mailgun-receivers',
-          component: () => import('@/views/mailgunReceivers/List.vue'),
+          redirect: { name: 'custom-receivers-mailgun' },
         },
         {
           path: 'mailgun-keys',

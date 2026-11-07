@@ -18,7 +18,7 @@ import * as sendgridApi from '@/api/sendgridKeys'
 import * as mailgunApi from '@/api/mailgunKeys'
 import type {
   EmailSchedule,
-  ScheduleDateFilter,
+  ScheduleAudience,
   ScheduleFrequency,
   ScheduleProvider,
   ScheduleRecipientPreview,
@@ -35,24 +35,33 @@ const items = ref<EmailSchedule[]>([])
 const loading = ref(false)
 
 // ── Option lists / labels ─────────────────────────────────────────────────────
-const dateFilterOptions: { label: string; value: ScheduleDateFilter }[] = [
-  { label: 'Signed up today', value: 'today' },
-  { label: 'Signed up yesterday', value: 'yesterday' },
-  { label: 'Signed up last week', value: 'last_week' },
-  { label: 'Signed up last month', value: 'last_month' },
-  { label: 'Signed up last quarter', value: 'last_quarter' },
-  { label: 'Signed up last year', value: 'last_year' },
-  { label: 'Signed up on a specific date', value: 'specific' },
+/*
+ * WHICH LIST a schedule mails. Two levels in the form — Custom Receivers opens
+ * a second choice between its two lists — but one value on the wire.
+ */
+type AudienceGroup = 'newsletters' | 'custom' | 'warmup'
+const audienceGroupOptions: { label: string; value: AudienceGroup }[] = [
+  { label: 'Newsletters', value: 'newsletters' },
+  { label: 'Custom Receivers', value: 'custom' },
+  { label: 'Warmup', value: 'warmup' },
 ]
+const customListOptions: { label: string; value: ScheduleAudience }[] = [
+  { label: 'Mailgun Receivers', value: 'mailgun_receivers' },
+  { label: 'Sendgrid Receivers', value: 'sendgrid_receivers' },
+]
+const AUDIENCE_LABELS: Record<ScheduleAudience, string> = {
+  newsletters: 'Newsletters',
+  mailgun_receivers: 'Mailgun Receivers',
+  sendgrid_receivers: 'Sendgrid Receivers',
+  warmup: 'Warmup',
+}
+// Bounds shared with StoreEmailScheduleRequest.
+const MAX_LIMIT = 100000
+const MAX_COOLDOWN_DAYS = 365
 const frequencyOptions: { label: string; value: ScheduleFrequency }[] = [
   { label: 'Every day', value: 'daily' },
   { label: 'Every week', value: 'weekly' },
   { label: 'Every month', value: 'monthly' },
-]
-type AudienceMode = 'date' | 'count'
-const audienceModeOptions: { label: string; value: AudienceMode }[] = [
-  { label: 'By sign-up date', value: 'date' },
-  { label: 'Most recent count', value: 'count' },
 ]
 const providerOptions: { label: string; value: ScheduleProvider }[] = [
   { label: 'SMTP (.env credentials)', value: 'smtp' },
@@ -78,9 +87,12 @@ const siteOptions = computed(() =>
 )
 
 function audienceLabel(s: EmailSchedule): string {
-  if (s.date_filter === null) return `Newest ${s.limit ?? 0} subscriber(s)`
-  if (s.date_filter === 'specific') return `Signed up on ${s.specific_date ?? '—'}`
-  return dateFilterOptions.find((o) => o.value === s.date_filter)?.label ?? s.date_filter
+  return AUDIENCE_LABELS[s.audience] ?? s.audience
+}
+
+function audienceDetail(s: EmailSchedule): string {
+  const days = s.cooldown_days === 1 ? '1 day' : `${s.cooldown_days} days`
+  return `${(s.limit ?? 0).toLocaleString()} per run · rest ${days}`
 }
 
 function cadenceLabel(s: EmailSchedule): string {
@@ -138,15 +150,31 @@ const showDialog = ref(false)
 const editingId = ref<number | null>(null)
 const saving = ref(false)
 const fieldErrors = ref<Record<string, string>>({})
-const audienceMode = ref<AudienceMode>('date')
+// The first level of the audience choice; `form.audience` holds the real value.
+const audienceGroup = ref<AudienceGroup>('newsletters')
+
+function groupOf(audience: ScheduleAudience): AudienceGroup {
+  if (audience === 'mailgun_receivers' || audience === 'sendgrid_receivers') return 'custom'
+  return audience
+}
+
+/** Switching the first level picks that group's list (Custom → Mailgun first). */
+function onAudienceGroup(group: AudienceGroup): void {
+  audienceGroup.value = group
+  if (group === 'custom') {
+    if (form.audience !== 'mailgun_receivers' && form.audience !== 'sendgrid_receivers') form.audience = 'mailgun_receivers'
+  } else {
+    form.audience = group
+  }
+}
 
 function emptyForm(): UpsertEmailSchedulePayload {
   return {
     site_id: sitesStore.sites[0]?.id ?? 0,
     name: '',
-    date_filter: 'today',
-    specific_date: null,
+    audience: 'newsletters',
     limit: 100,
+    cooldown_days: 1,
     frequency: 'daily',
     time: '03:00',
     day_of_week: 1,
@@ -161,7 +189,7 @@ const form = reactive<UpsertEmailSchedulePayload>(emptyForm())
 
 function openCreate(): void {
   Object.assign(form, emptyForm())
-  audienceMode.value = 'date'
+  audienceGroup.value = 'newsletters'
   editingId.value = null
   fieldErrors.value = {}
   showDialog.value = true
@@ -171,9 +199,11 @@ function openEdit(s: EmailSchedule): void {
   Object.assign(form, {
     site_id: s.site_id,
     name: s.name ?? '',
-    date_filter: s.date_filter ?? 'today',
-    specific_date: s.specific_date,
+    audience: s.audience,
+    // A legacy schedule has no count; the form starts at 100, and saving is
+    // what gives the schedule one.
     limit: s.limit ?? 100,
+    cooldown_days: s.cooldown_days,
     frequency: s.frequency,
     time: s.time,
     day_of_week: s.day_of_week ?? 1,
@@ -183,23 +213,19 @@ function openEdit(s: EmailSchedule): void {
     mailgun_key_id: s.mailgun_key_id,
     active: s.active,
   })
-  audienceMode.value = s.date_filter === null ? 'count' : 'date'
+  audienceGroup.value = groupOf(s.audience)
   editingId.value = s.id
   fieldErrors.value = {}
   showDialog.value = true
 }
 
-// Build the payload for the chosen audience mode: date window OR newest-N.
-// Also drops the SendGrid key when delivering over SMTP so no stale id lingers.
+// Drops the other provider's key so no stale id lingers.
 function payload(): UpsertEmailSchedulePayload {
-  const base = {
+  return {
     ...form,
     sendgrid_key_id: form.provider === 'sendgrid' ? form.sendgrid_key_id : null,
     mailgun_key_id: form.provider === 'mailgun' ? form.mailgun_key_id : null,
   }
-  return audienceMode.value === 'count'
-    ? { ...base, date_filter: null, limit: form.limit }
-    : { ...base, date_filter: form.date_filter, limit: null }
 }
 
 async function save(): Promise<void> {
@@ -343,7 +369,8 @@ onMounted(async () => {
       <div>
         <h2 class="text-lg font-semibold text-gray-900">Schedule Setting</h2>
         <p class="text-sm text-gray-500">
-          Automatically send a site's promotion email to subscribers by sign-up date, on a recurring schedule.
+          Automatically send a site's promotion email to a list — newsletters, Custom Receivers or
+          warmup — on a recurring schedule, skipping anyone who received it recently.
         </p>
       </div>
       <Button label="New schedule" icon="pi pi-plus" @click="openCreate" />
@@ -379,8 +406,13 @@ onMounted(async () => {
             <span class="text-gray-700">{{ data.name || '—' }}</span>
           </template>
         </Column>
-        <Column header="Audience (by sign-up)">
-          <template #body="{ data }: { data: EmailSchedule }">{{ audienceLabel(data) }}</template>
+        <Column header="Audience">
+          <template #body="{ data }: { data: EmailSchedule }">
+            <span class="text-gray-800">{{ audienceLabel(data) }}</span>
+            <span class="block text-xs text-gray-400">{{ audienceDetail(data) }}</span>
+            <!-- A schedule saved before counts existed sends nobody until edited. -->
+            <Tag v-if="data.blocked_reason" value="Needs a count" severity="warn" class="mt-1" v-tooltip.top="data.blocked_reason" />
+          </template>
         </Column>
         <Column header="Runs">
           <template #body="{ data }: { data: EmailSchedule }">{{ cadenceLabel(data) }}</template>
@@ -452,13 +484,14 @@ onMounted(async () => {
           </div>
 
           <div v-if="previewData.count === 0" class="py-6 text-center text-sm text-gray-400">
-            No subscribers match this schedule's audience right now.
+            Nobody on this list can be mailed right now — everyone is resting, opted out or already
+            mailed today.
           </div>
 
           <template v-else>
             <DataTable :value="previewData.sample" data-key="email" :pt="{ root: { class: 'text-sm' } }">
               <Column field="email" header="Email address" />
-              <Column field="created_at" header="Signed up" :style="{ width: '190px' }" />
+              <Column field="created_at" header="Added to the list" :style="{ width: '190px' }" />
             </DataTable>
             <p v-if="previewData.count > previewData.sample.length" class="text-xs text-gray-400">
               Showing the first {{ previewData.sample.length }} of
@@ -488,33 +521,68 @@ onMounted(async () => {
           <InputText v-model="form.name" fluid placeholder="e.g. Daily welcome-back offer" />
         </div>
 
-        <!-- Audience -->
+        <!-- Audience: which list, how many per run, and how long an address rests. -->
         <section class="rounded-lg border border-gray-200 p-3">
           <h4 class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Audience</h4>
-          <SelectButton v-model="audienceMode" :options="audienceModeOptions" option-label="label" option-value="value" :allow-empty="false" class="mb-3" />
+          <SelectButton
+            :model-value="audienceGroup"
+            :options="audienceGroupOptions"
+            option-label="label"
+            option-value="value"
+            :allow-empty="false"
+            class="mb-3"
+            @update:model-value="onAudienceGroup"
+          />
 
-          <template v-if="audienceMode === 'date'">
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div :class="form.date_filter === 'specific' ? '' : 'sm:col-span-2'">
-                <label class="mb-1 block text-xs font-medium text-gray-600">Subscribers who signed up…</label>
-                <Select v-model="form.date_filter" :options="dateFilterOptions" option-label="label" option-value="value" fluid />
-                <p v-if="err('date_filter')" class="mt-1 text-xs text-red-600">{{ err('date_filter') }}</p>
-              </div>
-              <div v-if="form.date_filter === 'specific'">
-                <label class="mb-1 block text-xs font-medium text-gray-600">Date</label>
-                <input type="date" v-model="form.specific_date" class="h-10 w-full rounded-md border border-gray-300 px-3 text-sm" />
-                <p v-if="err('specific_date')" class="mt-1 text-xs text-red-600">{{ err('specific_date') }}</p>
-              </div>
+          <!-- Custom Receivers opens its own choice: which of the two lists. -->
+          <div v-if="audienceGroup === 'custom'" class="mb-3 rounded-md bg-gray-50 p-2">
+            <label class="mb-1 block text-xs font-medium text-gray-600">Custom Receivers list</label>
+            <SelectButton
+              v-model="form.audience"
+              :options="customListOptions"
+              option-label="label"
+              option-value="value"
+              :allow-empty="false"
+            />
+          </div>
+          <p v-if="err('audience')" class="mb-2 text-xs text-red-600">{{ err('audience') }}</p>
+
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600">Emails per run</label>
+              <input
+                v-model.number="form.limit"
+                type="number"
+                min="1"
+                :max="MAX_LIMIT"
+                class="h-10 w-full rounded-md border border-gray-300 px-3 text-sm"
+              />
+              <p class="mt-1 text-xs text-gray-400">The newest addresses on the list that may be mailed now.</p>
+              <p v-if="err('limit')" class="mt-1 text-xs text-red-600">{{ err('limit') }}</p>
             </div>
-            <p class="mt-2 text-xs text-gray-400">The window covers the full day(s) — nobody is missed by time-of-day.</p>
-          </template>
-
-          <template v-else>
-            <label class="mb-1 block text-xs font-medium text-gray-600">Number of most recent subscribers</label>
-            <input type="number" v-model.number="form.limit" min="1" max="100000" class="h-10 w-full rounded-md border border-gray-300 px-3 text-sm sm:w-48" />
-            <p class="mt-1 text-xs text-gray-400">Sends to the newest N subscribers (most recent sign-ups first), ignoring date.</p>
-            <p v-if="err('limit')" class="mt-1 text-xs text-red-600">{{ err('limit') }}</p>
-          </template>
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600">Skip addresses contacted in the last</label>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model.number="form.cooldown_days"
+                  type="number"
+                  min="1"
+                  :max="MAX_COOLDOWN_DAYS"
+                  class="h-10 w-24 rounded-md border border-gray-300 px-3 text-sm"
+                />
+                <span class="text-sm text-gray-600">day(s)</span>
+              </div>
+              <p class="mt-1 text-xs text-gray-400">
+                An address that received this site's promotion email inside this window is skipped,
+                so each run moves further down the list.
+              </p>
+              <p v-if="err('cooldown_days')" class="mt-1 text-xs text-red-600">{{ err('cooldown_days') }}</p>
+            </div>
+          </div>
+          <p v-if="form.audience === 'warmup'" class="mt-2 text-xs text-amber-600">
+            Warmup addresses are your seed mailboxes: they have no unsubscribe of their own, and this
+            does not change their warmup "Last sent".
+          </p>
         </section>
 
         <!-- Cadence -->

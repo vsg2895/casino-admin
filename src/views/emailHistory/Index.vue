@@ -45,7 +45,7 @@ import TabList from 'primevue/tablist'
 import Tab from 'primevue/tab'
 import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
-import PromotionHistory from '@/views/promotionHistory/List.vue'
+import ScheduleHistory from '@/views/scheduleHistory/List.vue'
 import SmsHistory from '@/views/smsHistory/List.vue'
 import UniOneSends from '@/views/unione/Sends.vue'
 import VerifyEmailHistory from '@/views/verifyEmailHistory/List.vue'
@@ -56,7 +56,7 @@ const route = useRoute()
 const router = useRouter()
 
 /** The tab keys, which are also the `?tab=` values. */
-const TABS = ['promotion', 'verify', 'post-verification', 'warmup', 'sms', 'unione'] as const
+const TABS = ['schedules', 'verify', 'post-verification', 'warmup', 'sms', 'unione'] as const
 type TabKey = (typeof TABS)[number]
 
 function tabFromRoute(): TabKey {
@@ -64,7 +64,7 @@ function tabFromRoute(): TabKey {
 
   // An unknown value falls back to the first tab rather than rendering nothing:
   // a stale link should open the section, not break it.
-  return (TABS as readonly string[]).includes(requested) ? (requested as TabKey) : 'promotion'
+  return (TABS as readonly string[]).includes(requested) ? (requested as TabKey) : 'schedules'
 }
 
 const activeTab = ref<TabKey>(tabFromRoute())
@@ -100,7 +100,8 @@ watch(
 
     <Tabs v-model:value="activeTab" lazy>
       <TabList>
-        <Tab value="promotion">Promotion</Tab>
+        <!-- Every Schedule Setting send, with its list and email config. -->
+        <Tab value="schedules">Schedules</Tab>
         <!-- Before "After verification", because it comes first in a
              subscriber's life: confirm the address, then the promotion. -->
         <Tab value="verify">Verify email</Tab>
@@ -113,8 +114,8 @@ watch(
       </TabList>
 
       <TabPanels class="!px-0 !pt-4">
-        <TabPanel value="promotion">
-          <PromotionHistory embedded />
+        <TabPanel value="schedules">
+          <ScheduleHistory embedded />
         </TabPanel>
         <TabPanel value="verify">
           <VerifyEmailHistory embedded />

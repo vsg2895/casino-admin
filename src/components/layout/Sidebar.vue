@@ -20,9 +20,10 @@ interface NavItem {
  * Discussions, Boards and the rest would have pushed it to 33 and made the
  * whole menu harder to scan for the sake of one feature.
  *
- * Only the forum is grouped. Grouping everything else at the same time would be
- * a large, unrequested reshuffle of a menu people already know by position —
- * the pattern is here now, and the rest can adopt it when someone asks.
+ * Grouped so far: the forum, and Custom Receivers (the Mailgun and SendGrid
+ * address lists). Grouping everything else at the same time would be a large,
+ * unrequested reshuffle of a menu people already know by position — the
+ * pattern is here now, and the rest can adopt it when someone asks.
  */
 interface NavGroup {
   label: string
@@ -58,7 +59,6 @@ const navItems: NavItem[] = [
   { label: 'UniOne',         to: '/unione',         icon: 'pi-send' },
   { label: 'UniOne Receivers', to: '/unione-receivers', icon: 'pi-address-book' },
   { label: 'Mailgun Credentials', to: '/mailgun-keys', icon: 'pi-key' },
-  { label: 'Mailgun Receivers', to: '/mailgun-receivers', icon: 'pi-users' },
   { label: 'Email Configs', to: '/smtp-credentials', icon: 'pi-server' },
   { label: 'Warmup', to: '/warmup', icon: 'pi-sun' },
   // One entry for every email log — promotion, after-verification and warmup
@@ -83,6 +83,17 @@ const navGroups: NavGroup[] = [
       { label: 'Member Posts', to: '/forum/member-posts', icon: 'pi-user-edit' },
       { label: 'Discussions',  to: '/forum/articles',     icon: 'pi-book' },
       { label: 'Boards',       to: '/forum/boards',       icon: 'pi-sitemap' },
+    ],
+  },
+  {
+    // The two receiver lists, one per provider. Each is mailed only by its own
+    // provider's credentials (Mailgun Credentials + Email Configs, SendGrid Keys).
+    label: 'Custom Receivers',
+    icon: 'pi-users',
+    match: '/custom-receivers',
+    children: [
+      { label: 'Mailgun Receivers',  to: '/custom-receivers/mailgun',  icon: 'pi-users' },
+      { label: 'Sendgrid Receivers', to: '/custom-receivers/sendgrid', icon: 'pi-users' },
     ],
   },
 ]

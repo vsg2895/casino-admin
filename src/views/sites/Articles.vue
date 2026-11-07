@@ -11,7 +11,6 @@ import Textarea from 'primevue/textarea'
 import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
 import ToggleSwitch from 'primevue/toggleswitch'
-import Select from 'primevue/select'
 import { useToast } from 'primevue/usetoast'
 import axios from 'axios'
 import RichTextEditor from '@/components/RichTextEditor.vue'
@@ -19,8 +18,6 @@ import ImageDropzone from '@/components/ImageDropzone.vue'
 import { STORAGE_BASE_URL } from '@/config/urls'
 import * as articlesApi from '@/api/articles'
 import { handPageWindow, pagerMeta } from '@/utils/pagination'
-import * as newsCategoriesApi from '@/api/newsCategories'
-import type { NewsCategory } from '@shared/types/newsCategory'
 import type { ArticleType } from '@/api/articles'
 import * as sitesApi from '@/api/sites'
 import type { Article, UpsertArticlePayload } from '@shared/types/article'
@@ -191,12 +188,12 @@ const blank = (): ArticleForm => ({
   slug: null,
   excerpt: null,
   body: null,
+  editor_note: null,
   hero_image_path: null,
   published_at: null,
   active: true,
   featured: false,
   to_be_most_popular: false,
-  news_category_id: null as number | null,
   meta_title: null,
   meta_description: null,
   // News starts out of search: it is indexed only once it clears the bar
@@ -214,12 +211,12 @@ type ArticleForm = UpsertArticlePayload & {
   slug: string | null
   excerpt: string | null
   body: string | null
+  editor_note: string | null
   hero_image_path: string | null
   published_at: string | null
   active: boolean
   featured: boolean
   to_be_most_popular: boolean
-  news_category_id: number | null
   meta_title: string | null
   meta_description: string | null
 }
@@ -239,8 +236,16 @@ const SHARE_IMAGE_MIN_WIDTH = 1200
  * NewsIndexGate on the server, which is what actually enforces it.
  */
 const INDEX_MIN_WORDS = 300
+const EDITOR_NOTE_MAX = 2000
+// What a results page shows; the site cuts longer ones at a word (lib/seo/meta.ts).
+const META_TITLE_MAX = 60
+const META_DESCRIPTION_MAX = 155
+/** Body and editor's note together: the note is the site's own writing too. */
 const bodyWords = computed(() => {
-  const text = (form.value.body ?? '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim()
+  const text = `${form.value.body ?? ''} ${form.value.editor_note ?? ''}`
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .trim()
   return text === '' ? 0 : text.split(/\s+/).length
 })
 const hasInternalLink = computed(() => {
@@ -323,13 +328,13 @@ async function openEdit(a: Article): Promise<void> {
       slug: full.slug,
       excerpt: full.excerpt,
       body: full.body ?? null,
+      editor_note: full.editor_note ?? null,
       hero_image_path: full.hero_image_path,
       // <input type="date"> wants YYYY-MM-DD; the API stores a full timestamp.
       published_at: full.published_at ? full.published_at.slice(0, 10) : null,
       active: full.active ?? true,
       featured: full.featured ?? false,
       to_be_most_popular: full.to_be_most_popular ?? false,
-      news_category_id: full.news_category_id ?? null,
       meta_title: full.meta_title,
       meta_description: full.meta_description,
       noindex: full.noindex,
@@ -356,9 +361,6 @@ async function openEdit(a: Article): Promise<void> {
  */
 const busyId = ref<number | null>(null)
 
-/** Sections for the pickers. News only; guides have none. */
-const categories = ref<NewsCategory[]>([])
-
 async function patchRow(row: Article, changes: Partial<Article>): Promise<void> {
   busyId.value = row.id
   try {
@@ -372,12 +374,12 @@ async function patchRow(row: Article, changes: Partial<Article>): Promise<void> 
         slug: full.slug,
         excerpt: full.excerpt,
         body: full.body,
+        editor_note: full.editor_note ?? null,
         hero_image_path: full.hero_image_path,
         published_at: full.published_at,
         active: full.active ?? true,
         featured: full.featured ?? false,
         to_be_most_popular: full.to_be_most_popular ?? false,
-        news_category_id: full.news_category_id ?? null,
         meta_title: full.meta_title,
         meta_description: full.meta_description,
         canonical_url: full.canonical_url,
@@ -481,9 +483,6 @@ async function confirmDelete(): Promise<void> {
 }
 
 onMounted(async () => {
-  if (articleType === 'news') {
-    categories.value = await newsCategoriesApi.listNewsCategories(siteId).catch(() => [])
-  }
   await Promise.all([
     reload(),
     sitesApi.getSite(siteId).then((r) => (site.value = r.data)).catch(() => (site.value = null)),
@@ -499,8 +498,6 @@ onMounted(async () => {
         {{ section.plural }}<span v-if="site" class="text-gray-400"> — {{ site.name }}</span>
       </h2>
       <div class="flex items-center gap-2">
-        <Button v-if="articleType === 'news'" label="Categories" icon="pi pi-tags" outlined severity="secondary"
-                @click="router.push({ name: 'site-news-categories', params: { id: siteId } })" />
         <Button :label="section.newLabel" icon="pi pi-plus" @click="openCreate" />
       </div>
 
@@ -631,23 +628,6 @@ onMounted(async () => {
           </template>
         </Column>
 
-        <!-- Section. News only: guides have no categories. -->
-        <Column v-if="articleType === 'news'" header="Section" :style="{ width: '150px' }">
-          <template #body="{ data }">
-            <Select
-              :model-value="data.news_category_id"
-              :options="categories"
-              option-label="name"
-              option-value="id"
-              placeholder="—"
-              show-clear
-              :disabled="busyId === data.id"
-              :pt="{ root: { class: 'w-full text-xs' } }"
-              @update:model-value="(v: number | null) => patchRow(data, { news_category_id: v })"
-            />
-          </template>
-        </Column>
-
         <!-- TWO picks, not one. Only news has either surface, so both columns
              are hidden on the guides screen rather than shown and inert.
              Both are the editor's CHOICE — the site has no view tracking, so
@@ -738,6 +718,18 @@ onMounted(async () => {
           <RichTextEditor v-model="form.body" />
         </div>
 
+        <div v-if="articleType === 'news'">
+          <label class="mb-1 block text-xs font-medium text-gray-600">Editor's note</label>
+          <Textarea v-model="form.editor_note" rows="3" fluid :maxlength="EDITOR_NOTE_MAX"
+                    placeholder="What this story means for our players, in your own words." />
+          <p class="mt-1 text-xs text-gray-400">
+            Shown on the page under the article, signed by the author. Plain text; a blank line starts a new
+            paragraph. news:rewrite never changes it, and its words count toward the 300 needed to index.
+            {{ (form.editor_note ?? '').length }}/{{ EDITOR_NOTE_MAX }}
+          </p>
+          <p v-if="fieldErrors['editor_note']" class="mt-1 text-xs text-red-600">{{ fieldErrors['editor_note'] }}</p>
+        </div>
+
         <div class="grid grid-cols-2 gap-3 border-t border-gray-100 pt-3">
           <div>
             <label class="mb-1 block text-xs font-medium text-gray-600">Publish date</label>
@@ -752,12 +744,18 @@ onMounted(async () => {
           <div>
             <label class="mb-1 block text-xs font-medium text-gray-600">Meta title</label>
             <InputText v-model="form.meta_title" fluid placeholder="Defaults to the title" />
+            <p class="mt-1 text-xs" :class="(form.meta_title ?? '').length > META_TITLE_MAX ? 'text-amber-600' : 'text-gray-400'">
+              {{ (form.meta_title ?? '').length }}/{{ META_TITLE_MAX }}<template v-if="articleType === 'news'"> · news:rewrite fills it</template>
+            </p>
           </div>
         </div>
 
         <div>
           <label class="mb-1 block text-xs font-medium text-gray-600">Meta description</label>
           <Textarea v-model="form.meta_description" rows="2" fluid placeholder="Defaults to the excerpt" />
+          <p class="mt-1 text-xs" :class="(form.meta_description ?? '').length > META_DESCRIPTION_MAX ? 'text-amber-600' : 'text-gray-400'">
+            {{ (form.meta_description ?? '').length }}/{{ META_DESCRIPTION_MAX }}
+          </p>
         </div>
 
         <div class="flex items-center justify-between gap-4 rounded-lg border border-gray-200 p-3">
@@ -771,16 +769,6 @@ onMounted(async () => {
             <p v-else-if="fieldErrors['active']" class="mt-1 text-xs text-red-600">{{ fieldErrors['active'] }}</p>
           </div>
           <ToggleSwitch v-model="form.active" :disabled="approvalBlocked" />
-        </div>
-
-        <div v-if="articleType === 'news'">
-          <label class="mb-1 block text-xs font-medium text-gray-600">Section</label>
-          <Select v-model="form.news_category_id" :options="categories" option-label="name"
-                  option-value="id" placeholder="No section" show-clear fluid />
-          <p class="mt-1 text-xs text-gray-400">
-            Shown as the label on the card and as a topic pill above the feed. Optional —
-            a post without one still publishes.
-          </p>
         </div>
 
         <div v-if="articleType === 'news'" class="flex items-center justify-between gap-4 rounded-lg border border-gray-200 p-3">
@@ -817,7 +805,7 @@ onMounted(async () => {
             <!-- News is indexed only once it adds value; the server enforces
                  the same bar (NewsIndexGate) and refuses the untick otherwise. -->
             <p v-if="articleType === 'news'" class="mt-1 text-xs" :class="indexReady ? 'text-emerald-600' : 'text-amber-600'">
-              To index: {{ bodyWords }}/{{ INDEX_MIN_WORDS }} words · link to a casino, bonus or category page:
+              To index: {{ bodyWords }}/{{ INDEX_MIN_WORDS }} words (body + note) · link to a casino, bonus or category page:
               {{ hasInternalLink ? 'yes' : 'no' }}
             </p>
             <p v-if="fieldErrors['noindex']" class="mt-1 text-xs text-red-600">{{ fieldErrors['noindex'] }}</p>

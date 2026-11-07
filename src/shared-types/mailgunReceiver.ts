@@ -2,6 +2,10 @@
 // list. Separate from newsletter.ts: that model is per-site with four per-stream
 // opt-in tokens; this pool is global to the Mailgun credentials.
 //
+// The SendGrid receiver list (Custom Receivers → Sendgrid Receivers) returns the
+// SAME resource and shape, so these types describe both lists. The two are
+// separate tables — a row id means nothing on the other list.
+//
 // `unsubscribe_token` is deliberately absent. It is a bearer credential and is
 // never returned by the API — it exists only inside the emailed link.
 

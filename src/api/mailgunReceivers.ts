@@ -1,97 +1,32 @@
 import client from './client'
+import { receiverListApi, type ReceiverSources } from './receiverLists'
 import type { ApiResponse } from '@shared/types/api'
-import type { SimplePaginatedResponse } from '@shared/types/pagination'
 import type {
   MailgunReceiver,
-  ReceiverSourceLabel,
-  MailgunReceiverImport,
   MailgunReceiverSettings,
   MailgunReceiverTemplate,
   MailgunReceiverTemplateSeed,
-  UpsertMailgunReceiverPayload,
 } from '@shared/types/mailgunReceiver'
 
-/** Whether an address has ever been mailed. Keyed on `last_sent_at`. */
-export type MailgunSentFilter = 'yes' | 'no'
-
-export interface MailgunReceiverFilters {
-  page?: number
-  per_page?: number
-  search?: string
-  /** 'yes' = has been sent to, 'no' = never sent to. Omit for both. */
-  sent?: MailgunSentFilter
-  /** Inclusive `YYYY-MM-DD` bounds on the last-sent date. */
-  last_sent_from?: string
-  last_sent_to?: string
-  /**
-   * The operator's IANA timezone, so the server can place the day boundaries
-   * of the date filters above against the UTC column they compare. Set
-   * automatically from the browser; never a user-facing control.
-   * See utils/dayFilters.
-   */
-  tz?: string
-  source?: 'import' | 'manual'
-  /** Whose list an address came from. */
-  source_label?: ReceiverSourceLabel
-}
+/**
+ * The Mailgun receiver list — Custom Receivers → Mailgun Receivers.
+ *
+ * The list endpoints are the shared Custom Receivers client
+ * ({@link receiverListApi}); the SendGrid list builds the same client in
+ * `sendgridReceivers.ts`. The names below are kept for the Mailgun Credentials
+ * and Email Configs screens, which read the list's sources and reset it.
+ */
+export const mailgunReceiverList = receiverListApi('/admin/mailgun-receivers')
 
 /** The two sources with their counts — what the pickers are built from. */
-export interface MailgunReceiverSources {
-  sources: { value: ReceiverSourceLabel; label: string; total: number }[]
-}
+export type MailgunReceiverSources = ReceiverSources
 
 export function listMailgunReceiverSources(): Promise<MailgunReceiverSources> {
-  return client
-    .get<ApiResponse<MailgunReceiverSources>>('/admin/mailgun-receivers/sources')
-    .then((r) => r.data.data)
-}
-
-export function listMailgunReceivers(
-  params?: MailgunReceiverFilters,
-): Promise<SimplePaginatedResponse<MailgunReceiver>> {
-  return client
-    .get<SimplePaginatedResponse<MailgunReceiver>>('/admin/mailgun-receivers', { params })
-    .then((r) => r.data)
-}
-
-// Dedicated COUNT, issued separately so the paginated query never carries its
-// weight — the same split the newsletter and warmup lists use.
-export function countMailgunReceivers(
-  params?: Omit<MailgunReceiverFilters, 'page' | 'per_page'>,
-): Promise<number> {
-  return client
-    .get<{ total: number }>('/admin/mailgun-receivers/count', { params })
-    .then((r) => r.data.total)
-}
-
-export function createMailgunReceiver(
-  payload: UpsertMailgunReceiverPayload,
-): Promise<ApiResponse<MailgunReceiver>> {
-  return client.post<ApiResponse<MailgunReceiver>>('/admin/mailgun-receivers', payload).then((r) => r.data)
-}
-
-export function updateMailgunReceiver(
-  id: number,
-  payload: UpsertMailgunReceiverPayload,
-): Promise<ApiResponse<MailgunReceiver>> {
-  return client
-    .put<ApiResponse<MailgunReceiver>>(`/admin/mailgun-receivers/${id}`, payload)
-    .then((r) => r.data)
-}
-
-export function deleteMailgunReceiver(id: number): Promise<void> {
-  return client.delete(`/admin/mailgun-receivers/${id}`).then(() => undefined)
-}
-
-/** Delete is the only bulk action: every receiver is active, so there is nothing to toggle. */
-export function bulkMailgunReceivers(ids: number[]): Promise<number> {
-  return client
-    .post<{ affected: number }>('/admin/mailgun-receivers/bulk', { action: 'delete', ids })
-    .then((r) => r.data.affected)
+  return mailgunReceiverList.sources()
 }
 
 /**
- * Clear "Last sent" and "Sent" on EVERY receiver. Returns the rows changed.
+ * Clear "Last sent" and "Sent" on EVERY Mailgun receiver. Returns the rows changed.
  *
  * Takes no id list by design — this is the whole-list reset, the same one
  * `php artisan mailgun:reset-receiver-sends` performs, sharing one service on
@@ -101,34 +36,7 @@ export function bulkMailgunReceivers(ids: number[]): Promise<number> {
  * the next campaign can mail the whole list. Always confirm before calling.
  */
 export function resetMailgunReceiverSends(clearErrors = false): Promise<number> {
-  return client
-    .post<{ affected: number }>('/admin/mailgun-receivers/reset-sends', { clear_errors: clearErrors })
-    .then((r) => r.data.affected)
-}
-
-/**
- * Upload a spreadsheet. Returns immediately with the import row — the work is
- * queued, so the caller polls `getMailgunReceiverImport` until `finished_at`.
- */
-export function importMailgunReceivers(
-  file: File,
-  /** Stamped on every address in this file, so a send can target it later. */
-  sourceLabel?: ReceiverSourceLabel,
-): Promise<ApiResponse<MailgunReceiverImport>> {
-  const form = new FormData()
-  form.append('file', file)
-  // Omitted when absent, so the column's own default applies.
-  if (sourceLabel) form.append('source_label', sourceLabel)
-
-  return client
-    .post<ApiResponse<MailgunReceiverImport>>('/admin/mailgun-receivers/import', form)
-    .then((r) => r.data)
-}
-
-export function getMailgunReceiverImport(id: number): Promise<ApiResponse<MailgunReceiverImport>> {
-  return client
-    .get<ApiResponse<MailgunReceiverImport>>(`/admin/mailgun-receivers/imports/${id}`)
-    .then((r) => r.data)
+  return mailgunReceiverList.resetSends(clearErrors)
 }
 
 // ── Per-credential targeting ─────────────────────────────────────────────────

@@ -1,11 +1,15 @@
 <script setup lang="ts">
 /**
- * Mailgun Receivers — the address list every Mailgun credential sends to.
+ * One Custom Receivers list — Mailgun Receivers or Sendgrid Receivers.
+ *
+ * The two lists are separate tables with identical endpoints, so the screen is
+ * this one component and each route passes the list's API client and wording.
+ * Nothing here knows which list it is showing.
  *
  * Follows the Newsletters section's shape: lazy DataTable, server-side filters,
  * a dedicated COUNT endpoint for the badge, and a queued import polled through
  * its own row. It is a SEPARATE list from Newsletters and shares none of its
- * state — the two sections do not interact.
+ * state — the sections do not interact.
  *
  * Every row on this list is active and gets mailed. There is no per-receiver
  * on/off: an address is on the list and reached, or it is deleted. The only
@@ -25,11 +29,22 @@ import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
 import { asLocalDate, browserTimezone } from '@/utils/dayFilters'
-import * as api from '@/api/mailgunReceivers'
+import type { ReceiverListApi, ReceiverListFilters, ReceiverSentFilter, ReceiverSources } from '@/api/receiverLists'
 import RecordCount from '@/components/RecordCount.vue'
 import { pageWindow, pagerMeta } from '@/utils/pagination'
 import type { MailgunReceiver, MailgunReceiverImport, ReceiverSourceLabel } from '@shared/types/mailgunReceiver'
 
+const props = defineProps<{
+  /** The list's client — `mailgunReceiverList` or `sendgridReceiverList`. */
+  api: ReceiverListApi
+  title: string
+  /** One or two sentences under the title: who mails this list. */
+  description: string
+  /** Where a credential is pointed at sources, named in the Source hints. */
+  credentialsScreen: string
+}>()
+
+const api = props.api
 const toast = useToast()
 
 const items = ref<MailgunReceiver[]>([])
@@ -50,7 +65,7 @@ const search = ref('')
 // Has this address been mailed, and when. Both read `last_sent_at`, the same
 // column the "Last sent" table column shows and the reset action clears, so the
 // filter can never claim something the row contradicts.
-const sent = ref<api.MailgunSentFilter | null>(null)
+const sent = ref<ReceiverSentFilter | null>(null)
 const sentFrom = ref<Date | null>(null)
 const sentTo = ref<Date | null>(null)
 
@@ -62,7 +77,7 @@ const sentTo = ref<Date | null>(null)
  * the first time someone imports a new file.
  */
 const sourceLabel = ref<ReceiverSourceLabel | null>(null)
-const sources = ref<api.MailgunReceiverSources | null>(null)
+const sources = ref<ReceiverSources | null>(null)
 
 const sourceOptions = computed(() => {
   const list: { label: string; value: ReceiverSourceLabel | null }[] = [{ label: 'Any source', value: null }]
@@ -88,7 +103,7 @@ function sourceName(value: ReceiverSourceLabel): string {
 
 async function loadSources(): Promise<void> {
   // Never fatal: the filter simply offers "Any source" if this fails.
-  sources.value = await api.listMailgunReceiverSources().catch(() => null)
+  sources.value = await api.sources().catch(() => null)
 }
 
 const sentOptions = [
@@ -106,7 +121,7 @@ const dateRangeDisabled = computed(() => sent.value === 'no')
  * Not `toISOString()`: that converts to UTC first, so any timezone behind it
  * would send the previous day and silently shift the whole range by one.
  */
-type Filters = Omit<api.MailgunReceiverFilters, 'page' | 'per_page'>
+type Filters = Omit<ReceiverListFilters, 'page' | 'per_page'>
 
 function activeFilters(): Filters {
   const f: Filters = {}
@@ -132,9 +147,9 @@ async function reload(): Promise<void> {
   loading.value = true
   try {
     const [list, count] = await Promise.all([
-      api.listMailgunReceivers({ page: page.value, per_page: perPage.value, ...activeFilters() }),
+      api.list({ page: page.value, per_page: perPage.value, ...activeFilters() }),
       // Never fatal: a failed count must not take the listing down with it.
-      api.countMailgunReceivers(activeFilters()).catch(() => null),
+      api.count(activeFilters()).catch(() => null),
     ])
     items.value = list.data
     // The listing carries no total (simple-paginated); the COUNT sizes the pager.
@@ -206,8 +221,8 @@ async function save(): Promise<void> {
       name: form.value.name.trim() || null,
       source_label: form.value.source_label,
     }
-    if (editingId.value === null) await api.createMailgunReceiver(payload)
-    else await api.updateMailgunReceiver(editingId.value, payload)
+    if (editingId.value === null) await api.create(payload)
+    else await api.update(editingId.value, payload)
     showForm.value = false
     await reload()
     toast.add({ severity: 'success', summary: 'Saved', life: 2500 })
@@ -225,14 +240,14 @@ async function save(): Promise<void> {
 
 async function remove(r: MailgunReceiver): Promise<void> {
   if (!window.confirm(`Delete ${r.email}?`)) return
-  await api.deleteMailgunReceiver(r.id)
+  await api.remove(r.id)
   await reload()
 }
 
 async function bulkDelete(): Promise<void> {
   if (selected.value.length === 0) return
   if (!window.confirm(`Delete ${selected.value.length} receivers?`)) return
-  const affected = await api.bulkMailgunReceivers(selected.value.map((r) => r.id))
+  const affected = await api.bulkDelete(selected.value.map((r) => r.id))
   selected.value = []
   await reload()
   toast.add({ severity: 'success', summary: `${affected} deleted`, life: 2500 })
@@ -267,7 +282,7 @@ async function startImport(): Promise<void> {
   if (!canImport.value || importFile.value === null) return
   importing.value = true
   try {
-    const res = await api.importMailgunReceivers(importFile.value, importSource.value)
+    const res = await api.importFile(importFile.value, importSource.value)
     importRow.value = res.data
     poll(res.data.id)
   } catch {
@@ -281,7 +296,7 @@ function poll(id: number): void {
   clearInterval(pollTimer)
   pollTimer = setInterval(async () => {
     try {
-      const res = await api.getMailgunReceiverImport(id)
+      const res = await api.importStatus(id)
       importRow.value = res.data
       if (res.data.finished_at !== null || res.data.status === 'failed') {
         clearInterval(pollTimer)
@@ -316,11 +331,8 @@ onMounted(async () => {
     <!-- Header -->
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h2 class="text-lg font-semibold text-gray-900">Mailgun Receivers</h2>
-        <p class="text-sm text-gray-500">
-          Addresses reachable through your Mailgun credentials. Each credential decides which of
-          these it sends to, in its own Receivers settings.
-        </p>
+        <h2 class="text-lg font-semibold text-gray-900">{{ title }}</h2>
+        <p class="text-sm text-gray-500">{{ description }}</p>
       </div>
       <div class="flex items-center gap-2">
         <RecordCount :total="recordTotal" label="Receivers" />
@@ -464,8 +476,8 @@ onMounted(async () => {
           <label class="mb-1 block text-xs font-medium text-gray-600">Source</label>
           <Select v-model="form.source_label" :options="sourceChoices" option-label="label" option-value="value" fluid />
           <p class="mt-1 text-xs text-gray-500">
-            Whose list this address belongs to. A credential in Email Config can be pointed at
-            one source or both.
+            Whose list this address belongs to. A credential in {{ credentialsScreen }} can be
+            pointed at one source or both.
           </p>
           <p v-if="err('source_label')" class="mt-1 text-xs text-red-600">{{ err('source_label') }}</p>
         </div>
@@ -492,8 +504,8 @@ onMounted(async () => {
           <label class="mb-1 block text-xs font-medium text-gray-600">Source</label>
           <Select v-model="importSource" :options="sourceChoices" option-label="label" option-value="value" fluid />
           <p class="mt-1 text-xs text-gray-500">
-            Stamped on every address in this file. In Email Config you can point a credential at
-            one source or both, and it will only mail those.
+            Stamped on every address in this file. In {{ credentialsScreen }} you can point a
+            credential at one source or both, and it will only mail those.
           </p>
         </div>
 
