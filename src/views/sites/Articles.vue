@@ -476,7 +476,7 @@ async function confirmDelete(): Promise<void> {
     await articlesApi.deleteArticle(siteId, deleting.value.id, articleType)
     deleting.value = null
     await reload()
-    toast.add({ severity: 'success', summary: 'Deleted', detail: 'Guide removed.', life: 2500 })
+    toast.add({ severity: 'success', summary: 'Deleted', detail: articleType === 'news' ? 'News post deleted.' : 'Guide removed.', life: 2500 })
   } catch {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Could not delete.', life: 4000 })
   }
@@ -820,11 +820,18 @@ onMounted(async () => {
       </template>
     </Dialog>
 
-    <Dialog :visible="deleting !== null" modal header="Delete guide" :style="{ width: '420px' }" @update:visible="deleting = null">
+    <Dialog :visible="deleting !== null" modal :header="articleType === 'news' ? 'Delete news post' : 'Delete guide'" :style="{ width: '420px' }" @update:visible="deleting = null">
       <p class="text-sm text-gray-700">
         Delete <strong>{{ deleting?.title }}</strong>?
       </p>
-      <p v-if="deleting?.published_at" class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+      <!-- News is deleted for good; the backend keeps only its URL, which
+           answers 410 Gone, and unwraps links to it (NewsRemovalService). -->
+      <p v-if="articleType === 'news'" class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        This is permanent and cannot be undone. Its URL will answer 410 Gone, links to it from
+        other articles become plain text, and it leaves the sitemaps. Add a redirect first if
+        other websites link to it.
+      </p>
+      <p v-else-if="deleting?.published_at" class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
         This guide is published. Its URL will start returning 404 — add a redirect first if anything
         links to it.
       </p>

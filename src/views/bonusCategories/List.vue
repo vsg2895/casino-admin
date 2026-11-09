@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -9,12 +9,15 @@ import InputNumber from 'primevue/inputnumber'
 import Textarea from 'primevue/textarea'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Message from 'primevue/message'
+import Select from 'primevue/select'
 import { useToast } from 'primevue/usetoast'
 import axios from 'axios'
 import * as api from '@/api/bonusCategories'
+import { listSpecialOffers } from '@/api/specialOffers'
 import { uploadCategoryLogo } from '@/api/categories'
 import { STORAGE_BASE_URL } from '@/config/urls'
 import type { BonusCategory } from '@shared/types/bonusCategory'
+import type { SpecialOffer } from '@shared/types/specialOffer'
 import type { ErrorResponse } from '@shared/types/api'
 
 /**
@@ -33,6 +36,51 @@ const toast = useToast()
 const items = ref<BonusCategory[]>([])
 const loading = ref(false)
 const busyId = ref<number | null>(null)
+
+/*
+ * Filter by casino: the categories that casino has offers filed under, with
+ * the Offers column counting only that casino's. Categories are linked to
+ * casinos only THROUGH offers, so the offers list (the same one the Special
+ * Offers screen loads) is the whole source — options and counts are worked
+ * out here, with no request of their own. Never fatal: without it the screen
+ * is the plain list it always was.
+ */
+const offers = ref<SpecialOffer[]>([])
+const casinoId = ref<number | null>(null)
+const casinoOptions = computed(() => {
+  const byId = new Map<number, string>()
+  for (const o of offers.value) {
+    if (!byId.has(o.casino_id)) byId.set(o.casino_id, o.casino?.name ?? `Casino #${o.casino_id}`)
+  }
+  return [
+    { label: 'All casinos', value: null as number | null },
+    ...[...byId.entries()]
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([value, label]) => ({ label, value: value as number | null })),
+  ]
+})
+/** Offers per category for the chosen casino; null when no casino is chosen. */
+const casinoCounts = computed<Map<number, number> | null>(() => {
+  if (casinoId.value === null) return null
+  const counts = new Map<number, number>()
+  for (const o of offers.value) {
+    if (o.casino_id === casinoId.value && o.bonus_category_id !== null) {
+      counts.set(o.bonus_category_id, (counts.get(o.bonus_category_id) ?? 0) + 1)
+    }
+  }
+  return counts
+})
+const visibleItems = computed(() =>
+  casinoCounts.value === null ? items.value : items.value.filter((c) => (casinoCounts.value!.get(c.id) ?? 0) > 0),
+)
+
+async function loadOffers(): Promise<void> {
+  try {
+    offers.value = (await listSpecialOffers()).data
+  } catch {
+    offers.value = []
+  }
+}
 
 const showDialog = ref(false)
 const editingId = ref<number | null>(null)
@@ -181,7 +229,10 @@ async function confirmDelete(): Promise<void> {
   }
 }
 
-onMounted(reload)
+onMounted(() => {
+  void reload()
+  void loadOffers()
+})
 </script>
 
 <template>
@@ -194,7 +245,20 @@ onMounted(reload)
           home page, listing the special offers filed under it.
         </p>
       </div>
-      <Button label="New category" icon="pi pi-plus" @click="openCreate" />
+      <div class="flex flex-wrap items-center gap-2">
+        <Select
+          v-model="casinoId"
+          :options="casinoOptions"
+          option-label="label"
+          option-value="value"
+          filter
+          filter-placeholder="Find a casino"
+          placeholder="All casinos"
+          class="w-56"
+          aria-label="Filter by casino"
+        />
+        <Button label="New category" icon="pi pi-plus" @click="openCreate" />
+      </div>
     </div>
 
     <Message severity="info" :closable="false" class="text-sm">
@@ -205,9 +269,11 @@ onMounted(reload)
     </Message>
 
     <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-      <DataTable :value="items" :loading="loading" striped-rows data-key="id" :pt="{ root: { class: 'text-sm' } }">
+      <DataTable :value="visibleItems" :loading="loading" striped-rows data-key="id" :pt="{ root: { class: 'text-sm' } }">
         <template #empty>
-          <div class="py-10 text-center text-sm text-gray-400">No bonus categories yet.</div>
+          <div class="py-10 text-center text-sm text-gray-400">
+            {{ casinoId !== null ? 'This casino has no offers in any bonus category.' : 'No bonus categories yet.' }}
+          </div>
         </template>
 
         <Column header="Icon" :style="{ width: '72px' }">
@@ -245,7 +311,11 @@ onMounted(reload)
 
         <Column header="Offers" :style="{ width: '90px' }">
           <template #body="{ data }">
-            <span :class="data.offers_count ? 'text-gray-700' : 'text-amber-600'">
+            <!-- With a casino chosen: that casino's offers, out of the category's total. -->
+            <span v-if="casinoCounts" class="text-gray-700">
+              {{ casinoCounts.get(data.id) ?? 0 }}<span class="text-gray-400"> / {{ data.offers_count ?? 0 }}</span>
+            </span>
+            <span v-else :class="data.offers_count ? 'text-gray-700' : 'text-amber-600'">
               {{ data.offers_count ?? 0 }}
             </span>
           </template>

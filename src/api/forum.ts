@@ -2,6 +2,7 @@ import client from './client'
 import type {
   ForumAdminSection,
   ForumArticle,
+  ForumCasinoOption,
   ForumCategory,
   ForumModerationAction,
   ForumModerationCounts,
@@ -70,6 +71,8 @@ export interface ForumArticleFilters {
   page?: number
   per_page?: number
   category_id?: number | null
+  /** A casino id, or 'none' for topics about no casino. */
+  casino_id?: number | 'none' | null
   status?: string | null
   pinned?: boolean | null
   /** A LOCAL calendar day — see utils/dayFilters. */
@@ -91,6 +94,11 @@ export function listArticles(siteId: number, params?: ForumArticleFilters): Prom
 /** Discussions matching the filters — a dedicated COUNT, issued beside listArticles(). */
 export function countArticles(siteId: number, params?: Omit<ForumArticleFilters, 'page' | 'per_page'>): Promise<number> {
   return client.get<{ total: number }>(`/admin/sites/${siteId}/forum-articles/count`, { params }).then((r) => r.data.total)
+}
+
+/** The casinos a topic of this site may be about: id and name only. */
+export function listArticleCasinos(siteId: number): Promise<ForumCasinoOption[]> {
+  return client.get<{ data: ForumCasinoOption[] }>(`/admin/sites/${siteId}/forum-articles/casinos`).then((r) => r.data.data)
 }
 
 export function getArticle(siteId: number, id: number): Promise<ForumArticle> {

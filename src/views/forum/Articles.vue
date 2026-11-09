@@ -26,7 +26,7 @@ import { asLocalDate, browserTimezone } from '@/utils/dayFilters'
 import * as api from '@/api/forum'
 import { handPageWindow, pagerMeta } from '@/utils/pagination'
 import { useSitesStore } from '@/stores/sitesStore'
-import type { ForumAdminSection, ForumArticle, ForumArticleStatus } from '@shared/types/community-forum'
+import type { ForumAdminSection, ForumArticle, ForumArticleStatus, ForumCasinoOption } from '@shared/types/community-forum'
 
 const toast = useToast()
 const sitesStore = useSitesStore()
@@ -83,6 +83,7 @@ const first = computed(() => (page.value - 1) * perPage.value)
 
 // ── filters (Apply-driven, like Reviews) ─────────────────────────────────────
 const fCategory = ref<number | null>(null)
+const fCasino = ref<number | 'none' | null>(null)
 const fStatus = ref<ForumArticleStatus | null>(null)
 const fPinned = ref<boolean | null>(null)
 const fFrom = ref<Date | null>(null)
@@ -107,6 +108,28 @@ const categoryOptions = computed(() => [
   ...sections.value.flatMap((s) => s.categories.map((c) => ({ label: `${s.name} → ${c.name}`, value: c.id }))),
 ])
 
+/** Casinos attached to this site — the topic's casino field and the filter. */
+const casinos = ref<ForumCasinoOption[]>([])
+const casinoFilterOptions = computed(() => [
+  { label: 'All casinos', value: null as number | 'none' | null },
+  { label: 'No casino', value: 'none' as number | 'none' | null },
+  ...casinos.value.map((c) => ({ label: c.name, value: c.id as number | 'none' | null })),
+])
+const casinoFormOptions = computed(() => [
+  { label: 'None (general topic)', value: null as number | null },
+  ...casinos.value.map((c) => ({ label: c.name, value: c.id as number | null })),
+])
+
+async function loadCasinos(): Promise<void> {
+  if (siteId.value === null) return
+  try {
+    casinos.value = await api.listArticleCasinos(siteId.value)
+  } catch {
+    // Never fatal: the field and the filter just offer no casinos.
+    casinos.value = []
+  }
+}
+
 // ── editor ───────────────────────────────────────────────────────────────────
 const dialog = ref(false)
 const saving = ref(false)
@@ -115,6 +138,7 @@ const slugTouched = ref(false)
 
 const form = ref({
   forum_category_id: 0,
+  casino_id: null as number | null,
   title: '',
   slug: '',
   excerpt: '',
@@ -147,6 +171,7 @@ async function load(): Promise<void> {
   try {
     const filters = {
       category_id: fCategory.value,
+      casino_id: fCasino.value,
       status: fStatus.value,
       pinned: fPinned.value,
       // The LOCAL day plus the zone. `toISOString().slice(0, 10)` was here
@@ -201,6 +226,7 @@ async function open(article: ForumArticle | null): Promise<void> {
     const full = await api.getArticle(siteId.value, article.id)
     form.value = {
       forum_category_id: full.category?.id ?? 0,
+      casino_id: full.casino_id ?? null,
       title: full.title,
       slug: full.slug,
       excerpt: full.excerpt ?? '',
@@ -214,6 +240,7 @@ async function open(article: ForumArticle | null): Promise<void> {
   } else {
     form.value = {
       forum_category_id: sections.value[0]?.categories[0]?.id ?? 0,
+      casino_id: null,
       title: '', slug: '', excerpt: '', body: '', cover_image_path: '',
       status: 'draft', pinned: false, locked: false, published_at: null,
     }
@@ -228,6 +255,7 @@ async function save(): Promise<void> {
   try {
     const payload = {
       forum_category_id: form.value.forum_category_id,
+      casino_id: form.value.casino_id,
       title: form.value.title,
       slug: form.value.slug || null,
       excerpt: form.value.excerpt || null,
@@ -258,6 +286,7 @@ async function quickToggle(row: ForumArticle, field: 'pinned' | 'locked'): Promi
     const full = await api.getArticle(siteId.value, row.id)
     await api.updateArticle(siteId.value, row.id, {
       forum_category_id: full.category?.id ?? 0,
+      casino_id: full.casino_id ?? null,
       title: full.title,
       slug: full.slug,
       excerpt: full.excerpt ?? null,
@@ -294,7 +323,13 @@ function severityFor(status: string | undefined): string {
   return status === 'published' ? 'success' : status === 'archived' ? 'secondary' : 'warn'
 }
 
-watch(siteId, async () => { await loadSections(); page.value = 1; await load() })
+watch(siteId, async () => {
+  // A casino of the previous site means nothing on this one.
+  fCasino.value = null
+  await Promise.all([loadSections(), loadCasinos()])
+  page.value = 1
+  await load()
+})
 
 onMounted(async () => {
   if (sitesStore.sites.length === 0) await sitesStore.fetchSites?.()
@@ -322,6 +357,13 @@ onMounted(async () => {
       <div class="filter-field">
         <label class="mb-1 block text-xs font-medium text-gray-700">Board</label>
         <Select v-model="fCategory" :options="categoryOptions" option-label="label" option-value="value" class="w-56" />
+      </div>
+      <div class="filter-field">
+        <label class="mb-1 block text-xs font-medium text-gray-700">Casino</label>
+        <Select
+          v-model="fCasino" :options="casinoFilterOptions" option-label="label" option-value="value"
+          filter filter-placeholder="Find a casino" class="w-48"
+        />
       </div>
       <div class="filter-field">
         <label class="mb-1 block text-xs font-medium text-gray-700">Status</label>
@@ -373,6 +415,7 @@ onMounted(async () => {
           <p class="text-xs text-gray-400">
             <code class="rounded bg-gray-100 px-1">/{{ data.slug }}</code>
             <span v-if="data.category"> · {{ data.category.name }}</span>
+            <span v-if="data.casino" class="text-indigo-500"> · {{ data.casino.name }}</span>
           </p>
         </template>
       </Column>
@@ -460,6 +503,16 @@ onMounted(async () => {
             :options="categoryOptions.filter(o => o.value !== null)"
             option-label="label" option-value="value" class="w-full"
           />
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-gray-700">Casino</label>
+          <Select
+            v-model="form.casino_id"
+            :options="casinoFormOptions"
+            option-label="label" option-value="value"
+            filter filter-placeholder="Find a casino" class="w-full"
+          />
+          <p class="mt-1 text-xs text-gray-500">The casino this topic is about. Only casinos shown on this site.</p>
         </div>
         <div class="col-span-2">
           <label class="mb-1 block text-xs font-medium text-gray-700">Excerpt</label>

@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import InputText from 'primevue/inputtext'
+import Select from 'primevue/select'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Popover from 'primevue/popover'
@@ -18,9 +19,33 @@ const toast = useToast()
 const store = useSpecialOffersStore()
 
 const search = ref('')
-const filtered = computed(() =>
-  store.offers.filter((o) => o.title.toLowerCase().includes(search.value.toLowerCase())),
-)
+// Null = every casino. Options come from the loaded offers themselves, so the
+// list only names casinos that have at least one offer, and needs no request.
+const casinoId = ref<number | null>(null)
+const casinoOptions = computed(() => {
+  const byId = new Map<number, string>()
+  for (const o of store.offers) {
+    if (!byId.has(o.casino_id)) byId.set(o.casino_id, o.casino?.name ?? `Casino #${o.casino_id}`)
+  }
+  return [
+    { label: 'All casinos', value: null as number | null },
+    ...[...byId.entries()]
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([value, label]) => ({ label, value: value as number | null })),
+  ]
+})
+// The search box matches the offer's title OR its casino's name, so typing
+// "bitstarz" finds every BitStarz offer whatever the offer is called.
+const filtered = computed(() => {
+  const term = search.value.trim().toLowerCase()
+  return store.offers.filter(
+    (o) =>
+      (casinoId.value === null || o.casino_id === casinoId.value) &&
+      (term === '' ||
+        o.title.toLowerCase().includes(term) ||
+        (o.casino?.name ?? '').toLowerCase().includes(term)),
+  )
+})
 
 const storageBase = STORAGE_BASE_URL
 function img(path: string | null): string | null {
@@ -114,11 +139,11 @@ async function refreshCount(): Promise<void> {
   }
 }
 
-// The search here filters the already-loaded list in the browser, so while a
+// The search and the casino filter work on the already-loaded list in the browser, so while a
 // term is active the exact number of matches is known locally — asking the
 // server to re-count would be a round-trip for a figure we already have. The
 // label changes with it, so "12" is never mistaken for the catalogue total.
-const isSearching = computed(() => search.value.trim() !== '')
+const isSearching = computed(() => search.value.trim() !== '' || casinoId.value !== null)
 const countLabel = computed(() => (isSearching.value ? 'Matching Special Offers' : 'Total Special Offers'))
 const countTotal = computed(() => (isSearching.value ? filtered.value.length : recordTotal.value))
 
@@ -135,14 +160,27 @@ onMounted(() => {
         <h2 class="text-xl font-semibold text-indigo-500">Special Offers</h2>
         <RecordCount :label="countLabel" :total="countTotal" :loading="store.loading" />
       </div>
-      <div class="flex items-center gap-2">
-        <InputText v-model="search" placeholder="Search by name" class="w-64" />
+      <div class="flex flex-wrap items-center gap-2">
+        <Select
+          v-model="casinoId"
+          :options="casinoOptions"
+          option-label="label"
+          option-value="value"
+          filter
+          filter-placeholder="Find a casino"
+          placeholder="All casinos"
+          class="w-56"
+          aria-label="Filter by casino"
+        />
+        <InputText v-model="search" placeholder="Search by offer or casino name" class="w-64" />
         <Button label="Create" icon="pi pi-plus" @click="router.push({ name: 'special-offers-create' })" />
       </div>
     </div>
 
     <div v-if="store.loading" class="py-12 text-center text-sm text-gray-400">Loading…</div>
-    <div v-else-if="filtered.length === 0" class="py-12 text-center text-sm text-gray-400">No special offers yet.</div>
+    <div v-else-if="filtered.length === 0" class="py-12 text-center text-sm text-gray-400">
+      {{ isSearching ? 'No special offers match these filters.' : 'No special offers yet.' }}
+    </div>
 
     <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       <div v-for="offer in filtered" :key="offer.id" class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
