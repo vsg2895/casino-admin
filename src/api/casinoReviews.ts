@@ -1,7 +1,7 @@
 import client from './client'
 import type { ApiResponse } from '@shared/types/api'
 import type { SimplePaginatedResponse } from '@shared/types/pagination'
-import type { CasinoReview, CasinoReviewStatus } from '@shared/types/casinoReview'
+import type { CasinoReview, CasinoReviewStatus, ReviewCasinoOption } from '@shared/types/casinoReview'
 
 export interface CasinoReviewFilters {
   page?: number
@@ -27,6 +27,13 @@ export function countReviews(
   return client
     .get<{ total: number }>('/admin/reviews/count', { params })
     .then((r) => r.data.total)
+}
+
+/** Casinos with at least one review, for the casino filter. */
+export function listReviewedCasinos(): Promise<ReviewCasinoOption[]> {
+  return client
+    .get<{ data: ReviewCasinoOption[] }>('/admin/reviews/casinos')
+    .then((r) => r.data.data)
 }
 
 /** How many are waiting to be moderated, regardless of the current filters. */

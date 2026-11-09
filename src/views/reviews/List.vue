@@ -24,7 +24,7 @@ import * as api from '@/api/casinoReviews'
 import RecordCount from '@/components/RecordCount.vue'
 import { pageWindow, pagerMeta } from '@/utils/pagination'
 import { useSitesStore } from '@/stores/sitesStore'
-import type { CasinoReview, CasinoReviewStatus } from '@shared/types/casinoReview'
+import type { CasinoReview, CasinoReviewStatus, ReviewCasinoOption } from '@shared/types/casinoReview'
 
 const toast = useToast()
 const sitesStore = useSitesStore()
@@ -48,6 +48,7 @@ type Filters = Omit<api.CasinoReviewFilters, 'page' | 'per_page'>
 const search = ref('')
 const status = ref<CasinoReviewStatus | null>(null)
 const siteId = ref<number | null>(null)
+const casinoId = ref<number | null>(null)
 const rating = ref<number | null>(null)
 
 const applied = ref<Filters>({})
@@ -69,12 +70,20 @@ const siteOptions = computed(() => [
   ...sitesStore.sites.map((s) => ({ label: s.name, value: s.id })),
 ])
 
+/** Only casinos that have reviews; loaded once, never fatal. */
+const casinos = ref<ReviewCasinoOption[]>([])
+const casinoOptions = computed(() => [
+  { label: 'All casinos', value: null as number | null },
+  ...casinos.value.map((c) => ({ label: c.name, value: c.id as number | null })),
+])
+
 function draftFilters(): Filters {
   const f: Filters = {}
   const term = search.value.trim()
   if (term !== '') f.search = term
   if (status.value !== null) f.status = status.value
   if (siteId.value !== null) f.site_id = siteId.value
+  if (casinoId.value !== null) f.casino_id = casinoId.value
   if (rating.value !== null) f.rating = rating.value
   return f
 }
@@ -118,6 +127,7 @@ async function clearFilters(): Promise<void> {
   search.value = ''
   status.value = null
   siteId.value = null
+  casinoId.value = null
   rating.value = null
   await applyFilters()
 }
@@ -202,7 +212,11 @@ function severityFor(s: CasinoReviewStatus): 'success' | 'warn' | 'secondary' {
 
 onMounted(async () => {
   await sitesStore.fetchSites()
-  await Promise.all([reload(), refreshPending()])
+  await Promise.all([
+    reload(),
+    refreshPending(),
+    api.listReviewedCasinos().then((rows) => (casinos.value = rows)).catch(() => undefined),
+  ])
 })
 </script>
 
@@ -227,6 +241,10 @@ onMounted(async () => {
       <InputText v-model="search" placeholder="Search name, title or text" class="w-64" @keyup.enter="applyFilters" />
       <Select v-model="status" :options="statusOptions" option-label="label" option-value="value" class="w-44" />
       <Select v-model="siteId" :options="siteOptions" option-label="label" option-value="value" class="w-48" />
+      <Select
+        v-model="casinoId" :options="casinoOptions" option-label="label" option-value="value"
+        filter filter-placeholder="Find a casino" class="w-52" aria-label="Filter by casino"
+      />
       <Select v-model="rating" :options="ratingOptions" option-label="label" option-value="value" class="w-36" />
       <Button label="Apply" icon="pi pi-filter" :loading="loading" :severity="isDirty ? 'primary' : 'secondary'" @click="applyFilters" />
       <Button label="Clear" icon="pi pi-filter-slash" text severity="secondary" @click="clearFilters" />
