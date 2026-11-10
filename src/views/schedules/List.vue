@@ -357,8 +357,8 @@ async function loadSendgridKeys(): Promise<void> {
 }
 
 onMounted(async () => {
-  await Promise.all([sitesStore.fetchSites(), loadSendgridKeys(), loadMailgunKeys()])
-  await reload()
+  // The listing needs none of the others, so it loads beside them, not after.
+  await Promise.all([sitesStore.fetchSites(), loadSendgridKeys(), loadMailgunKeys(), reload()])
 })
 </script>
 

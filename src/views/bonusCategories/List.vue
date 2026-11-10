@@ -15,6 +15,7 @@ import axios from 'axios'
 import * as api from '@/api/bonusCategories'
 import { listSpecialOffers } from '@/api/specialOffers'
 import { uploadCategoryLogo } from '@/api/categories'
+import { casinoOptionsFromOffers } from '@/utils/casinoOptions'
 import { STORAGE_BASE_URL } from '@/config/urls'
 import type { BonusCategory } from '@shared/types/bonusCategory'
 import type { SpecialOffer } from '@shared/types/specialOffer'
@@ -47,18 +48,7 @@ const busyId = ref<number | null>(null)
  */
 const offers = ref<SpecialOffer[]>([])
 const casinoId = ref<number | null>(null)
-const casinoOptions = computed(() => {
-  const byId = new Map<number, string>()
-  for (const o of offers.value) {
-    if (!byId.has(o.casino_id)) byId.set(o.casino_id, o.casino?.name ?? `Casino #${o.casino_id}`)
-  }
-  return [
-    { label: 'All casinos', value: null as number | null },
-    ...[...byId.entries()]
-      .sort((a, b) => a[1].localeCompare(b[1]))
-      .map(([value, label]) => ({ label, value: value as number | null })),
-  ]
-})
+const casinoOptions = computed(() => casinoOptionsFromOffers(offers.value))
 /** Offers per category for the chosen casino; null when no casino is chosen. */
 const casinoCounts = computed<Map<number, number> | null>(() => {
   if (casinoId.value === null) return null

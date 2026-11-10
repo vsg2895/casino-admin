@@ -11,6 +11,7 @@ import { useSpecialOffersStore } from '@/stores/specialOffersStore'
 import { STORAGE_BASE_URL } from '@/config/urls'
 import * as offersApi from '@/api/specialOffers'
 import RecordCount from '@/components/RecordCount.vue'
+import { casinoOptionsFromOffers } from '@/utils/casinoOptions'
 import type { SpecialOffer } from '@shared/types/specialOffer'
 import type { CasinoSiteRow } from '@shared/types/casino'
 
@@ -22,18 +23,7 @@ const search = ref('')
 // Null = every casino. Options come from the loaded offers themselves, so the
 // list only names casinos that have at least one offer, and needs no request.
 const casinoId = ref<number | null>(null)
-const casinoOptions = computed(() => {
-  const byId = new Map<number, string>()
-  for (const o of store.offers) {
-    if (!byId.has(o.casino_id)) byId.set(o.casino_id, o.casino?.name ?? `Casino #${o.casino_id}`)
-  }
-  return [
-    { label: 'All casinos', value: null as number | null },
-    ...[...byId.entries()]
-      .sort((a, b) => a[1].localeCompare(b[1]))
-      .map(([value, label]) => ({ label, value: value as number | null })),
-  ]
-})
+const casinoOptions = computed(() => casinoOptionsFromOffers(store.offers))
 // The search box matches the offer's title OR its casino's name, so typing
 // "bitstarz" finds every BitStarz offer whatever the offer is called.
 const filtered = computed(() => {
@@ -76,8 +66,14 @@ async function confirmDelete(): Promise<void> {
 const linkPopover = ref<{ toggle: (e: Event) => void; hide: () => void } | null>(null)
 const popoverOffer = ref<SpecialOffer | null>(null)
 
+// Worked out once per offers load, not on every render: the template reads it
+// three times per card (disabled state, tooltip, picker).
+const activeSitesByOffer = computed(
+  () => new Map(store.offers.map((o) => [o.id, o.casino?.sites?.filter((s) => s.active) ?? []])),
+)
+
 function offerSites(offer: SpecialOffer): CasinoSiteRow[] {
-  return offer.casino?.sites?.filter((s) => s.active) ?? []
+  return activeSitesByOffer.value.get(offer.id) ?? offer.casino?.sites?.filter((s) => s.active) ?? []
 }
 
 function offerUrl(offer: SpecialOffer, site: CasinoSiteRow): string {

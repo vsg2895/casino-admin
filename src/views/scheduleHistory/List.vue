@@ -183,8 +183,9 @@ onMounted(async () => {
     listScheduleHistorySchedules()
       .then((rows) => (schedules.value = rows))
       .catch(() => (schedules.value = [])),
+    // Independent of both lookups above, so it no longer waits for them.
+    reload(),
   ])
-  await reload()
 })
 </script>
 
