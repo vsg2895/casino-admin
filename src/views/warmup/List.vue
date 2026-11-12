@@ -285,6 +285,21 @@ function confirmBulkDelete(): Promise<void> {
   })
 }
 
+// ── Excel export ──────────────────────────────────────────────────────────────
+// Every address matching the search box, not just the page on screen.
+const exporting = ref(false)
+
+async function doExport(): Promise<void> {
+  exporting.value = true
+  try {
+    await api.exportWarmupEmails(search.value)
+  } catch {
+    toast.add({ severity: 'error', summary: 'Export failed', detail: 'The warmup list could not be exported. Please try again.', life: 5000 })
+  } finally {
+    exporting.value = false
+  }
+}
+
 // ── Excel / CSV import ────────────────────────────────────────────────────────
 const fileInput = ref<HTMLInputElement | null>(null)
 const importing = ref(false)
@@ -588,6 +603,7 @@ onMounted(async () => {
         <RecordCount label="Total Warmup Emails" :total="recordTotal" :loading="loading" />
         <Button label="History" icon="pi pi-history" severity="secondary" outlined @click="router.push({ name: 'email-history', query: { tab: 'warmup' } })" />
         <Button label="Import" icon="pi pi-upload" severity="secondary" outlined :loading="importing" @click="triggerImport" />
+        <Button label="Export Excel" icon="pi pi-download" severity="secondary" outlined :loading="exporting" :disabled="recordTotal === 0" @click="doExport" />
         <Button label="Send warmup" icon="pi pi-send" severity="secondary" outlined @click="openSend" />
         <Button label="Stop run" icon="pi pi-ban" severity="danger" outlined @click="showCancel = true" />
         <Button label="Add email" icon="pi pi-plus" @click="openCreate" />

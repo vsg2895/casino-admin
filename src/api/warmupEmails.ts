@@ -1,4 +1,5 @@
 import client from './client'
+import { downloadFile } from './download'
 import type { ApiResponse } from '@shared/types/api'
 import type { SimplePaginatedResponse } from '@shared/types/pagination'
 import type {
@@ -73,6 +74,14 @@ export function deleteWarmupEmail(id: number): Promise<void> {
 
 export function bulkDeleteWarmupEmails(ids: number[]): Promise<{ deleted: number }> {
   return client.post<{ deleted: number }>('/admin/warmup-emails/bulk-delete', { ids }).then((r) => r.data)
+}
+
+// The list as an .xlsx, honouring the current search. Its first column is
+// headed "Email", so the file can be fed straight back to the import below.
+export function exportWarmupEmails(search?: string): Promise<void> {
+  const term = search?.trim() ?? ''
+  const query = term === '' ? '' : `?${new URLSearchParams({ search: term }).toString()}`
+  return downloadFile(`/admin/warmup-emails/export${query}`, 'warmup-emails.xlsx')
 }
 
 // Runs synchronously and returns the per-row breakdown, unlike the newsletter
