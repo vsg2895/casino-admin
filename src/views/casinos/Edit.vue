@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, onMounted } from 'vue'
+import { reactive, ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Tabs from 'primevue/tabs'
 import TabList from 'primevue/tablist'
@@ -20,7 +20,7 @@ import * as detailsApi from '@/api/casinoDetails'
 import { useCasinosStore } from '@/stores/casinosStore'
 import { useSitesStore } from '@/stores/sitesStore'
 import BylineFields from '@/components/BylineFields.vue'
-import RichTextEditor from '@/components/RichTextEditor.vue'
+import SiteContentPanel from '@/components/SiteContentPanel.vue'
 import type { BylineValue } from '@/components/BylineFields.vue'
 import { useCategoriesStore } from '@/stores/categoriesStore'
 import { useCountriesStore } from '@/stores/countriesStore'
@@ -38,6 +38,17 @@ const sitesStore = useSitesStore()
 
 const casinoId = Number(route.params.id)
 const activeTab = ref('details')
+
+// Whose content the Details tab edits: null = Default (the casino's own fields,
+// which every other site falls back to), else a site slug. Kept in ?site= so a
+// link from the coverage screen opens straight on that site.
+const contentSite = ref<string | null>(typeof route.query.site === 'string' ? route.query.site : null)
+watch(contentSite, (slug) => {
+  const query = { ...route.query }
+  if (slug === null) delete query.site
+  else query.site = slug
+  void router.replace({ query })
+})
 const offers = ref<SpecialOffer[]>([])
 const loaded = ref(false)
 
@@ -64,17 +75,6 @@ const attachSaving = ref(false)
 // each attached site names its own writer and reviewer.
 interface SiteByline { site_id: number; site_name: string; value: BylineValue; saving: boolean }
 const bylines = ref<SiteByline[]>([])
-
-// Per-site review text (SEO audit H6). The shared description is the same
-// paragraph on every site; a site's own text replaces it there. One editor
-// open at a time — a TinyMCE per attached site would be heavy.
-interface SiteDescription { site_id: number; site_name: string; text: string | null; saving: boolean; open: boolean }
-const siteDescriptions = ref<SiteDescription[]>([])
-
-function wordCount(html: string | null): number {
-  const text = (html ?? '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim()
-  return text === '' ? 0 : text.split(/\s+/).length
-}
 
 // The factual profile. Loaded and saved on its own endpoints, so the casino
 // save above is completely unchanged by this feature.
@@ -118,13 +118,6 @@ onMounted(async () => {
     site_name: sitesStore.sites.find((s) => s.id === a.site_id)?.name ?? `Site #${a.site_id}`,
     value: { author_id: a.author_id ?? null, reviewed_by_id: a.reviewed_by_id ?? null, last_reviewed_at: a.last_reviewed_at ?? null },
     saving: false,
-  }))
-  siteDescriptions.value = attachRes.data.map((a) => ({
-    site_id: a.site_id,
-    site_name: sitesStore.sites.find((s) => s.id === a.site_id)?.name ?? `Site #${a.site_id}`,
-    text: a.description ?? null,
-    saving: false,
-    open: false,
   }))
   attachments.value = attachRes.data.map((a) => ({
     site_id: a.site_id,
@@ -190,30 +183,6 @@ async function saveByline(row: SiteByline): Promise<void> {
   }
 }
 
-function openDescription(row: SiteDescription): void {
-  for (const other of siteDescriptions.value) other.open = other === row
-}
-
-async function saveSiteDescription(row: SiteDescription): Promise<void> {
-  row.saving = true
-  try {
-    const { data } = await attachmentsApi.updateCasinoSiteDescription(casinoId, row.site_id, row.text)
-    // The server stores null for an empty text or an unchanged copy of the shared one.
-    row.text = data.description ?? null
-    toast.add({
-      severity: 'success',
-      summary: 'Saved',
-      detail: row.text === null ? `${row.site_name} uses the shared description.` : `Description saved for ${row.site_name}.`,
-      life: 3000,
-    })
-  } catch (e: unknown) {
-    const data = axios.isAxiosError(e) ? (e.response?.data as ErrorResponse | undefined) : undefined
-    toast.add({ severity: 'error', summary: 'Error', detail: data?.message ?? 'Failed to save the description.', life: 4000 })
-  } finally {
-    row.saving = false
-  }
-}
-
 async function saveAttachments(): Promise<void> {
   attachSaving.value = true
   try {
@@ -240,7 +209,9 @@ async function saveAttachments(): Promise<void> {
     <div class="flex items-center justify-between">
       <Button label="Cancel" icon="pi pi-arrow-left" text severity="secondary" @click="router.push({ name: 'casinos' })" />
       <h2 class="text-lg font-semibold text-gray-900">Edit Product</h2>
-      <Button label="Update" icon="pi pi-check" :loading="saving" @click="save" />
+      <!-- Default content only; a site's own content saves from its panel. -->
+      <Button v-if="contentSite === null" label="Update" icon="pi pi-check" :loading="saving" @click="save" />
+      <span v-else class="w-[86px]" aria-hidden="true" />
     </div>
 
     <div v-if="formError" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ formError }}</div>
@@ -251,12 +222,14 @@ async function saveAttachments(): Promise<void> {
         <Tab value="profile">Operator Profile</Tab>
         <Tab value="sites">Attach to Sites</Tab>
         <Tab value="bylines">Bylines</Tab>
-        <Tab value="descriptions">Site descriptions</Tab>
       </TabList>
       <TabPanels class="!pt-4">
         <TabPanel value="details">
-          <div class="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
-            <CasinoFormFields :form="form" :categories="categoriesStore.categories" :countries="countriesStore.countries" :offers="offers" :errors="errors" editing />
+          <div class="space-y-4">
+            <SiteContentPanel v-model:site="contentSite" entity="casino" :entity-id="casinoId" />
+            <div v-if="contentSite === null" class="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
+              <CasinoFormFields :form="form" :categories="categoriesStore.categories" :countries="countriesStore.countries" :offers="offers" :errors="errors" editing />
+            </div>
           </div>
         </TabPanel>
         <TabPanel value="profile">
@@ -294,34 +267,6 @@ async function saveAttachments(): Promise<void> {
                 <Button label="Save byline" icon="pi pi-check" size="small" :loading="row.saving" @click="saveByline(row)" />
               </div>
               <BylineFields v-model="row.value" :site-id="row.site_id" />
-            </div>
-          </div>
-        </TabPanel>
-        <TabPanel value="descriptions">
-          <div class="space-y-4">
-            <p class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              The description on the Details tab is shown word for word on every site this casino is
-              attached to, so search engines treat the copies as duplicates. Write each site's own
-              review here, in that site's voice. Do not paste or reword the shared text: a reworded
-              copy is still a duplicate. Empty = the site shows the shared description.
-            </p>
-            <p v-if="siteDescriptions.length === 0" class="text-sm text-gray-400">Attach the casino to a site first (and save).</p>
-            <div v-for="row in siteDescriptions" :key="row.site_id" class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-              <div class="flex items-center justify-between gap-3">
-                <div>
-                  <h3 class="text-sm font-semibold text-gray-800">{{ row.site_name }}</h3>
-                  <p class="text-xs" :class="row.text ? 'text-emerald-600' : 'text-gray-400'">
-                    {{ row.text ? `Own text · ${wordCount(row.text)} words` : 'Uses the shared description' }}
-                  </p>
-                </div>
-                <div class="flex gap-2">
-                  <Button v-if="!row.open" label="Edit" icon="pi pi-pencil" size="small" severity="secondary" @click="openDescription(row)" />
-                  <Button v-else label="Save description" icon="pi pi-check" size="small" :loading="row.saving" @click="saveSiteDescription(row)" />
-                </div>
-              </div>
-              <div v-if="row.open" class="mt-3">
-                <RichTextEditor v-model="row.text" />
-              </div>
             </div>
           </div>
         </TabPanel>

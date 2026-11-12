@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -164,9 +164,27 @@ const pager = computed(() => pagerMeta(store.pageInfo, recordTotal.value))
 const totalRecords = computed(() => pager.value.total)
 const first = computed(() => (page.value - 1) * perPage.value)
 
+// "Missing custom content for site": casinos the chosen site publishes but has
+// written no description/meta of its own for. Server-side, so the paginator
+// and the badge count the filtered set.
+const missingSiteId = ref<number | null>(null)
+const missingSiteOptions = computed(() => [
+  { label: 'All casinos', value: null },
+  ...sitesStore.sites
+    .filter((s) => s.active && !s.is_default_content_site)
+    .map((s) => ({ label: `Missing custom content for ${s.name}`, value: s.id })),
+])
+const missingParams = computed(() => (missingSiteId.value === null ? {} : { missing_for_site: missingSiteId.value }))
+
 function fetchPage(): Promise<void> {
-  return store.fetchCasinos({ page: page.value, per_page: perPage.value })
+  return store.fetchCasinos({ page: page.value, per_page: perPage.value, ...missingParams.value })
 }
+
+watch(missingSiteId, () => {
+  page.value = 1
+  selected.value = []
+  void reload()
+})
 
 async function reload(): Promise<void> {
   await Promise.all([fetchPage(), refreshCount()])
@@ -196,7 +214,7 @@ const recordTotal = ref<number | null>(null)
 
 async function refreshCount(): Promise<void> {
   try {
-    recordTotal.value = await casinosApi.countCasinos()
+    recordTotal.value = await casinosApi.countCasinos(missingParams.value)
   } catch {
     recordTotal.value = null
   }
@@ -264,7 +282,17 @@ async function onProfileFileChosen(event: Event): Promise<void> {
         <p class="text-sm text-gray-500">Manage casino master data and site attachments.</p>
       </div>
       <div class="flex items-center gap-3">
-        <RecordCount label="Total Casinos" :total="recordTotal" :loading="store.loading" />
+        <Select
+          v-model="missingSiteId"
+          :options="missingSiteOptions"
+          option-label="label"
+          option-value="value"
+          filter
+          placeholder="All casinos"
+          class="w-72"
+          aria-label="Missing custom content for site"
+        />
+        <RecordCount :label="missingSiteId === null ? 'Total Casinos' : 'Missing content'" :total="recordTotal" :loading="store.loading" />
         <Button
           label="Export profiles"
           icon="pi pi-download"

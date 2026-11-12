@@ -54,6 +54,10 @@ export interface Site {
   news_enabled: boolean
   /** Publish the Bonus area (menu + home-page sections) on this site. */
   bonus_enabled: boolean
+  /** Noindex (and leave out of the sitemap) casino/offer pages without this site's own description. */
+  noindex_without_override: boolean
+  /** The site whose casino/offer text is the shared default (never has overrides). */
+  is_default_content_site: boolean
   /**
    * Open the discussion board at /forum.
    *

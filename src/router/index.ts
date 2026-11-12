@@ -169,6 +169,12 @@ const router = createRouter({
           meta: { requiresAuth: true, title: 'Edit Casino' },
         },
         {
+          path: 'content-coverage',
+          name: 'content-coverage',
+          component: () => import('@/views/contentCoverage/Index.vue'),
+          meta: { requiresAuth: true, title: 'Content Coverage' },
+        },
+        {
           path: 'special-offers',
           name: 'special-offers',
           component: () => import('@/views/specialOffers/List.vue'),

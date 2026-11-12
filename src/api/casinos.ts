@@ -27,14 +27,16 @@ export type UpdateCasinoPayload = Partial<CreateCasinoPayload>
 export function listCasinos(params?: {
   page?: number
   per_page?: number
+  /** Casinos this site publishes but has no own content for yet. */
+  missing_for_site?: number
 }): Promise<SimplePaginatedResponse<Casino>> {
   return client.get<SimplePaginatedResponse<Casino>>('/admin/casinos', { params }).then((r) => r.data)
 }
 
 // Total casinos. A dedicated COUNT on the server, issued separately from the
 // listing so the paginated query never carries its weight.
-export function countCasinos(): Promise<number> {
-  return client.get<{ total: number }>('/admin/casinos/count').then((r) => r.data.total)
+export function countCasinos(params?: { missing_for_site?: number }): Promise<number> {
+  return client.get<{ total: number }>('/admin/casinos/count', { params }).then((r) => r.data.total)
 }
 
 export function getCasino(id: number): Promise<ApiResponse<Casino>> {

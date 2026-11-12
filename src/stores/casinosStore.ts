@@ -11,7 +11,7 @@ export const useCasinosStore = defineStore('casinos', () => {
   // and the screen sizes its paginator from the separate COUNT.
   const pageInfo = ref<PageWindow | null>(null)
 
-  async function fetchCasinos(params?: { page?: number; per_page?: number }): Promise<void> {
+  async function fetchCasinos(params?: { page?: number; per_page?: number; missing_for_site?: number }): Promise<void> {
     loading.value = true
     try {
       const response = await casinosApi.listCasinos(params)

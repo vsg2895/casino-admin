@@ -7,10 +7,10 @@ export const useSpecialOffersStore = defineStore('specialOffers', () => {
   const offers = ref<SpecialOffer[]>([])
   const loading = ref(false)
 
-  async function fetchOffers(): Promise<void> {
+  async function fetchOffers(params?: { missing_for_site?: number }): Promise<void> {
     loading.value = true
     try {
-      const response = await offersApi.listSpecialOffers()
+      const response = await offersApi.listSpecialOffers(params)
       offers.value = response.data
     } finally {
       loading.value = false

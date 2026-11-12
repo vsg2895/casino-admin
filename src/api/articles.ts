@@ -1,6 +1,6 @@
 import client from './client'
 import type { ApiResponse } from '@shared/types/api'
-import type { Article, UpsertArticlePayload } from '@shared/types/article'
+import type { Article, ArticleRewriteFilter, UpsertArticlePayload } from '@shared/types/article'
 
 /** Which section an article belongs to. Mirrors Article::TYPES on the server. */
 export type ArticleType = 'guide' | 'news'
@@ -61,21 +61,34 @@ export function listArticles(
   type: ArticleType = 'guide',
   page = 1,
   perPage?: number,
+  rewrite?: ArticleRewriteFilter | null,
 ): Promise<ArticlePage> {
   return client
     .get<ArticlePage>(
       `/admin/sites/${siteId}/articles${query(type)}&page=${page}`
-      + (perPage ? `&per_page=${perPage}` : ''),
+      + (perPage ? `&per_page=${perPage}` : '')
+      + rewriteQuery(rewrite),
     )
     .then((r) => r.data)
 }
 
-/** Every entry in this site's section — a dedicated COUNT that sizes the paginator. */
-export function countArticles(siteId: number, type: ArticleType = 'guide'): Promise<number> {
+/**
+ * Every entry in this site's section — a dedicated COUNT that sizes the
+ * paginator, so it takes the same `rewrite` filter as the listing.
+ */
+export function countArticles(
+  siteId: number,
+  type: ArticleType = 'guide',
+  rewrite?: ArticleRewriteFilter | null,
+): Promise<number> {
   return client
-    .get<{ total: number }>(`/admin/sites/${siteId}/articles/count${query(type)}`)
+    .get<{ total: number }>(`/admin/sites/${siteId}/articles/count${query(type)}${rewriteQuery(rewrite)}`)
     .then((r) => r.data.total)
 }
+
+/** News only: narrow to scraped posts in one rewrite state. Absent = every post. */
+const rewriteQuery = (rewrite?: ArticleRewriteFilter | null) =>
+  rewrite ? `&rewrite=${encodeURIComponent(rewrite)}` : ''
 
 export function getArticle(siteId: number, id: number, type: ArticleType = 'guide'): Promise<Article> {
   return client

@@ -10,6 +10,8 @@ export interface CreateSpecialOfferPayload {
   bonuses?: string | null
   affiliate_url?: string | null
   description?: string | null
+  meta_title?: string | null
+  meta_description?: string | null
   rating?: number
   sort_order?: number
   active?: boolean
@@ -17,14 +19,14 @@ export interface CreateSpecialOfferPayload {
 
 export type UpdateSpecialOfferPayload = Partial<CreateSpecialOfferPayload>
 
-export function listSpecialOffers(): Promise<ApiResponse<SpecialOffer[]>> {
-  return client.get<ApiResponse<SpecialOffer[]>>('/admin/special-offers').then((r) => r.data)
+export function listSpecialOffers(params?: { missing_for_site?: number }): Promise<ApiResponse<SpecialOffer[]>> {
+  return client.get<ApiResponse<SpecialOffer[]>>('/admin/special-offers', { params }).then((r) => r.data)
 }
 
 // Total special offers. A dedicated COUNT on the server, issued separately from
 // the listing so that query never carries its weight.
-export function countSpecialOffers(): Promise<number> {
-  return client.get<{ total: number }>('/admin/special-offers/count').then((r) => r.data.total)
+export function countSpecialOffers(params?: { missing_for_site?: number }): Promise<number> {
+  return client.get<{ total: number }>('/admin/special-offers/count', { params }).then((r) => r.data.total)
 }
 
 export function getSpecialOffer(id: number): Promise<ApiResponse<SpecialOffer>> {

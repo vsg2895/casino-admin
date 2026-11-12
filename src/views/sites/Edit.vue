@@ -27,6 +27,7 @@ interface SiteEditForm {
   guides_enabled: boolean
   news_enabled: boolean
   bonus_enabled: boolean
+  noindex_without_override: boolean
   forum_enabled: boolean
   accounts_enabled: boolean
   author_name: string | null
@@ -68,6 +69,7 @@ const form = reactive<SiteEditForm>({
   guides_enabled: false,
   news_enabled: false,
   bonus_enabled: false,
+  noindex_without_override: false,
   forum_enabled: false,
   accounts_enabled: false,
   author_name: null,
@@ -130,6 +132,7 @@ watch(
       form.guides_enabled = props.site.guides_enabled
       form.news_enabled = props.site.news_enabled
       form.bonus_enabled = props.site.bonus_enabled
+      form.noindex_without_override = props.site.noindex_without_override ?? false
       form.forum_enabled = props.site.forum_enabled
       form.accounts_enabled = props.site.accounts_enabled
       form.author_name = props.site.author_name
@@ -174,6 +177,7 @@ async function submit(): Promise<void> {
       guides_enabled: form.guides_enabled,
       news_enabled: form.news_enabled,
       bonus_enabled: form.bonus_enabled,
+      noindex_without_override: form.noindex_without_override,
       forum_enabled: form.forum_enabled,
       accounts_enabled: form.accounts_enabled,
       author_name: form.author_name,
@@ -398,6 +402,16 @@ async function submit(): Promise<void> {
             </p>
           </div>
           <ToggleSwitch class="shrink-0" v-model="form.bonus_enabled" />
+        </div>
+
+        <div class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
+          <div class="min-w-0">
+            <label class="block text-sm font-medium text-gray-700">Hide pages without own content</label>
+            <p class="mt-0.5 text-xs text-gray-500">
+              Casino and offer pages on this site without their own description are hidden from search and the sitemap.
+            </p>
+          </div>
+          <ToggleSwitch class="shrink-0" v-model="form.noindex_without_override" />
         </div>
 
         <div class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">

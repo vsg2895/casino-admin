@@ -51,8 +51,15 @@ The casino edit form is tabbed:
 - **Attach to Sites** — one row per registered site with a "show on this site" checkbox
   and the per-site overrides: `affiliate_url`, `position`, `featured`, `active`, plus an
   "apply to all selected" shortcut.
-- **Bylines** and **Site descriptions** — per attached site, each saved on its own
-  endpoint (`…/sites/{site}/byline`, `…/sites/{site}/description`), never through sync.
+- **Bylines** — per attached site, saved on its own endpoint (`…/sites/{site}/byline`),
+  never through sync.
+
+Per-site **content** (description, meta, noindex) is edited on the Details tab of both the
+casino and the special-offer edit pages, through `components/SiteContentPanel.vue`: a Site
+picker whose first option is Default (the record's own fields, every site's fallback); any
+other site shows only that site's override fields, saved on `…/site-contents/{site}`. The
+picked site lives in `?site=<slug>`. **Content Coverage** (`views/contentCoverage/`) is the
+casino/offer × site matrix; both lists filter by "Missing custom content for site".
 
 Save posts the **full** attachment array to
 `POST /api/v1/admin/casinos/{id}/sites/sync` — the backend replaces the pivot state in

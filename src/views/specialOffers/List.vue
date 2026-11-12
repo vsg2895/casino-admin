@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
@@ -8,6 +8,7 @@ import Dialog from 'primevue/dialog'
 import Popover from 'primevue/popover'
 import { useToast } from 'primevue/usetoast'
 import { useSpecialOffersStore } from '@/stores/specialOffersStore'
+import { useSitesStore } from '@/stores/sitesStore'
 import { STORAGE_BASE_URL } from '@/config/urls'
 import * as offersApi from '@/api/specialOffers'
 import RecordCount from '@/components/RecordCount.vue'
@@ -18,6 +19,22 @@ import type { CasinoSiteRow } from '@shared/types/casino'
 const router = useRouter()
 const toast = useToast()
 const store = useSpecialOffersStore()
+const sitesStore = useSitesStore()
+
+// "Missing custom content for site": offers the chosen site publishes (through
+// their casino) with no description/meta of its own yet. Filtered server-side.
+const missingSiteId = ref<number | null>(null)
+const missingSiteOptions = computed(() => [
+  { label: 'Any content', value: null },
+  ...sitesStore.sites
+    .filter((s) => s.active && !s.is_default_content_site)
+    .map((s) => ({ label: `Missing custom content for ${s.name}`, value: s.id })),
+])
+const missingParams = computed(() => (missingSiteId.value === null ? {} : { missing_for_site: missingSiteId.value }))
+watch(missingSiteId, () => {
+  void store.fetchOffers(missingParams.value)
+  void refreshCount()
+})
 
 const search = ref('')
 // Null = every casino. Options come from the loaded offers themselves, so the
@@ -129,7 +146,7 @@ const recordTotal = ref<number | null>(null)
 
 async function refreshCount(): Promise<void> {
   try {
-    recordTotal.value = await offersApi.countSpecialOffers()
+    recordTotal.value = await offersApi.countSpecialOffers(missingParams.value)
   } catch {
     recordTotal.value = null
   }
@@ -139,13 +156,14 @@ async function refreshCount(): Promise<void> {
 // term is active the exact number of matches is known locally — asking the
 // server to re-count would be a round-trip for a figure we already have. The
 // label changes with it, so "12" is never mistaken for the catalogue total.
-const isSearching = computed(() => search.value.trim() !== '' || casinoId.value !== null)
+const isSearching = computed(() => search.value.trim() !== '' || casinoId.value !== null || missingSiteId.value !== null)
 const countLabel = computed(() => (isSearching.value ? 'Matching Special Offers' : 'Total Special Offers'))
 const countTotal = computed(() => (isSearching.value ? filtered.value.length : recordTotal.value))
 
 onMounted(() => {
   store.fetchOffers()
   refreshCount()
+  void sitesStore.fetchSites()
 })
 </script>
 
@@ -167,6 +185,16 @@ onMounted(() => {
           placeholder="All casinos"
           class="w-56"
           aria-label="Filter by casino"
+        />
+        <Select
+          v-model="missingSiteId"
+          :options="missingSiteOptions"
+          option-label="label"
+          option-value="value"
+          filter
+          placeholder="Any content"
+          class="w-64"
+          aria-label="Missing custom content for site"
         />
         <InputText v-model="search" placeholder="Search by offer or casino name" class="w-64" />
         <Button label="Create" icon="pi pi-plus" @click="router.push({ name: 'special-offers-create' })" />

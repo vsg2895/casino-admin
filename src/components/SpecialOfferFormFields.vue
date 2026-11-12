@@ -40,6 +40,12 @@ export interface SpecialOfferFormModel {
   terms_url: string | null
   /** Keep out of search results: noindex on the offer page, absent from the sitemap. */
   noindex: boolean
+  /**
+   * Default-site SEO, and every other site's fallback. Empty: the page title
+   * comes from the site's pattern, and the API derives one where it needs it.
+   */
+  meta_title: string | null
+  meta_description: string | null
 }
 
 const props = defineProps<{
@@ -284,13 +290,29 @@ const ratingOptions = [0, 1, 2, 3, 4, 5].map((n) => ({ label: String(n), value: 
       </div>
     </div>
 
-    <div class="flex items-center justify-between gap-3 border-t border-gray-100 pt-4">
-      <div>
-        <label class="text-sm text-gray-700">Keep out of search results</label>
-        <p class="text-xs text-gray-400">Sets noindex and leaves the offer out of the sitemap. The page stays reachable by direct link.</p>
+    <!-- SEO — same block as the casino form's. -->
+    <fieldset class="space-y-4 border-t border-gray-100 pt-4">
+      <legend class="text-xs font-semibold uppercase tracking-wide text-gray-400">SEO</legend>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label class="mb-1 block text-sm font-medium text-gray-700">Meta Title</label>
+          <InputText v-model="form.meta_title" maxlength="255" fluid />
+          <p v-if="errors?.meta_title" class="mt-1 text-xs text-red-600">{{ errors.meta_title }}</p>
+        </div>
+        <div>
+          <label class="mb-1 block text-sm font-medium text-gray-700">Meta Description</label>
+          <InputText v-model="form.meta_description" maxlength="500" fluid />
+          <p v-if="errors?.meta_description" class="mt-1 text-xs text-red-600">{{ errors.meta_description }}</p>
+        </div>
       </div>
-      <ToggleSwitch v-model="form.noindex" />
-    </div>
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <label class="text-sm text-gray-700">Keep out of search results</label>
+          <p class="text-xs text-gray-400">Sets noindex and leaves the offer out of the sitemap, on every site. The page stays reachable by direct link.</p>
+        </div>
+        <ToggleSwitch v-model="form.noindex" />
+      </div>
+    </fieldset>
   </div>
 
 </template>

@@ -34,6 +34,7 @@ export interface UpdateSitePayload {
   guides_enabled?: boolean
   news_enabled?: boolean
   bonus_enabled?: boolean
+  noindex_without_override?: boolean
   // The discussion board at /forum. Switching it on also deactivates this
   // site's /forum -> /reviews redirect, which would otherwise shadow it.
   forum_enabled?: boolean

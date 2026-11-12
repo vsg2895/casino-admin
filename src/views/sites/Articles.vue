@@ -11,6 +11,7 @@ import Textarea from 'primevue/textarea'
 import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
 import ToggleSwitch from 'primevue/toggleswitch'
+import Select from 'primevue/select'
 import { useToast } from 'primevue/usetoast'
 import axios from 'axios'
 import RichTextEditor from '@/components/RichTextEditor.vue'
@@ -20,7 +21,7 @@ import * as articlesApi from '@/api/articles'
 import { handPageWindow, pagerMeta } from '@/utils/pagination'
 import type { ArticleType } from '@/api/articles'
 import * as sitesApi from '@/api/sites'
-import type { Article, UpsertArticlePayload } from '@shared/types/article'
+import type { Article, ArticleRewriteFilter, UpsertArticlePayload } from '@shared/types/article'
 import type { Site } from '@shared/types/site'
 import type { ErrorResponse } from '@shared/types/api'
 
@@ -108,6 +109,74 @@ const entryTotal = ref<number | null>(null)
 // PrimeVue's paginator works in row offsets, not page numbers.
 const first = computed(() => (page.value - 1) * perPage.value)
 
+// ── rewrite filter (news only) ───────────────────────────────────────────────
+//
+// Scraped posts in one state with `news:rewrite`. Applied server-side to the
+// rows AND to the count that sizes the paginator; the stat tiles above the
+// table stay over the whole section.
+const rewriteFilter = ref<ArticleRewriteFilter | null>(null)
+
+const REWRITE_FILTER_OPTIONS: { label: string; value: ArticleRewriteFilter | null }[] = [
+  { label: 'All posts', value: null },
+  { label: 'Rewritten', value: 'rewritten' },
+  { label: 'Not rewritten', value: 'not_rewritten' },
+  { label: 'Not rewritten — never tried', value: 'not_attempted' },
+  { label: 'Not rewritten — tried, failed', value: 'attempt_failed' },
+]
+
+async function onRewriteFilter(value: ArticleRewriteFilter | null): Promise<void> {
+  rewriteFilter.value = value
+  page.value = 1
+  await reload()
+}
+
+/**
+ * The line under a news post's title: whether news:rewrite wrote it, and — when
+ * it did not — whether it ever tried, and why the last try produced no copy.
+ * Null for posts written here, which were never anything to rewrite.
+ */
+function rewriteInfo(a: Article): { tag: string; severity: string; detail: string; error: string | null } | null {
+  const r = a.rewrite
+  if (!r || r.state === 'written_here') return null
+
+  const when = r.last_attempt_at ? formatDateTime(r.last_attempt_at) : null
+  const tries = `${r.attempts} ${r.attempts === 1 ? 'attempt' : 'attempts'}`
+
+  if (r.state === 'rewritten') {
+    // A later `news:rewrite --all` that did not take keeps the earlier copy;
+    // say so rather than hide it.
+    const lastFailed = r.last_result === 'rejected' || r.last_result === 'failed'
+    return {
+      tag: 'Rewritten',
+      severity: 'success',
+      detail: lastFailed
+        ? `Rewritten earlier · last re-write ${r.last_result}${when ? ` ${when}` : ''}`
+        : `Rewritten${when ? ` ${when}` : ''}`,
+      error: lastFailed ? r.last_error : null,
+    }
+  }
+
+  if (r.state === 'not_attempted') {
+    return {
+      tag: 'Not rewritten',
+      severity: 'danger',
+      detail: 'Not tried yet — waiting for the next news:rewrite run',
+      error: null,
+    }
+  }
+
+  return {
+    tag: 'Not rewritten',
+    severity: 'danger',
+    detail: `Tried, ${r.last_result ?? 'failed'} · ${tries}${when ? ` · last ${when}` : ''}`,
+    error: r.last_error,
+  }
+}
+
+function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })
+}
+
 async function onPage(event: { page: number; rows: number }): Promise<void> {
   page.value = event.page + 1
   perPage.value = event.rows
@@ -129,14 +198,19 @@ function formatDate(iso: string | null): string {
   return iso ? new Date(iso).toLocaleDateString('en-GB', { dateStyle: 'medium' }) : '—'
 }
 
+/** The rewrite filter applies to News only; Guides never send it. */
+function filterForRequest(): ArticleRewriteFilter | null {
+  return articleType === 'news' ? rewriteFilter.value : null
+}
+
 async function reload(): Promise<void> {
   loading.value = true
   try {
     // The listing carries no total (simple-paginated); the dedicated COUNT,
     // requested beside it, sizes the paginator. Never fatal.
     const [res, count] = await Promise.all([
-      articlesApi.listArticles(siteId, articleType, page.value, perPage.value),
-      articlesApi.countArticles(siteId, articleType).catch(() => null),
+      articlesApi.listArticles(siteId, articleType, page.value, perPage.value, filterForRequest()),
+      articlesApi.countArticles(siteId, articleType, filterForRequest()).catch(() => null),
     ])
     const pager = pagerMeta(handPageWindow(res), count)
     items.value = res.data
@@ -558,6 +632,24 @@ onMounted(async () => {
       </span>
     </div>
 
+    <!-- News only: narrow the list to scraped posts by where they stand with
+         news:rewrite. Counts above stay over the whole section. -->
+    <div v-if="articleType === 'news'" class="flex flex-wrap items-center gap-3">
+      <label for="rewrite-filter" class="text-sm text-gray-600">Rewrite</label>
+      <Select
+        input-id="rewrite-filter"
+        :model-value="rewriteFilter"
+        :options="REWRITE_FILTER_OPTIONS"
+        option-label="label"
+        option-value="value"
+        class="w-72"
+        @update:model-value="onRewriteFilter"
+      />
+      <span v-if="rewriteFilter && entryTotal !== null" class="text-sm text-gray-500">
+        {{ entryTotal }} matching
+      </span>
+    </div>
+
     <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
       <DataTable
         :value="items"
@@ -576,7 +668,9 @@ onMounted(async () => {
         :pt="{ root: { class: 'text-sm' } }"
       >
         <template #empty>
-          <div class="py-10 text-center text-sm text-gray-400">No {{ section.plural.toLowerCase() }} yet.</div>
+          <div class="py-10 text-center text-sm text-gray-400">
+            {{ rewriteFilter && articleType === 'news' ? 'No posts match this rewrite filter.' : `No ${section.plural.toLowerCase()} yet.` }}
+          </div>
         </template>
 
         <Column header="Title">
@@ -585,8 +679,24 @@ onMounted(async () => {
             <!-- Scraped and not rewritten yet: the title and excerpt are still the
                  SOURCE's words. Shown so nobody publishes them by mistake;
                  `news:rewrite` clears it. -->
+            <!-- News: rewritten, or not — and if not, whether news:rewrite
+                 ever tried and why the last try produced no copy. -->
+            <template v-if="articleType === 'news' && rewriteInfo(data)">
+              <Tag
+                :value="rewriteInfo(data)!.tag"
+                :severity="rewriteInfo(data)!.severity"
+                class="ml-2 align-middle !text-[0.65rem]"
+                :title="data.awaiting_rewrite ? 'Still the source\'s headline and teaser. Run news:rewrite before publishing.' : undefined"
+              />
+              <p class="text-xs" :class="rewriteInfo(data)!.severity === 'success' ? 'text-emerald-700' : 'text-red-600'">
+                {{ rewriteInfo(data)!.detail }}
+              </p>
+              <p v-if="rewriteInfo(data)!.error" class="text-xs text-gray-500">
+                Why: {{ rewriteInfo(data)!.error }}
+              </p>
+            </template>
             <Tag
-              v-if="data.awaiting_rewrite"
+              v-else-if="data.awaiting_rewrite"
               value="Not rewritten"
               severity="danger"
               class="ml-2 align-middle !text-[0.65rem]"

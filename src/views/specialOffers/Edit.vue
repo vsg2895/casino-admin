@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import * as bonusApi from '@/api/bonusCategories'
 import type { BonusCategory } from '@shared/types/bonusCategory'
-import { reactive, ref, onMounted } from 'vue'
+import { reactive, ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import { useToast } from 'primevue/usetoast'
 import axios from 'axios'
 import SpecialOfferFormFields from '@/components/SpecialOfferFormFields.vue'
+import SiteContentPanel from '@/components/SiteContentPanel.vue'
 import type { SpecialOfferFormModel } from '@/components/SpecialOfferFormFields.vue'
 import * as offersApi from '@/api/specialOffers'
 import { useSpecialOffersStore } from '@/stores/specialOffersStore'
@@ -22,6 +23,16 @@ const store = useSpecialOffersStore()
 const casinosStore = useCasinosStore()
 
 const offerId = Number(route.params.id)
+
+// Whose content is edited: null = Default (the offer's own fields, every
+// other site's fallback), else a site slug, kept in ?site=.
+const contentSite = ref<string | null>(typeof route.query.site === 'string' ? route.query.site : null)
+watch(contentSite, (slug) => {
+  const query = { ...route.query }
+  if (slug === null) delete query.site
+  else query.site = slug
+  void router.replace({ query })
+})
 const loaded = ref(false)
 const saving = ref(false)
 const errors = ref<Record<string, string>>({})
@@ -32,6 +43,7 @@ const form = reactive<SpecialOfferFormModel>({
   bonus_category_id: null, title: '', slug: null, image_path: null, banner_image: null, bonuses: null,
   wagering_requirement: null, min_deposit: null, max_cashout: null,
   bonus_code: null, expires_at: null, terms_url: null, noindex: false,
+  meta_title: null, meta_description: null,
   affiliate_url: null, description: null, rating: 0, sort_order: 0, active: true,
 })
 
@@ -60,6 +72,8 @@ onMounted(async () => {
     terms_url: offer.terms?.terms_url ?? null,
     // The admin payload carries the flag as `is_indexable`, its inverse.
     noindex: offer.is_indexable === false,
+    meta_title: offer.meta_title ?? null,
+    meta_description: offer.meta_description ?? null,
     description: offer.description, rating: offer.rating, sort_order: offer.sort_order, active: offer.active,
   })
   loaded.value = true
@@ -92,12 +106,16 @@ async function save(): Promise<void> {
     <div class="flex items-center justify-between">
       <Button label="Cancel" icon="pi pi-arrow-left" text severity="secondary" @click="router.push({ name: 'special-offers' })" />
       <h2 class="text-lg font-semibold text-gray-900">Edit Offer</h2>
-      <Button label="Update" icon="pi pi-check" :loading="saving" @click="save" />
+      <!-- Default content only; a site's own content saves from its panel. -->
+      <Button v-if="contentSite === null" label="Update" icon="pi pi-check" :loading="saving" @click="save" />
+      <span v-else class="w-[86px]" aria-hidden="true" />
     </div>
 
     <div v-if="formError" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ formError }}</div>
 
-    <div class="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
+    <SiteContentPanel v-model:site="contentSite" entity="offer" :entity-id="offerId" />
+
+    <div v-if="contentSite === null" class="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
       <SpecialOfferFormFields :form="form" :casinos="casinosStore.casinos" :bonus-categories="bonusCategories" :errors="errors" show-slug />
     </div>
   </div>
