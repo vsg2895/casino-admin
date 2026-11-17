@@ -56,6 +56,10 @@ export interface VerificationPromotionEmail {
   // Read-only catalogue of everything that can be hidden, served by the API so
   // the editor never duplicates the list.
   optional_blocks: string[]
+  // Read-only: the brand site's active Social Links, in admin order, that the
+  // footer's Follow row shows (hidden with the `social_links` block). Managed on
+  // the Social Links page; the editor never sends it back.
+  social_links: VerificationPromotionSocialLink[]
   // Read-only sizing bounds, so the admin input never hard-codes them.
   intro_text_min_size: number
   intro_text_max_size: number
@@ -134,6 +138,16 @@ export interface VerificationPromotionEmail {
   updated_at: string
 }
 
+// One icon in the email's Follow row. `label` is the platform's display name
+// (the icon's alt text); `icon_url` is the hosted PNG, null when the platform
+// has none and the email shows the name instead.
+export interface VerificationPromotionSocialLink {
+  platform: string
+  label: string
+  url: string
+  icon_url: string | null
+}
+
 export type EmailProvider = 'smtp' | 'sendgrid_env' | 'mailgun' | 'sendgrid'
 
 // Payload for PUT /admin/verification-promotion — every editable field.
@@ -145,6 +159,7 @@ export type UpdateVerificationPromotionEmailPayload = Omit<
   | 'sendgrid_env_available'
   // Server-owned catalogue; the editor reads it but never sends it back.
   | 'optional_blocks'
+  | 'social_links'
   | 'intro_text_min_size'
   | 'intro_text_max_size'
   | 'intro_text_default_size'

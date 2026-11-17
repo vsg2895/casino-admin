@@ -97,6 +97,28 @@ const navGroups: NavGroup[] = [
       { label: 'Sendgrid Receivers', to: '/custom-receivers/sendgrid', icon: 'pi-users' },
     ],
   },
+  {
+    // Big Glow Day — the perfume store (src/perfume): its own tables, API and
+    // pages; nothing in it is a casino site.
+    label: 'Big Glow Day',
+    icon: 'pi-sparkles',
+    match: '/perfume',
+    children: [
+      { label: 'Orders',         to: '/perfume/orders',         icon: 'pi-shopping-cart' },
+      { label: 'Subscribers',    to: '/perfume/subscribers',    icon: 'pi-users' },
+      { label: 'Products',       to: '/perfume/products',       icon: 'pi-box' },
+      { label: 'Brands',         to: '/perfume/brands',         icon: 'pi-bookmark' },
+      { label: 'Sections',       to: '/perfume/categories',     icon: 'pi-tags' },
+      { label: 'Scent notes',    to: '/perfume/scent-notes',    icon: 'pi-star' },
+      { label: 'Scent families', to: '/perfume/scent-families', icon: 'pi-sitemap' },
+      { label: 'Perfumers',      to: '/perfume/perfumers',      icon: 'pi-user' },
+      { label: 'Home page',      to: '/perfume/home',           icon: 'pi-home' },
+      { label: 'Footer links',   to: '/perfume/navigation',     icon: 'pi-bars' },
+      { label: 'Stores',         to: '/perfume/stores',         icon: 'pi-map-marker' },
+      { label: 'Pages',          to: '/perfume/pages',          icon: 'pi-file' },
+      { label: 'Settings',       to: '/perfume/settings',       icon: 'pi-cog' },
+    ],
+  },
 ]
 
 // Open when the current route is inside the group, so arriving by deep link or

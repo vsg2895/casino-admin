@@ -12,6 +12,25 @@ export type ScheduleAudience = 'newsletters' | 'mailgun_receivers' | 'sendgrid_r
 // How often the campaign runs.
 export type ScheduleFrequency = 'daily' | 'weekly' | 'monthly'
 
+/**
+ * WHICH email a schedule sends: one of the site's stored templates, or the
+ * operator's own HTML typed into the schedule itself.
+ *
+ * The keys match EmailSchedule::TEMPLATE_* and the warmup/email-history
+ * template keys, so one template is one string everywhere.
+ */
+export type ScheduleTemplate = 'promotion' | 'subscribe' | 'verify' | 'custom'
+
+/**
+ * Templates that may only be sent to `newsletters`.
+ *
+ * Both are about the recipient's own subscriber record — the verify email's
+ * link is resolved from that subscriber's token — and a Custom Receivers or
+ * warmup address has none, so the link would resolve to nothing. The API
+ * rejects the combination; the form stops it before that.
+ */
+export const SUBSCRIBER_ONLY_TEMPLATES: readonly ScheduleTemplate[] = ['subscribe', 'verify']
+
 // Fields match EmailScheduleResource.php — a scheduled promotion campaign: the
 // site's promotion email, sent to the newest `limit` addresses of `audience`,
 // skipping anyone who received it from this site within `cooldown_days`.
@@ -20,9 +39,26 @@ export interface EmailSchedule {
   site_id: number
   site?: Site
   name: string | null
+  /** Which email this schedule sends. 'promotion' for every schedule saved before the choice existed. */
+  template: ScheduleTemplate
+  /** The same, in words — 'Custom HTML'. */
+  template_label: string
+  /** Custom HTML only; null for every stored-template schedule. */
+  custom_from_name: string | null
+  custom_from_address: string | null
+  custom_subject: string | null
+  custom_html: string | null
   audience: ScheduleAudience
   limit: number | null // emails per run; null only on a schedule saved before counts existed
   cooldown_days: number // 1..365
+  /**
+   * Whether this schedule mails addresses that opted out of its site.
+   *
+   * False everywhere unless an admin deliberately turned it on. An opt-out is
+   * global per site — any unsubscribe, through any template, stops all mail
+   * from that site to that address, on every audience.
+   */
+  include_unsubscribed: boolean
   /** Non-null when the schedule cannot send — a legacy row with no count. */
   blocked_reason: string | null
   frequency: ScheduleFrequency
@@ -44,9 +80,16 @@ export interface EmailSchedule {
 export interface UpsertEmailSchedulePayload {
   site_id: number
   name?: string | null
+  template: ScheduleTemplate
+  // Required by the API when template = 'custom', ignored (and cleared) otherwise.
+  custom_from_name?: string | null
+  custom_from_address?: string | null
+  custom_subject?: string | null
+  custom_html?: string | null
   audience: ScheduleAudience
   limit: number
   cooldown_days: number
+  include_unsubscribed?: boolean
   frequency: ScheduleFrequency
   time: string
   day_of_week?: number | null

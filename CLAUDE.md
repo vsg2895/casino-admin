@@ -16,7 +16,7 @@ Conventions: [../docs/CONVENTIONS.md](../docs/CONVENTIONS.md)
 | **Content** | Casinos (+ Attach to Sites, + Countries), Special Offers, Categories, Countries, Reviews (moderation), CMS/Legal Pages, Social Links |
 | **Email templates** | per site: Email Template (welcome), Verify Email, Promotion Email; plus the **global** Promotion-after-verification |
 | **Audience** | Newsletter (email), Newsletter Phones (SMS), Unsubscribes |
-| **Delivery** | Schedules (audience: newsletters / Custom Receivers / warmup + count + cooldown), **Email History** (schedules · verify · after-verification · warmup · SMS · UniOne runs, one tabbed section, each row deletable), SendGrid Keys, Mailgun Keys, Twilio Configs, SMS Templates, Warmup |
+| **Delivery** | Schedules (email: the site's promotion / subscription / verify template, or custom HTML typed in the form + audience: newsletters / Custom Receivers / warmup + count + cooldown), **Email History** (schedules · verify · after-verification · warmup · SMS · UniOne runs, one tabbed section, each row deletable), SendGrid Keys, Mailgun Keys, Twilio Configs, SMS Templates, Warmup |
 | **Custom Receivers** | sidebar group: Mailgun Receivers + Sendgrid Receivers — two lists, one screen (`components/receivers/ReceiverListPanel.vue`) fed by `api/receiverLists.ts`; SendGrid Keys' receiver dialog is `components/receivers/ReceiverSettingsDialog.vue` |
 | **Account** | Change Password |
 

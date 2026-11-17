@@ -34,6 +34,7 @@ import type {
   EmailProvider,
   UpdateVerificationPromotionEmailPayload,
   VerificationPromotionEmail,
+  VerificationPromotionSocialLink,
 } from '@shared/types/verificationPromotionEmail'
 import type { ErrorResponse } from '@shared/types/api'
 
@@ -86,6 +87,9 @@ const sendgridKeys = ref<{ label: string; value: number }[]>([])
 const mailgunKeys = ref<{ label: string; value: number }[]>([])
 
 const sendgridEnvAvailable = ref(false)
+
+/** Read-only: the brand site's active Social Links the footer's Follow row shows. */
+const socialLinks = ref<VerificationPromotionSocialLink[]>([])
 
 /**
  * Only providers this server can actually send with.
@@ -250,6 +254,7 @@ onMounted(async () => {
     buttonMin.value = tpl.button_text_min_size ?? buttonMin.value
     buttonMax.value = tpl.button_text_max_size ?? buttonMax.value
     sendgridEnvAvailable.value = tpl.sendgrid_env_available
+    socialLinks.value = tpl.social_links ?? []
   } catch {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load the promotion.', life: 5000 })
   }
@@ -975,6 +980,31 @@ function err(field: string): string | undefined {
                 <Button icon="pi pi-trash" size="small" text severity="danger" @click="removeFooterLink(i)" />
               </div>
               <p v-if="err('footer_links')" class="mt-1 text-xs text-red-600">{{ err('footer_links') }}</p>
+            </div>
+
+            <div>
+              <OptionalBlockLabel
+                label="Social links"
+                block="social_links"
+                v-model:hidden="form.hidden_blocks"
+              />
+              <ul v-if="socialLinks.length > 0" class="flex flex-wrap gap-2">
+                <li
+                  v-for="link in socialLinks"
+                  :key="link.url"
+                  class="flex items-center gap-1.5 rounded-full border border-gray-200 py-1 pl-1 pr-3 text-xs text-gray-700"
+                  :title="link.url"
+                >
+                  <img v-if="link.icon_url" :src="link.icon_url" alt="" width="20" height="20" class="h-5 w-5 rounded-full ring-1 ring-gray-200" />
+                  {{ link.label }}
+                </li>
+              </ul>
+              <p v-else class="text-xs text-gray-400">No active social links.</p>
+              <p class="mt-1 text-xs text-gray-400">
+                The brand site's active accounts, in their set order. Add, reorder or switch them off on the
+                <RouterLink :to="{ name: 'social-links' }" class="text-primary underline">Social Links</RouterLink>
+                page.
+              </p>
             </div>
 
             <div>

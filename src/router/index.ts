@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'
+import { perfumeRoutes } from '@/perfume/routes'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -449,6 +450,8 @@ const router = createRouter({
           component: () => import('@/views/cmsPages/Edit.vue'),
           meta: { requiresAuth: true, title: 'Edit Page' },
         },
+        // Big Glow Day perfume store — its own section (src/perfume).
+        ...perfumeRoutes,
       ],
     },
     {

@@ -16,14 +16,17 @@ import * as api from '@/api/emailSchedules'
 import { pageWindow, pagerMeta } from '@/utils/pagination'
 import * as sendgridApi from '@/api/sendgridKeys'
 import * as mailgunApi from '@/api/mailgunKeys'
+import Textarea from 'primevue/textarea'
 import type {
   EmailSchedule,
   ScheduleAudience,
   ScheduleFrequency,
   ScheduleProvider,
   ScheduleRecipientPreview,
+  ScheduleTemplate,
   UpsertEmailSchedulePayload,
 } from '@shared/types/emailSchedule'
+import { SUBSCRIBER_ONLY_TEMPLATES } from '@shared/types/emailSchedule'
 import type { SendgridKey } from '@shared/types/sendgridKey'
 import type { MailgunKey } from '@shared/types/mailgunKey'
 import type { ErrorResponse } from '@shared/types/api'
@@ -55,9 +58,60 @@ const AUDIENCE_LABELS: Record<ScheduleAudience, string> = {
   sendgrid_receivers: 'Sendgrid Receivers',
   warmup: 'Warmup',
 }
+/*
+ * WHICH EMAIL a schedule sends. The first three are the site's own stored
+ * templates — edited on their own screens — and the fourth is typed here.
+ *
+ * `newslettersOnly` is the pair that can only go to the site's subscribers:
+ * both are about a subscriber's own record, and the verify email's link is
+ * resolved from their token, so there is nothing for a Custom Receivers or
+ * warmup address to confirm. The API rejects the combination; this flag is
+ * what stops an admin reaching it.
+ */
+const templateOptions: {
+  label: string
+  value: ScheduleTemplate
+  hint: string
+  newslettersOnly: boolean
+}[] = [
+  {
+    label: 'Promotion email',
+    value: 'promotion',
+    hint: "The site's Promotion Email template — the marketing offer.",
+    newslettersOnly: false,
+  },
+  {
+    label: 'Subscription email',
+    value: 'subscribe',
+    hint: "The site's Email Template — the welcome sent once a subscription is confirmed.",
+    newslettersOnly: true,
+  },
+  {
+    label: 'Verify email',
+    value: 'verify',
+    hint: "The site's Verify Email — the double opt-in message carrying the confirmation link.",
+    newslettersOnly: true,
+  },
+  {
+    label: 'Custom HTML',
+    value: 'custom',
+    hint: 'Your own From, subject and HTML, typed below and sent as pasted.',
+    newslettersOnly: false,
+  },
+]
+const TEMPLATE_LABELS: Record<ScheduleTemplate, string> = {
+  promotion: 'Promotion email',
+  subscribe: 'Subscription email',
+  verify: 'Verify email',
+  custom: 'Custom HTML',
+}
+
 // Bounds shared with StoreEmailScheduleRequest.
 const MAX_LIMIT = 100000
 const MAX_COOLDOWN_DAYS = 365
+const MAX_SUBJECT_LENGTH = 255
+// config('promotions.custom.max_html_bytes'); counted in bytes, as the API does.
+const MAX_HTML_BYTES = 500_000
 const frequencyOptions: { label: string; value: ScheduleFrequency }[] = [
   { label: 'Every day', value: 'daily' },
   { label: 'Every week', value: 'weekly' },
@@ -89,6 +143,33 @@ const siteOptions = computed(() =>
 function audienceLabel(s: EmailSchedule): string {
   return AUDIENCE_LABELS[s.audience] ?? s.audience
 }
+
+function templateLabel(s: EmailSchedule): string {
+  return s.template_label || TEMPLATE_LABELS[s.template] || s.template
+}
+
+/** The chosen template's own explanation, shown under the picker. */
+const templateHint = computed(
+  () => templateOptions.find((o) => o.value === form.template)?.hint ?? '',
+)
+
+/** Whether the chosen template can only be sent to the site's newsletters. */
+const templateIsSubscriberOnly = computed(() => SUBSCRIBER_ONLY_TEMPLATES.includes(form.template))
+
+/**
+ * The reason the current template + audience pair cannot be saved, or ''.
+ *
+ * Shown live rather than waiting for the API's 422: an admin who picks "Verify
+ * email" for a receivers list should learn why before filling the rest in.
+ */
+const templateAudienceError = computed(() =>
+  templateIsSubscriberOnly.value && form.audience !== 'newsletters'
+    ? `The ${TEMPLATE_LABELS[form.template]} is resolved from a subscriber's own token, so it can only go to Newsletters.`
+    : '',
+)
+
+/** Size of the pasted HTML on the wire — the API's limit is in bytes too. */
+const htmlBytes = computed(() => new TextEncoder().encode(form.custom_html ?? '').length)
 
 function audienceDetail(s: EmailSchedule): string {
   const days = s.cooldown_days === 1 ? '1 day' : `${s.cooldown_days} days`
@@ -172,9 +253,18 @@ function emptyForm(): UpsertEmailSchedulePayload {
   return {
     site_id: sitesStore.sites[0]?.id ?? 0,
     name: '',
+    // What every schedule sent before the choice existed.
+    template: 'promotion',
+    custom_from_name: '',
+    custom_from_address: '',
+    custom_subject: '',
+    custom_html: '',
     audience: 'newsletters',
     limit: 100,
     cooldown_days: 1,
+    // Never on by default: an opt-out is the site's, and honouring it is the
+    // only safe starting point.
+    include_unsubscribed: false,
     frequency: 'daily',
     time: '03:00',
     day_of_week: 1,
@@ -199,11 +289,19 @@ function openEdit(s: EmailSchedule): void {
   Object.assign(form, {
     site_id: s.site_id,
     name: s.name ?? '',
+    template: s.template,
+    // Empty strings rather than null so the inputs are controlled either way;
+    // payload() turns them back into null for a non-custom template.
+    custom_from_name: s.custom_from_name ?? '',
+    custom_from_address: s.custom_from_address ?? '',
+    custom_subject: s.custom_subject ?? '',
+    custom_html: s.custom_html ?? '',
     audience: s.audience,
     // A legacy schedule has no count; the form starts at 100, and saving is
     // what gives the schedule one.
     limit: s.limit ?? 100,
     cooldown_days: s.cooldown_days,
+    include_unsubscribed: s.include_unsubscribed,
     frequency: s.frequency,
     time: s.time,
     day_of_week: s.day_of_week ?? 1,
@@ -219,12 +317,37 @@ function openEdit(s: EmailSchedule): void {
   showDialog.value = true
 }
 
-// Drops the other provider's key so no stale id lingers.
+/*
+ * Drops the other provider's key so no stale id lingers, and the custom
+ * content unless the custom template is the one being saved — the API clears
+ * it server-side too, so a stored-template schedule can never keep a body it
+ * would then send.
+ */
 function payload(): UpsertEmailSchedulePayload {
+  const custom = form.template === 'custom'
+
   return {
     ...form,
+    custom_from_name: custom ? form.custom_from_name : null,
+    custom_from_address: custom ? form.custom_from_address : null,
+    custom_subject: custom ? form.custom_subject : null,
+    custom_html: custom ? form.custom_html : null,
     sendgrid_key_id: form.provider === 'sendgrid' ? form.sendgrid_key_id : null,
     mailgun_key_id: form.provider === 'mailgun' ? form.mailgun_key_id : null,
+  }
+}
+
+/**
+ * Picking a subscriber-only template moves the audience to Newsletters.
+ *
+ * The alternative is leaving an invalid pair on screen for the API to reject.
+ * Only ever moves TO Newsletters, so an admin who then wants a different list
+ * changes the template rather than fighting the form.
+ */
+function onTemplate(template: ScheduleTemplate): void {
+  form.template = template
+  if (SUBSCRIBER_ONLY_TEMPLATES.includes(template) && form.audience !== 'newsletters') {
+    onAudienceGroup('newsletters')
   }
 }
 
@@ -406,12 +529,30 @@ onMounted(async () => {
             <span class="text-gray-700">{{ data.name || '—' }}</span>
           </template>
         </Column>
+        <Column header="Sends">
+          <template #body="{ data }: { data: EmailSchedule }">
+            <span class="text-gray-800">{{ templateLabel(data) }}</span>
+            <span v-if="data.template === 'custom'" class="block truncate text-xs text-gray-400" :title="data.custom_subject ?? ''">
+              {{ data.custom_subject || 'No subject saved' }}
+            </span>
+          </template>
+        </Column>
         <Column header="Audience">
           <template #body="{ data }: { data: EmailSchedule }">
             <span class="text-gray-800">{{ audienceLabel(data) }}</span>
             <span class="block text-xs text-gray-400">{{ audienceDetail(data) }}</span>
             <!-- A schedule saved before counts existed sends nobody until edited. -->
             <Tag v-if="data.blocked_reason" value="Needs a count" severity="warn" class="mt-1" v-tooltip.top="data.blocked_reason" />
+            <!-- Visible on the row, not only inside the dialog: mailing people
+                 who opted out is the kind of setting nobody should discover by
+                 opening a form. -->
+            <Tag
+              v-if="data.include_unsubscribed"
+              value="Includes unsubscribed"
+              severity="danger"
+              class="mt-1"
+              v-tooltip.top="'This schedule mails addresses that unsubscribed from this site.'"
+            />
           </template>
         </Column>
         <Column header="Runs">
@@ -512,7 +653,7 @@ onMounted(async () => {
         <div>
           <label class="mb-1 block text-xs font-medium text-gray-600">Site</label>
           <Select v-model="form.site_id" :options="siteOptions" option-label="label" option-value="value" fluid placeholder="Select a site" />
-          <p class="mt-1 text-xs text-gray-400">This site's promotion email template will be sent.</p>
+          <p class="mt-1 text-xs text-gray-400">Whose template, subscribers and unsubscribe links this schedule uses.</p>
           <p v-if="err('site_id')" class="mt-1 text-xs text-red-600">{{ err('site_id') }}</p>
         </div>
 
@@ -520,6 +661,66 @@ onMounted(async () => {
           <label class="mb-1 block text-xs font-medium text-gray-600">Name (optional)</label>
           <InputText v-model="form.name" fluid placeholder="e.g. Daily welcome-back offer" />
         </div>
+
+        <!-- WHICH email goes out: a stored template of the site, or your own HTML. -->
+        <section class="rounded-lg border border-gray-200 p-3">
+          <h4 class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Email to send</h4>
+          <Select
+            :model-value="form.template"
+            :options="templateOptions"
+            option-label="label"
+            option-value="value"
+            fluid
+            @update:model-value="onTemplate"
+          />
+          <p class="mt-1 text-xs text-gray-400">{{ templateHint }}</p>
+          <p v-if="templateAudienceError" class="mt-1 text-xs text-amber-600">{{ templateAudienceError }}</p>
+          <p v-if="err('template')" class="mt-1 text-xs text-red-600">{{ err('template') }}</p>
+
+          <!-- Custom HTML: the four things a stored template would have supplied. -->
+          <div v-if="form.template === 'custom'" class="mt-3 space-y-3 border-t border-gray-100 pt-3">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label class="mb-1 block text-xs font-medium text-gray-600">From name</label>
+                <InputText v-model="form.custom_from_name" fluid maxlength="120" placeholder="e.g. Casino Weekly" />
+                <p v-if="err('custom_from_name')" class="mt-1 text-xs text-red-600">{{ err('custom_from_name') }}</p>
+              </div>
+              <div>
+                <label class="mb-1 block text-xs font-medium text-gray-600">From address</label>
+                <InputText v-model="form.custom_from_address" fluid type="email" placeholder="offers@yourdomain.com" />
+                <p v-if="err('custom_from_address')" class="mt-1 text-xs text-red-600">{{ err('custom_from_address') }}</p>
+              </div>
+            </div>
+
+            <!--
+              The one setting on this screen that can break delivery silently.
+              A From domain the sending account is not authorised for fails
+              SPF/DKIM alignment, and the message is filtered rather than
+              bounced — it sends, reports no error, and never arrives. Nothing
+              server-side can check it, so it is said here.
+            -->
+            <p class="rounded-md bg-amber-50 px-2.5 py-2 text-xs text-amber-700">
+              Use a domain this provider is authorised to send for. A From address outside it fails SPF/DKIM
+              and the mail is filtered silently — it will look sent and never arrive.
+            </p>
+
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600">Subject</label>
+              <InputText v-model="form.custom_subject" fluid :maxlength="MAX_SUBJECT_LENGTH" placeholder="What lands in the inbox" />
+              <p v-if="err('custom_subject')" class="mt-1 text-xs text-red-600">{{ err('custom_subject') }}</p>
+            </div>
+
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600">HTML</label>
+              <Textarea v-model="form.custom_html" rows="10" fluid class="font-mono text-xs" placeholder="<html>…</html>" />
+              <p class="mt-1 flex justify-between text-xs" :class="htmlBytes > MAX_HTML_BYTES ? 'text-red-600' : 'text-gray-400'">
+                <span>Sent exactly as pasted. A plain-text part and an unsubscribe link are added.</span>
+                <span>{{ (htmlBytes / 1000).toFixed(1) }} / {{ MAX_HTML_BYTES / 1000 }} KB</span>
+              </p>
+              <p v-if="err('custom_html')" class="mt-1 text-xs text-red-600">{{ err('custom_html') }}</p>
+            </div>
+          </div>
+        </section>
 
         <!-- Audience: which list, how many per run, and how long an address rests. -->
         <section class="rounded-lg border border-gray-200 p-3">
@@ -573,16 +774,41 @@ onMounted(async () => {
                 <span class="text-sm text-gray-600">day(s)</span>
               </div>
               <p class="mt-1 text-xs text-gray-400">
-                An address that received this site's promotion email inside this window is skipped,
-                so each run moves further down the list.
+                An address that received this site's {{ TEMPLATE_LABELS[form.template].toLowerCase() }}
+                inside this window is skipped, so each run moves further down the list.
               </p>
               <p v-if="err('cooldown_days')" class="mt-1 text-xs text-red-600">{{ err('cooldown_days') }}</p>
             </div>
           </div>
           <p v-if="form.audience === 'warmup'" class="mt-2 text-xs text-amber-600">
-            Warmup addresses are your seed mailboxes: they have no unsubscribe of their own, and this
-            does not change their warmup "Last sent".
+            Warmup addresses are your seed mailboxes. A send here moves their warmup
+            "Last sent", so a warmup run will not contact them again inside its own cooldown.
           </p>
+
+          <!--
+            Unsubscribed addresses.
+
+            Off by default and deliberately hard to turn on: an opt-out is global
+            per site — any unsubscribe, through any template, stops all mail from
+            that site to that address, whichever list it also sits on.
+          -->
+          <div class="mt-3 border-t border-gray-100 pt-3">
+            <label class="flex items-start gap-3">
+              <ToggleSwitch v-model="form.include_unsubscribed" class="mt-0.5 shrink-0" />
+              <span class="min-w-0">
+                <span class="block text-xs font-medium text-gray-600">Include unsubscribed addresses</span>
+                <span class="mt-0.5 block text-xs text-gray-400">
+                  Off: anyone who unsubscribed from this site — through any of its emails, on any
+                  list — is skipped.
+                </span>
+              </span>
+            </label>
+            <p v-if="form.include_unsubscribed" class="mt-2 rounded-md bg-red-50 px-2.5 py-2 text-xs text-red-700">
+              This schedule will mail people who asked this site to stop. That is what spam
+              complaints and provider blocks are made of, and in most of the world it is unlawful.
+              Turn it on only for a list you can prove consent for.
+            </p>
+          </div>
         </section>
 
         <!-- Cadence -->
