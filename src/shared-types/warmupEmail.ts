@@ -8,6 +8,16 @@ export interface WarmupEmail {
   // When this address was last SUCCESSFULLY contacted; null = never. This is the
   // column the cooldown filter reads, so it explains why a run skipped an address.
   last_sent_at: string | null
+  /**
+   * When this address used the list's opt-out link; null = still on the list.
+   *
+   * The warmup list gained an opt-out of its own in 2026-12. Until then its
+   * messages carried an INERT unsubscribe link, on the view that a seed mailbox
+   * never unsubscribes — which stopped holding once a schedule could aim a real
+   * site template at the list. An address with a timestamp here is excluded
+   * from every warmup run and from every schedule that targets warmup.
+   */
+  unsubscribed_at: string | null
   created_at: string
   updated_at: string
 }

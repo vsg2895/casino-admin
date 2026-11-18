@@ -22,14 +22,21 @@ export type ScheduleFrequency = 'daily' | 'weekly' | 'monthly'
 export type ScheduleTemplate = 'promotion' | 'subscribe' | 'verify' | 'custom'
 
 /**
- * Templates that may only be sent to `newsletters`.
+ * Templates the API accepts only for the `newsletters` audience. Mirrors
+ * EmailSchedule::SUBSCRIBER_ONLY_TEMPLATES — keep the two in step.
  *
- * Both are about the recipient's own subscriber record — the verify email's
- * link is resolved from that subscriber's token — and a Custom Receivers or
- * warmup address has none, so the link would resolve to nothing. The API
- * rejects the combination; the form stops it before that.
+ * Just the verify email: it asks the recipient to confirm an address they
+ * submitted themselves, and the button is resolved from their subscriber row.
+ * Every address on a global list was entered by an operator who already has
+ * it, so there is no claim to confirm and the button would have nothing to do.
+ *
+ * `subscribe` was in here until 2026-12, for a reason that no longer holds: its
+ * opt-out link was resolved from a subscriber's own token, and only a
+ * subscriber had one. Every global list — Mailgun receivers, SendGrid
+ * receivers, warmup — now carries its own, so a welcome message to any of them
+ * carries a working opt-out for the list that mailed them.
  */
-export const SUBSCRIBER_ONLY_TEMPLATES: readonly ScheduleTemplate[] = ['subscribe', 'verify']
+export const SUBSCRIBER_ONLY_TEMPLATES: readonly ScheduleTemplate[] = ['verify']
 
 // Fields match EmailScheduleResource.php — a scheduled promotion campaign: the
 // site's promotion email, sent to the newest `limit` addresses of `audience`,

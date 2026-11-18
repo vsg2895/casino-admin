@@ -153,18 +153,24 @@ const templateHint = computed(
   () => templateOptions.find((o) => o.value === form.template)?.hint ?? '',
 )
 
-/** Whether the chosen template can only be sent to the site's newsletters. */
+/**
+ * Whether the chosen template can ONLY go to Newsletters — today just the
+ * Verify email, which asks for confirmation of an address the recipient
+ * submitted. Nobody on an operator-built list submitted one.
+ *
+ * "Subscription email" was in this set until 2026-12; every global list now
+ * carries its own unsubscribe token, so a welcome message is valid on any
+ * audience.
+ */
 const templateIsSubscriberOnly = computed(() => SUBSCRIBER_ONLY_TEMPLATES.includes(form.template))
 
 /**
- * The reason the current template + audience pair cannot be saved, or ''.
- *
- * Shown live rather than waiting for the API's 422: an admin who picks "Verify
- * email" for a receivers list should learn why before filling the rest in.
+ * Said under the picker rather than left to a 422, so the reason is visible
+ * while the choice is being made. The API refuses the same pair.
  */
 const templateAudienceError = computed(() =>
   templateIsSubscriberOnly.value && form.audience !== 'newsletters'
-    ? `The ${TEMPLATE_LABELS[form.template]} is resolved from a subscriber's own token, so it can only go to Newsletters.`
+    ? `The ${TEMPLATE_LABELS[form.template]} can only be sent to Newsletters — the addresses on a global list have nothing to confirm.`
     : '',
 )
 
@@ -338,16 +344,16 @@ function payload(): UpsertEmailSchedulePayload {
 }
 
 /**
- * Picking a subscriber-only template moves the audience to Newsletters.
- *
- * The alternative is leaving an invalid pair on screen for the API to reject.
- * Only ever moves TO Newsletters, so an admin who then wants a different list
- * changes the template rather than fighting the form.
+ * Picking a subscriber-only template moves the audience back to Newsletters,
+ * because the pair would be refused on save. Any other template leaves the
+ * audience alone — overriding a choice the admin made deliberately.
  */
 function onTemplate(template: ScheduleTemplate): void {
   form.template = template
-  if (SUBSCRIBER_ONLY_TEMPLATES.includes(template) && form.audience !== 'newsletters') {
-    onAudienceGroup('newsletters')
+
+  if (SUBSCRIBER_ONLY_TEMPLATES.includes(template)) {
+    form.audience = 'newsletters'
+    audienceGroup.value = 'newsletters'
   }
 }
 
@@ -674,8 +680,10 @@ onMounted(async () => {
             @update:model-value="onTemplate"
           />
           <p class="mt-1 text-xs text-gray-400">{{ templateHint }}</p>
-          <p v-if="templateAudienceError" class="mt-1 text-xs text-amber-600">{{ templateAudienceError }}</p>
           <p v-if="err('template')" class="mt-1 text-xs text-red-600">{{ err('template') }}</p>
+          <p v-if="templateAudienceError" class="mt-2 rounded-md bg-amber-50 px-2.5 py-2 text-xs text-amber-700">
+            {{ templateAudienceError }}
+          </p>
 
           <!-- Custom HTML: the four things a stored template would have supplied. -->
           <div v-if="form.template === 'custom'" class="mt-3 space-y-3 border-t border-gray-100 pt-3">

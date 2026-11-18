@@ -9,6 +9,7 @@ import InputNumber from 'primevue/inputnumber'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
+import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
 import { useToast } from 'primevue/usetoast'
 import axios from 'axios'
@@ -788,6 +789,16 @@ onMounted(async () => {
           </template>
         </Column>
 
+        <!-- The list gained an opt-out of its own in 2026-12, so a seed mailbox
+             can now leave it. An unsubscribed address is excluded from every
+             run and from every schedule aimed at warmup, which is worth seeing
+             without opening the history. -->
+        <Column header="" :style="{ width: '150px' }">
+          <template #body="{ data }: { data: WarmupEmail }">
+            <Tag v-if="data.unsubscribed_at" value="Unsubscribed" severity="danger" />
+          </template>
+        </Column>
+
         <Column header="Added" :style="{ width: '190px' }">
           <template #body="{ data }: { data: WarmupEmail }">
             <span class="text-gray-600">{{ formatDate(data.created_at) }}</span>
@@ -795,7 +806,9 @@ onMounted(async () => {
         </Column>
 
         <!-- What the cooldown filter actually reads, so a skipped address is
-             explainable without opening the history. -->
+             explainable without opening the history. It counts a contact from
+             EITHER sender: a warmup run, or a schedule aimed at the warmup
+             audience (which writes no warmup history row of its own). -->
         <Column header="Last sent" :style="{ width: '190px' }">
           <template #body="{ data }: { data: WarmupEmail }">
             <span v-if="data.last_sent_at" class="text-gray-600">
