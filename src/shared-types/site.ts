@@ -109,9 +109,26 @@ export interface Site {
   updated_at: string
 }
 
-// Returned only by POST /admin/sites and POST /admin/sites/{id}/rotate-key.
-// The api_key is the plain text value shown exactly once.
-export interface SiteRegistrationResponse extends Site {
+/**
+ * Returned only by POST /admin/sites and POST /admin/sites/{id}/rotate-key.
+ * The api_key is the plain text value shown exactly once.
+ *
+ * IT IS NOT A `Site`, and this used to say `extends Site`, which was a lie the
+ * compiler could not catch: `SiteRegistrationResource` on the backend emits
+ * TEN fields, while `SiteResource` — what the listing returns — emits around
+ * fifty. Typed as a full Site, the rotate response could be written straight
+ * into the sites list, and every field the resource does not send arrived as
+ * `undefined`: the row then showed Countries "Off", Reviews "Off" and Cache
+ * "Unknown" for a site that had all three on, until the page was reloaded.
+ *
+ * Built with `Pick` from Site rather than restated, so a renamed field on Site
+ * is a compile error here instead of silent drift. KEEP THIS LIST IN STEP WITH
+ * App\Http\Resources\SiteRegistrationResource.
+ */
+export type SiteRegistrationResponse = Pick<
+  Site,
+  'id' | 'name' | 'slug' | 'domain' | 'revalidation_url' | 'settings' | 'active' | 'created_at' | 'updated_at'
+> & {
   api_key: string
   this_key_will_not_be_shown_again: true
 }

@@ -40,10 +40,19 @@ const togglingId = ref<number | null>(null)
 onMounted(() => store.fetchSites())
 
 // ── register flow ─────────────────────────────────────────────────────────────
-function onRegistered(response: SiteRegistrationResponse): void {
-  store.upsert(response)
+/*
+ * The registration response is NOT a Site — it carries ten fields, where the
+ * listing's SiteResource carries about fifty. Writing it into the list as a
+ * row left every missing field `undefined`, so a brand-new site showed
+ * Countries "Off", Reviews "Off" and Cache "Unknown" until the page was
+ * reloaded. Re-fetch instead: one request, and the row is whatever the server
+ * actually has.
+ */
+async function onRegistered(response: SiteRegistrationResponse): Promise<void> {
   pendingApiKey.value = response.api_key
   showApiKey.value = true
+  store.invalidate()
+  await store.fetchSites()
 }
 
 // ── edit flow ─────────────────────────────────────────────────────────────────
@@ -75,7 +84,10 @@ async function confirmRotate(): Promise<void> {
 
   try {
     const response = await sitesApi.rotateKey(rotateSite.value.id)
-    store.upsert(response.data)
+    // No upsert: rotation changes only the HASHED key, which this list never
+    // displays (the column is always dots). Writing the ten-field rotation
+    // response over the row was what blanked Countries, Reviews and Cache for
+    // every site whose key had been rotated.
     showRotateConfirm.value = false
     pendingApiKey.value = response.data.api_key
     showApiKey.value = true
@@ -310,7 +322,8 @@ async function toggleActive(site: Site): Promise<void> {
                 :loading="togglingId === site.id"
                 size="small"
                 text
-                :v-tooltip="site.active ? 'Deactivate' : 'Activate'"
+                v-tooltip="site.active ? 'Deactivate' : 'Activate'"
+                :aria-label="site.active ? `Deactivate ${site.name}` : `Activate ${site.name}`"
                 @click="toggleActive(site)"
               />
             </div>
