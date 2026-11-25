@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -13,6 +13,7 @@ import { useSitesStore } from '@/stores/sitesStore'
 import Register from './Register.vue'
 import Edit from './Edit.vue'
 import ApiKeyDisplayModal from '@/components/modals/ApiKeyDisplayModal.vue'
+import RecordCount from '@/components/RecordCount.vue'
 import * as sitesApi from '@/api/sites'
 import type { Site, SiteRegistrationResponse } from '@shared/types/site'
 import type { ErrorResponse } from '@shared/types/api'
@@ -36,6 +37,20 @@ const rotateLoading = ref(false)
 
 // ── toggle-active state ───────────────────────────────────────────────────────
 const togglingId = ref<number | null>(null)
+
+/*
+ * THE TOTAL IS THE ARRAY'S OWN LENGTH, and here that is the real count rather
+ * than a pager's estimate: this listing is NOT paginated — `fetchSites()`
+ * loads every registered domain in one request and the store holds all of
+ * them — so there is no `/count` endpoint to call and nothing for the number
+ * to drift from. Every other list in the panel quotes a count endpoint
+ * because every other list is simple-paginated; this one would be quoting a
+ * second opinion about an array it is already holding.
+ *
+ * `null` while the first fetch is in flight, which is what `RecordCount`
+ * wants: showing "0" and then flicking to "31" reads as a bug.
+ */
+const totalSites = computed<number | null>(() => (store.loading && store.sites.length === 0 ? null : store.sites.length))
 
 onMounted(() => store.fetchSites())
 
@@ -130,11 +145,14 @@ async function toggleActive(site: Site): Promise<void> {
         <h2 class="text-lg font-semibold text-gray-900">Sites</h2>
         <p class="text-sm text-gray-500">Manage registered domains and their API keys.</p>
       </div>
-      <Button
-        label="Register Domain"
-        icon="pi pi-plus"
-        @click="showRegister = true"
-      />
+      <div class="flex flex-wrap items-center gap-3">
+        <RecordCount label="Total Sites" :total="totalSites" :loading="store.loading" />
+        <Button
+          label="Register Domain"
+          icon="pi pi-plus"
+          @click="showRegister = true"
+        />
+      </div>
     </div>
 
     <!-- Table -->

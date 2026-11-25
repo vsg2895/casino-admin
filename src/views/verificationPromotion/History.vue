@@ -245,6 +245,14 @@ const removeHistoryRow = (id: number) => api.deleteVerificationPromotionHistory(
         />
       </div>
     </div>
+    <!-- Embedded in Email History, the header above is hidden because the tab
+         is the title — and the count went with it. The total belongs to the
+         STREAM, not to the page the operator happens to be on, so it is
+         restated here on its own row. Same component, same number, same
+         placement as the Schedules, SMS and UniOne tabs beside it. -->
+    <div v-else class="flex justify-end">
+      <RecordCount label="Total Sends" :total="recordTotal" :loading="loading" />
+    </div>
 
     <!-- Failures, stated rather than left to be noticed. Counted over the whole
          filtered set, not the page. -->
