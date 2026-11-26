@@ -194,6 +194,19 @@ const router = createRouter({
           meta: { requiresAuth: true, title: 'Edit Special Offer' },
         },
         {
+          /*
+           * Its own top-level path, NOT nested under special-offers/.
+           * `special-offers/visitors` would be matched by the
+           * `special-offers/:id/edit` pattern's sibling `:id` segment in some
+           * orderings, and a route that resolves by luck of declaration order
+           * is a route that breaks the next time this list is sorted.
+           */
+          path: 'special-offer-visitors',
+          name: 'special-offer-visitors',
+          component: () => import('@/views/specialOfferVisits/List.vue'),
+          meta: { requiresAuth: true, title: 'Special Offers Visitors Ip Info' },
+        },
+        {
           path: 'categories',
           name: 'categories',
           component: () => import('@/views/categories/List.vue'),

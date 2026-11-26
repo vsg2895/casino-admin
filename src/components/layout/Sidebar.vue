@@ -36,6 +36,7 @@ interface NavGroup {
 const navItems: NavItem[] = [
   { label: 'Casinos',        to: '/casinos',        icon: 'pi-th-large' },
   { label: 'Special Offers', to: '/special-offers', icon: 'pi-percentage' },
+  { label: 'Special Offers Visitors Ip Info', to: '/special-offer-visitors', icon: 'pi-map-marker' },
   { label: 'Content Coverage', to: '/content-coverage', icon: 'pi-table' },
   { label: 'Categories',     to: '/categories',     icon: 'pi-tags' },
   { label: 'Bonus Categories', to: '/bonus-categories', icon: 'pi-gift' },
