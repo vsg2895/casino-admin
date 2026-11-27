@@ -8,6 +8,14 @@
 
 /** Where a value came from. Mirrors the `type` enum on special_offer_visit_ips. */
 export type VisitIpType =
+  /**
+   * The site's own Next.js server stating who called IT.
+   *
+   * The only address that survives the hop to the API, because that hop goes
+   * through Cloudflare a second time and Cloudflare rewrites every other
+   * address header with the calling server's own. Highest priority upstream.
+   */
+  | 'site_reported'
   | 'remote_addr'
   | 'cf_connecting_ip'
   | 'true_client_ip'

@@ -9,6 +9,7 @@ import type { VisitIpType } from '@shared/types/specialOfferVisit'
  * IP", which is the claim under examination.
  */
 export const IP_TYPE_LABELS: Record<VisitIpType, string> = {
+  site_reported: 'Reported by the site server',
   remote_addr: 'REMOTE_ADDR (connection peer)',
   cf_connecting_ip: 'CF-Connecting-IP',
   true_client_ip: 'True-Client-IP',
